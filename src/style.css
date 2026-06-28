@@ -141,8 +141,19 @@ input[type=range] { height:30px; }
 .lobby-player { position:relative; min-height:240px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; overflow:hidden; border:4px solid #141728; border-radius:17px; background:#17172a; box-shadow:0 8px 0 #080b14; }
 .lobby-player.occupied { border-color:var(--player-color); background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--player-color) 40%,transparent),#111525 70%); }
 .lobby-pawn { position:absolute; top:28px; width:105px; height:130px; display:grid; place-items:start center; padding-top:35px; border:5px solid #090f1d; border-radius:48% 48% 22% 22% / 30% 30% 13% 13%; background:var(--player-color); box-shadow:inset -14px -18px 18px #001d4c66,inset 8px 7px 12px #ffffff44,6px 9px 10px #0007; font:bold 1.2rem sans-serif; animation:character-wiggle 4s ease-in-out infinite; }
+.lobby-pawn.owned { cursor:help; }
+.lobby-pawn.owned:focus-visible { outline:4px solid #ffc325; outline-offset:4px; }
 .lobby-pawn::after { content:""; position:absolute; bottom:-9px; left:-12px; z-index:-1; width:120px; height:30px; border:5px solid #090f1d; border-radius:50%; background:var(--player-color); }
+.lobby-character-tooltip { position:absolute; z-index:8; top:8px; left:50%; width:calc(100% - 22px); padding:.7rem .8rem; border:3px solid var(--player-color); border-radius:11px; background:#090d19f2; box-shadow:0 6px 0 #05070d; opacity:0; pointer-events:none; transform:translate(-50%,-8px) scale(.96); transition:opacity .16s ease,transform .16s ease; text-align:center; }
+.lobby-pawn.owned:hover ~ .lobby-character-tooltip,
+.lobby-pawn.owned:focus-visible ~ .lobby-character-tooltip { opacity:1; transform:translate(-50%,0) scale(1); }
+.lobby-character-tooltip strong { display:block; color:#fff; text-transform:uppercase; font:1.1rem 'Luckiest Guy'; }
+.lobby-character-tooltip small { display:block; margin:.2rem 0; color:#ffc325; text-transform:uppercase; font:.9rem 'Luckiest Guy'; }
+.lobby-character-tooltip p { margin:0; color:#ded7c8; font-size:.78rem; line-height:1.25; }
 .lobby-player > strong { z-index:2; width:100%; padding:.45rem; background:color-mix(in srgb,var(--player-color) 65%,#111); text-align:center; font:1.35rem 'Luckiest Guy'; }
+.lobby-player-name { z-index:2; width:100%; min-width:0; padding:.4rem .55rem; border:0; border-top:2px solid #090d16; outline:0; background:color-mix(in srgb,var(--player-color) 65%,#111); color:#fff; text-align:center; font:1.25rem 'Luckiest Guy'; }
+.lobby-player-name:hover { filter:brightness(1.12); }
+.lobby-player-name:focus { background:#f4e3bd; color:#151319; box-shadow:inset 0 0 0 3px #ffc325; }
 .lobby-player > small { z-index:2; width:100%; padding:.35rem; background:#10141e; color:#66dc44; text-align:center; text-transform:uppercase; font:1rem 'Luckiest Guy'; }
 .host-crown { position:absolute; z-index:3; top:4px; left:10px; color:#ffc315; font-size:2.3rem; transform:rotate(-12deg); }
 .lobby-char-arrow { position:absolute; z-index:6; top:43%; width:38px; height:54px; display:grid; place-items:center; padding:0; border:3px solid #0a0e17; border-radius:10px; background:#f2b814; color:#111; box-shadow:0 5px 0 #0a0e17; font:bold 2.6rem/1 sans-serif; }
@@ -219,6 +230,15 @@ input[type=range] { height:30px; }
 .skill-overlay small b { -webkit-text-stroke:1px #050608; paint-order:stroke fill; }
 .skill-overlay strong { color:#f4e6bf; text-align:center; text-transform:uppercase; font:clamp(3.5rem,9vw,7.5rem)/1 'Luckiest Guy'; -webkit-text-stroke:5px #4f2472; paint-order:stroke fill; filter:drop-shadow(0 8px 0 #100519); }
 .skill-overlay p { max-width:550px; margin:1rem 1.5rem; padding:.7rem 1.2rem; border:3px solid #623b80; border-radius:10px; background:#100817e8; color:#f2e4cf; text-align:center; font-size:1.2rem; }
+.skill-target-overlay { position:fixed; z-index:60; inset:0; display:grid; place-items:center; padding:1rem; background:#050914c7; }
+.skill-target-card { width:min(440px,100%); padding:1.4rem; border:4px solid #7743a1; border-radius:18px; background:linear-gradient(145deg,#29143d,#101522); box-shadow:0 10px 0 #08040d; text-align:center; }
+.skill-target-card > small { color:#c69be8; text-transform:uppercase; font:1rem 'Luckiest Guy'; }
+.skill-target-card > strong { display:block; margin:.25rem 0; color:#ffc325; text-transform:uppercase; font:2rem 'Luckiest Guy'; }
+.skill-target-card > p { color:#e5d8c5; }
+.skill-target-card > div { display:grid; gap:.65rem; margin:1rem 0; }
+.skill-target-card > div button { display:flex; align-items:center; gap:.7rem; min-height:52px; padding:.65rem 1rem; border:3px solid var(--target-color); border-radius:10px; background:#111b2b; color:#fff; text-align:left; font:1.05rem 'Luckiest Guy'; }
+.skill-target-card > div button span { font-size:1.5rem; }
+.skill-target-cancel { padding:.55rem 1rem; border:2px solid #8c7899; border-radius:8px; background:#392b43; color:#eee; font:1rem 'Luckiest Guy'; }
 @keyframes center-card {
   0% { opacity:0; transform:scale(.65); }
   12%,82% { opacity:1; transform:scale(1); }
@@ -295,8 +315,12 @@ input[type=range] { height:30px; }
 .skill-title strong { color:#ffc325; text-align:right; text-transform:uppercase; font:1.2rem 'Luckiest Guy'; }
 .skill-panel kbd { display:inline-grid; place-items:center; min-width:25px; height:25px; border:2px solid #17111d; border-radius:5px; background:#f2dfba; box-shadow:0 3px 0 #17111d; color:#151219; font:bold .9rem sans-serif; }
 .skill-panel p { margin:.55rem 0; color:#ded2c0; font-size:1rem; }
-.skill-state { padding:.45rem .65rem; border-radius:7px; background:#59252f; color:#ffb2b2; text-align:center; text-transform:uppercase; font:.9rem 'Luckiest Guy'; }
+.skill-state { width:100%; min-height:44px; padding:.55rem .75rem; border:2px solid #7d4854; border-radius:7px; background:#59252f; color:#ffb2b2; text-align:center; text-transform:uppercase; font:.9rem 'Luckiest Guy'; }
+.skill-state:disabled { cursor:not-allowed; opacity:.78; }
 .skill-state.ready { background:#245d24; color:#a9f797; animation:skill-ready 1s ease-in-out infinite alternate; }
+.skill-state.ready:not(:disabled) { cursor:pointer; border-color:#69bf52; }
+.skill-state.ready:not(:disabled):hover { filter:brightness(1.12); }
+.skill-state.ready:not(:disabled):active { transform:translateY(2px); }
 .skill-panel > small { display:block; margin-top:.55rem; color:#f4c453; text-align:center; font-size:.9rem; }
 @keyframes skill-ready { to { box-shadow:0 0 12px #59d13e88; } }
 .event-log { max-height:190px; overflow-y:auto; overscroll-behavior:contain; scrollbar-color:#ffc21b #111a28; scrollbar-width:thin; padding:1rem; border:3px solid #293448; border-radius:12px; background:#080e19dd; }

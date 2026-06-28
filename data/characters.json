@@ -51,7 +51,7 @@
     "description": "Mysterious. Mischievous. Menacing.",
     "specialSkill": {
       "name": "Intersect",
-      "description": "Pull the closest player within 10 spaces to the median space between you and them."
+      "description": "Pull yourself and the closest player within 10 spaces to the median space between you and them."
     }
   },
   {
@@ -62,7 +62,7 @@
     "description": "Cunning. Deceptive. Delightfully tricky.",
     "specialSkill": {
       "name": "Peek-a-Boo",
-      "description": "Move a player to the next question mark space within 10 spaces of them."
+      "description": "Move the closest player within 10 spaces to the next question mark space within 10 spaces of them. Choose the target when multiple closest players share the same space."
     }
   }
 ]

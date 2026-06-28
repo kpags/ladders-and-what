@@ -22,6 +22,7 @@ export function createGameState(board, players, startedAt = Date.now()) {
     turn: 1,
     lastRoll: null,
     lastWhat: null,
+    lastQuestionChain: [],
     lastEvent: 'The race to 100 is ready to begin.',
     log: ['Game started. Reach 100—and do not be the last player left!'],
     questionHistory: {},
@@ -94,25 +95,43 @@ function finishPlayer(state, player) {
 
 function resolveLanding(state, player) {
   state.lastWhat = null
-  if (state.board.question_marks.includes(player.space)) {
+  state.lastQuestionChain = []
+  let chainCount = 0
+
+  while (state.board.question_marks.includes(player.space) && chainCount < 10) {
     const questionSpace = player.space
     if (player.skillArmed === 'ignore-question') {
       player.skillArmed = null
       addLog(state, `${player.name}'s Nope skill cancelled the question mark on space ${questionSpace}.`)
+      break
     } else if (player.skillArmed === 'reroll-question') {
       player.skillArmed = null
       const reroll = Math.floor(Math.random() * 6) + 1
       player.space = Math.min(100, player.space + reroll)
       state.lastRoll = reroll
+      state.lastQuestionChain.push({
+        kind: 'reroll',
+        space: questionSpace,
+        destination: player.space,
+        roll: reroll,
+      })
       addLog(state, `${player.name}'s Rage Reroll rolled ${reroll} and escaped space ${questionSpace}!`)
     } else {
       const what = chooseWhat(state, questionSpace)
       if (what) {
         state.lastWhat = { ...what, space: questionSpace }
         applyWhat(player, what)
+        state.lastQuestionChain.push({
+          kind: 'what',
+          space: questionSpace,
+          destination: player.space,
+          what: { ...what },
+        })
         addLog(state, `${player.name} found ${what.name} on space ${questionSpace}. ${affectedDescription(what.effect.description, player.name)}`)
       }
     }
+    chainCount++
+    if (player.space === questionSpace) break
   }
 
   const ladder = state.board.ladders.find(item => item.from === player.space)
@@ -142,6 +161,7 @@ export function takeTurn(state, forcedRoll) {
     if (player.skillBlockedTurns > 0) player.skillBlockedTurns--
     state.lastRoll = null
     state.lastWhat = null
+    state.lastQuestionChain = []
     addLog(state, `${player.name} cannot move due to ${player.skipReason || 'a what'}. ${player.skipTurns} skipped turn(s) remain.`)
     if (player.skipTurns === 0) player.skipReason = null
     advanceTurn(state)
@@ -166,6 +186,7 @@ export function penalizeTurn(state) {
   player.space = destination
   state.lastRoll = null
   state.lastWhat = null
+  state.lastQuestionChain = []
   const message = `${player.name} ran out of time and was moved back from space ${from} to normal space ${destination}.`
   addLog(state, message)
   advanceTurn(state)
@@ -199,7 +220,19 @@ function closestOpponent(state, player) {
     .sort((a, b) => Math.abs(a.space - player.space) - Math.abs(b.space - player.space))[0]
 }
 
-export function activateSkill(state, now = Date.now()) {
+function peekTarget(state, player, targetId) {
+  const opponents = activePlayers(state)
+    .filter(other => other.id !== player.id && Math.abs(other.space - player.space) <= 10)
+    .sort((a, b) => Math.abs(a.space - player.space) - Math.abs(b.space - player.space))
+  const closest = opponents[0]
+  if (!closest || !targetId) return closest
+
+  const selected = opponents.find(other => other.id === targetId)
+  if (!selected || selected.space !== closest.space) return null
+  return selected
+}
+
+export function activateSkill(state, now = Date.now(), targetId = null) {
   if (state.gameOver) return { ok: false, message: 'The game is over.' }
   const player = state.players[state.currentPlayerIndex]
   if (player.skillBlockedTurns > 0) return { ok: false, message: `Skill blocked for ${player.skillBlockedTurns} more turn(s).` }
@@ -208,6 +241,8 @@ export function activateSkill(state, now = Date.now()) {
   const skill = player.specialSkill?.name
   const target = closestOpponent(state, player)
   let message
+  let movement = null
+  let landingResolution = null
 
   if (skill === 'Magnet') {
     if (!target) return { ok: false, message: 'No player is within 10 spaces.' }
@@ -224,14 +259,30 @@ export function activateSkill(state, now = Date.now()) {
     const middle = Math.round((player.space + target.space) / 2)
     player.space = middle
     target.space = middle
-    message = `${player.name} used Intersect. Both players meet on space ${middle}.`
+    message = `${player.name} used Intersect and pulled themselves and ${target.name} to space ${middle}.`
   } else if (skill === 'Peek-a-Boo') {
-    if (!target) return { ok: false, message: 'No player is within 10 spaces.' }
-    const question = state.board.question_marks.find(space => space > target.space && space - target.space <= 10)
+    const peekPlayer = peekTarget(state, player, targetId)
+    if (!peekPlayer) return { ok: false, message: 'Choose a closest player within 10 spaces.' }
+    const question = [...state.board.question_marks]
+      .sort((a, b) => a - b)
+      .find(space => space > peekPlayer.space && space - peekPlayer.space <= 10)
     if (!question) return { ok: false, message: 'No question mark is within 10 spaces of a player.' }
-    target.space = question
-    resolveLanding(state, target)
-    message = `${player.name} used Peek-a-Boo on ${target.name}, moving them to question space ${question}.`
+    movement = { playerId: peekPlayer.id, from: peekPlayer.space, to: question }
+    peekPlayer.space = question
+    resolveLanding(state, peekPlayer)
+    const questionChain = state.lastQuestionChain.map(item => ({
+      ...item,
+      what: item.what ? { ...item.what } : undefined,
+    }))
+    const afterQuestions = questionChain.at(-1)?.destination ?? question
+    const ladder = state.board.ladders.find(item => item.from === afterQuestions)
+    landingResolution = {
+      playerId: peekPlayer.id,
+      playerName: peekPlayer.name,
+      questionChain,
+      ladder: ladder ? { ...ladder } : null,
+    }
+    message = `${player.name} used Peek-a-Boo on ${peekPlayer.name}, moving them to question space ${question}.`
   } else if (skill === 'Nope') {
     player.skillArmed = 'ignore-question'
     message = `${player.name} activated Nope. Their next question mark will be ignored.`
@@ -244,5 +295,5 @@ export function activateSkill(state, now = Date.now()) {
 
   player.skillCooldownUntil = now + SKILL_COOLDOWN_MS
   addLog(state, message)
-  return { ok: true, message }
+  return { ok: true, message, movement, landingResolution }
 }

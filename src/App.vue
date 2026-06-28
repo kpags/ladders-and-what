@@ -61,6 +61,7 @@ const skipOverlay = ref(null)
 const visibleLog = ref([])
 const now = ref(Date.now())
 const skillNotice = ref('')
+const skillTargetOptions = ref([])
 const turnDeadline = ref(null)
 const penaltyOverlay = ref(null)
 let clockTimer
@@ -118,6 +119,7 @@ function clearGamePresentation() {
   moveOverlay.value = null
   whatOverlay.value = null
   skillOverlay.value = null
+  skillTargetOptions.value = []
   skipOverlay.value = null
   penaltyOverlay.value = null
   movingPlayerId.value = null
@@ -129,6 +131,7 @@ async function handleServerEvent(event) {
   seenEvents.add(event.id)
   const remaining = eventRemaining(event)
   if (remaining <= 0) return
+  skillTargetOptions.value = []
   turnBusy.value = true
   turnDeadline.value = null
 
@@ -180,7 +183,7 @@ async function handleServerEvent(event) {
       skillOverlay.value = { ...event.data, result: true }
       window.setTimeout(() => { skillOverlay.value = null }, remaining)
     } else {
-      skillNotice.value = event.data.message
+      skillNotice.value = ''
     }
   } else if (event.type === 'skip_notice') {
     audioManager.loseTurn()
@@ -337,6 +340,12 @@ function changeLobbyCharacter(direction) {
   sendLobby({ type: 'character', characterIndex: playerCharacter.value })
 }
 
+function updateLobbyPlayerName(event) {
+  const name = event.currentTarget.value.trim().slice(0, 20)
+  event.currentTarget.value = name
+  sendLobby({ type: 'player_name', name })
+}
+
 function selectLobbyBoard(index) {
   if (onlineRoom.value && !isLobbyHost.value) return
   selectedBoard.value = index
@@ -423,7 +432,7 @@ function playTurn() {
   sendLobby({ type: 'start_roll' })
 }
 
-function useSkill() {
+function useSkill(targetId = null) {
   if (!game.value || page.value !== 'game' || turnBusy.value || game.value.gameOver) return
   const player = game.value.players[game.value.currentPlayerIndex]
   if (!isControlledTurn.value) {
@@ -438,7 +447,19 @@ function useSkill() {
     skillNotice.value = 'Skill is still cooling down.'
     return
   }
-  sendLobby({ type: 'use_skill' })
+  if (player.specialSkill?.name === 'Peek-a-Boo' && !targetId) {
+    const opponents = game.value.players
+      .filter(other => !other.finished && other.id !== player.id && Math.abs(other.space - player.space) <= 10)
+      .sort((a, b) => Math.abs(a.space - player.space) - Math.abs(b.space - player.space))
+    const closest = opponents[0]
+    const stackedClosest = closest ? opponents.filter(other => other.space === closest.space) : []
+    if (stackedClosest.length > 1) {
+      skillTargetOptions.value = stackedClosest
+      return
+    }
+  }
+  skillTargetOptions.value = []
+  sendLobby({ type: 'use_skill', targetId })
 }
 
 function handleGameKey(event) {
@@ -566,9 +587,34 @@ onUnmounted(() => {
                   <span v-if="lobbyPlayers[slot - 1].isAI" class="ai-label">AI</span>
                   <span v-if="lobbyPlayers[slot - 1].id === onlineRoom?.hostId" class="host-crown">♛</span>
                   <button v-if="lobbyPlayers[slot - 1].id === clientId" class="lobby-char-arrow left" @click="changeLobbyCharacter(-1)">‹</button>
-                  <div class="lobby-pawn"><span>{{ lobbyPlayers[slot - 1].character.face }}</span></div>
+                  <div
+                    class="lobby-pawn"
+                    :class="{ owned: lobbyPlayers[slot - 1].id === clientId }"
+                    :tabindex="lobbyPlayers[slot - 1].id === clientId ? 0 : null"
+                    :aria-describedby="lobbyPlayers[slot - 1].id === clientId ? `lobby-character-tip-${slot}` : null"
+                  ><span>{{ lobbyPlayers[slot - 1].character.face }}</span></div>
                   <button v-if="lobbyPlayers[slot - 1].id === clientId" class="lobby-char-arrow right" @click="changeLobbyCharacter(1)">›</button>
-                  <strong>{{ lobbyPlayers[slot - 1].character.name }}</strong>
+                  <div
+                    v-if="lobbyPlayers[slot - 1].id === clientId"
+                    :id="`lobby-character-tip-${slot}`"
+                    class="lobby-character-tooltip"
+                    role="tooltip"
+                  >
+                    <strong>{{ lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name }}</strong>
+                    <small>{{ lobbyPlayers[slot - 1].character.specialSkill.name }}</small>
+                    <p>{{ lobbyPlayers[slot - 1].character.specialSkill.description }}</p>
+                  </div>
+                  <input
+                    v-if="lobbyPlayers[slot - 1].id === clientId"
+                    class="lobby-player-name"
+                    :value="lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name"
+                    maxlength="20"
+                    aria-label="Edit your player name"
+                    title="Edit your player name"
+                    @change="updateLobbyPlayerName"
+                    @keydown.enter="$event.currentTarget.blur()"
+                  >
+                  <strong v-else>{{ lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name }}</strong>
                   <small>✓ Ready</small>
                 </template>
                 <template v-else>
@@ -643,6 +689,26 @@ onUnmounted(() => {
           </small>
           <strong>{{ skillOverlay.name }}</strong>
           <p>{{ skillOverlay.result ? skillOverlay.message : skillOverlay.description }}</p>
+        </div>
+        <div v-if="skillTargetOptions.length" class="skill-target-overlay" role="dialog" aria-modal="true" aria-label="Choose Peek-a-Boo target">
+          <div class="skill-target-card">
+            <small>Peek-a-Boo</small>
+            <strong>Choose a player</strong>
+            <p>These closest players share space {{ skillTargetOptions[0].space }}.</p>
+            <div>
+              <button
+                v-for="target in skillTargetOptions"
+                :key="target.id"
+                type="button"
+                :style="{ '--target-color': target.color }"
+                @click="useSkill(target.id)"
+              >
+                <span>{{ target.face }}</span>
+                {{ target.name }}
+              </button>
+            </div>
+            <button type="button" class="skill-target-cancel" @click="skillTargetOptions = []">Cancel</button>
+          </div>
         </div>
         <div v-if="whatOverlay" class="what-overlay" role="status">
           <small>What?!</small>
@@ -731,9 +797,18 @@ onUnmounted(() => {
                 <strong>{{ controlledGamePlayer.specialSkill.name }}</strong>
               </div>
               <p>{{ controlledGamePlayer.specialSkill.description }}</p>
-              <div class="skill-state" :class="{ ready: isControlledTurn && skillCooldown(controlledGamePlayer) === 0 && !controlledGamePlayer.skillBlockedTurns }">
+              <button
+                type="button"
+                class="skill-state"
+                :class="{ ready: isControlledTurn && !turnBusy && skillCooldown(controlledGamePlayer) === 0 && !controlledGamePlayer.skillBlockedTurns }"
+                :disabled="!isControlledTurn || turnBusy || game.gameOver || controlledGamePlayer.skillBlockedTurns > 0 || skillCooldown(controlledGamePlayer) > 0"
+                @click="useSkill()"
+              >
                 <template v-if="!isControlledTurn">
                   Wait for your turn
+                </template>
+                <template v-else-if="turnBusy">
+                  Please wait
                 </template>
                 <template v-else-if="controlledGamePlayer.skillBlockedTurns">
                   Blocked for {{ controlledGamePlayer.skillBlockedTurns }} turn(s)
@@ -741,8 +816,8 @@ onUnmounted(() => {
                 <template v-else-if="skillCooldown(controlledGamePlayer)">
                   Cooldown {{ skillCooldown(controlledGamePlayer) }}s
                 </template>
-                <template v-else>Ready · Press G to activate</template>
-              </div>
+                <template v-else>Use skill · Tap or press G</template>
+              </button>
               <small v-if="skillNotice">{{ skillNotice }}</small>
             </div>
 

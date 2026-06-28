@@ -110,6 +110,13 @@ function affectedDescription(description, playerName) {
   return description.replace(/\byour\b/gi, `${playerName}'s`).replace(/\byou\b/gi, playerName)
 }
 
+function normalizePlayerName(value) {
+  return String(value ?? '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .trim()
+    .slice(0, 20)
+}
+
 function effectDestination(space, what) {
   if (!what) return space
   if (what.effect.effect === 'move_back') return Math.max(1, space - (what.effect.spaces || 0))
@@ -128,9 +135,25 @@ async function runTurnSequence(room, player, startSpace, roll, token) {
   emitEvent(room, 'movement', { playerId: player.id, from: startSpace, to: rollLanding, kind: 'roll' }, rollDuration)
   if (!await wait(room, rollDuration, token)) return
 
-  const what = room.game.lastWhat
+  const questionChain = room.game.lastQuestionChain || []
   let resolvedSpace = rollLanding
-  if (what) {
+  for (const resolution of questionChain) {
+    if (resolution.kind === 'reroll') {
+      const duration = Math.abs(resolution.destination - resolvedSpace) * 540
+      if (duration > 0) {
+        emitEvent(room, 'movement', {
+          playerId: player.id,
+          from: resolvedSpace,
+          to: resolution.destination,
+          kind: 'reroll',
+        }, duration)
+        if (!await wait(room, duration, token)) return
+      }
+      resolvedSpace = resolution.destination
+      continue
+    }
+
+    const what = resolution.what
     emitEvent(room, 'what_reveal', {
       playerId: player.id,
       playerName: player.name,
@@ -139,13 +162,17 @@ async function runTurnSequence(room, player, startSpace, roll, token) {
       effect: what.effect.effect,
     }, 3000)
     if (!await wait(room, 3000, token)) return
-    const destination = effectDestination(rollLanding, what)
-    if (destination !== rollLanding) {
-      const duration = Math.abs(destination - rollLanding) * 540
-      emitEvent(room, 'movement', { playerId: player.id, from: rollLanding, to: destination, kind: 'effect' }, duration)
+    if (resolution.destination !== resolvedSpace) {
+      const duration = Math.abs(resolution.destination - resolvedSpace) * 540
+      emitEvent(room, 'movement', {
+        playerId: player.id,
+        from: resolvedSpace,
+        to: resolution.destination,
+        kind: 'effect',
+      }, duration)
       if (!await wait(room, duration, token)) return
     }
-    resolvedSpace = destination
+    resolvedSpace = resolution.destination
   }
 
   const ladder = room.game.board.ladders.find(item => item.from === resolvedSpace)
@@ -259,7 +286,7 @@ function beginTurn(room) {
   broadcastGame(room)
 }
 
-function useSkill(room, requesterId) {
+function useSkill(room, requesterId, targetId = null) {
   if (room.phase !== 'playing' || room.busy || room.game.gameOver) return
   const current = room.game.players[room.game.currentPlayerIndex]
   if (current.id !== requesterId || current.isAI) return reject(sockets.get(requesterId), 'Skill can only be used during your turn.')
@@ -267,7 +294,7 @@ function useSkill(room, requesterId) {
   if (current.skillCooldownUntil > Date.now()) return reject(sockets.get(requesterId), 'Skill is still cooling down.')
   const turnKey = `${room.game.turn}:${room.game.currentPlayerIndex}`
   if (room.skillUsedTurnKey === turnKey) return reject(sockets.get(requesterId), 'Skill can only be used once per turn.')
-  const validation = activateSkill(structuredClone(room.game), Date.now())
+  const validation = activateSkill(structuredClone(room.game), Date.now(), targetId)
   if (!validation.ok) return reject(sockets.get(requesterId), validation.message)
 
   clearTimer(room.turnTimer)
@@ -284,22 +311,73 @@ function useSkill(room, requesterId) {
   }, 2000)
   wait(room, 2000, token).then(valid => {
     if (!valid) return
-    const result = activateSkill(room.game, Date.now())
-    emitEvent(room, 'skill_result', {
-      playerId: current.id,
-      playerName: current.name,
-      color: current.color,
-      name: current.specialSkill.name,
-      message: result.message,
-      ok: result.ok,
-    }, 2000)
-    wait(room, 2000, token).then(resultVisible => {
-      if (!resultVisible) return
-      room.currentEvent = null
-      room.busy = false
-      broadcastGame(room)
-      beginTurn(room)
-    })
+    const result = activateSkill(room.game, Date.now(), targetId)
+    const playLandingResolution = async () => {
+      if (!result.landingResolution) return true
+      let resolvedSpace = result.movement.to
+      for (const resolution of result.landingResolution.questionChain) {
+        if (resolution.kind === 'what') {
+          emitEvent(room, 'what_reveal', {
+            playerId: result.landingResolution.playerId,
+            playerName: result.landingResolution.playerName,
+            name: resolution.what.name,
+            description: affectedDescription(resolution.what.effect.description, result.landingResolution.playerName),
+            effect: resolution.what.effect.effect,
+          }, 3000)
+          if (!await wait(room, 3000, token)) return false
+        }
+
+        if (resolution.destination !== resolvedSpace) {
+          const duration = Math.abs(resolution.destination - resolvedSpace) * 540
+          emitEvent(room, 'movement', {
+            playerId: result.landingResolution.playerId,
+            from: resolvedSpace,
+            to: resolution.destination,
+            kind: resolution.kind === 'reroll' ? 'reroll' : 'effect',
+          }, duration)
+          if (!await wait(room, duration, token)) return false
+        }
+        resolvedSpace = resolution.destination
+      }
+
+      const ladder = result.landingResolution.ladder
+      if (ladder) {
+        emitEvent(room, 'ladder', {
+          playerId: result.landingResolution.playerId,
+          from: ladder.from,
+          to: ladder.to,
+        }, 1600)
+        if (!await wait(room, 1600, token)) return false
+      }
+      return true
+    }
+    const showResult = () => {
+      emitEvent(room, 'skill_result', {
+        playerId: current.id,
+        playerName: current.name,
+        color: current.color,
+        name: current.specialSkill.name,
+        message: result.message,
+        ok: result.ok,
+      }, 2000)
+      wait(room, 2000, token).then(resultVisible => {
+        if (!resultVisible) return
+        room.currentEvent = null
+        room.busy = false
+        broadcastGame(room)
+        beginTurn(room)
+      })
+    }
+
+    if (result.movement) {
+      const duration = Math.abs(result.movement.to - result.movement.from) * 540
+      emitEvent(room, 'movement', { ...result.movement, kind: 'skill' }, duration)
+      wait(room, duration, token).then(async moved => {
+        if (moved && await playLandingResolution()) showResult()
+      })
+    } else {
+      showResult()
+    }
   })
 }
 
@@ -313,7 +391,7 @@ function startGame(room, requesterId) {
     return {
       ...character,
       id: player.id,
-      name: player.isAI ? `${character.name} AI` : character.name,
+      name: player.isAI ? `${character.name} AI` : (player.customName || character.name),
       isAI: player.isAI,
     }
   })
@@ -460,6 +538,14 @@ wss.on('connection', socket => {
         room.boardIndex = Math.max(0, Math.min(boards.length - 1, Number(message.boardIndex) || 0))
         broadcastRoom(room)
       }
+    } else if (message.type === 'player_name') {
+      const player = room.players.find(item => item.id === clientId && !item.isAI)
+      if (!player) reject(socket, 'Only human players can edit their name.')
+      else if (room.phase !== 'lobby') reject(socket, 'Names can only be edited in the lobby.')
+      else {
+        player.customName = normalizePlayerName(message.name) || null
+        broadcastRoom(room)
+      }
     } else if (message.type === 'add_ai') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can add AI players.')
       else if (room.phase === 'lobby' && room.players.length < 6) {
@@ -478,7 +564,7 @@ wss.on('connection', socket => {
     } else if (message.type === 'start_game') startGame(room, clientId)
     else if (message.type === 'start_roll') startRoll(room, clientId)
     else if (message.type === 'stop_roll') stopRoll(room, clientId)
-    else if (message.type === 'use_skill') useSkill(room, clientId)
+    else if (message.type === 'use_skill') useSkill(room, clientId, message.targetId)
   })
 
   socket.on('close', () => {
