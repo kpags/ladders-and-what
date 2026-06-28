@@ -1,0 +1,68 @@
+[
+  {
+    "id": "blue-sass",
+    "name": "Blue Sass",
+    "color": "#0879e7",
+    "face": "ಠ‿ಠ",
+    "description": "Cool. Sarcastic. Probably judging you right now.",
+    "specialSkill": {
+      "name": "Magnet",
+      "description": "Move one player within 10 spaces of you to your space."
+    }
+  },
+  {
+    "id": "red-rage",
+    "name": "Red Rage",
+    "color": "#e9342d",
+    "face": "ಠ益ಠ",
+    "description": "Hot-headed and always ready to blame the dice.",
+    "specialSkill": {
+      "name": "Rage Reroll",
+      "description": "Reroll one die after landing on a question mark."
+    }
+  },
+  {
+    "id": "yellow-sarcasm",
+    "name": "Yellow Sarcasm",
+    "color": "#f2ae13",
+    "face": "¬‿¬",
+    "description": "Smart mouth. Sharper moves. Zero regrets.",
+    "specialSkill": {
+      "name": "Switcheroo",
+      "description": "Swap places with any player within 10 spaces of you."
+    }
+  },
+  {
+    "id": "green-mayhem",
+    "name": "Green Mayhem",
+    "color": "#5da52b",
+    "face": "◔‿◔",
+    "description": "Unpredictable. Unapologetic. Unstoppable.",
+    "specialSkill": {
+      "name": "Nope",
+      "description": "Ignore one question mark effect."
+    }
+  },
+  {
+    "id": "black-devil",
+    "name": "Black Devil",
+    "color": "#000000",
+    "face": "ಠ_ಠ",
+    "description": "Mysterious. Mischievous. Menacing.",
+    "specialSkill": {
+      "name": "Intersect",
+      "description": "Pull the closest player within 10 spaces to the median space between you and them."
+    }
+  },
+  {
+    "id": "purple-tricker",
+    "name": "Purple Tricker",
+    "color": "#800080",
+    "face": "ಠ‿↼",
+    "description": "Cunning. Deceptive. Delightfully tricky.",
+    "specialSkill": {
+      "name": "Peek-a-Boo",
+      "description": "Move a player to the next question mark space within 10 spaces of them."
+    }
+  }
+]

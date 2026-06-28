@@ -1,0 +1,139 @@
+[
+    {
+        "name": "Nature",
+        "picture": "assets/boards/nature/template.png",
+        "ladders": [
+            { "from": 8, "to": 27 },
+            { "from": 18, "to": 37 },
+            { "from": 32, "to": 51 },
+            { "from": 35, "to": 55 },
+            { "from": 44, "to": 65 },
+            { "from": 56, "to": 65 },
+            { "from": 68, "to": 88 },
+            { "from": 76, "to": 97 },
+            { "from": 79, "to": 100 }
+        ],
+        "question_marks": [
+            5, 16, 23, 33, 43, 59, 63, 67, 75, 83, 92, 95, 98
+        ],
+        "whats": [
+            {
+                "name": "Spider",
+                "spawn_locations": {
+                    "start": 50,
+                    "end": 80
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 2,
+                    "description": "The spider has trapped you in its web! Lose your next 2 turns."
+                }
+            },
+            {
+                "name": "Bee Swarm",
+                "spawn_locations": {
+                    "start": 20,
+                    "end": 90
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_back",
+                    "spaces": 10,
+                    "description": "A swarm of bees is chasing you! Move back 10 spaces."
+                }
+            },
+            {
+                "name": "Dung",
+                "spawn_locations": {
+                    "start": 5,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 1,
+                    "description": "You stepped in dung! Lose your next turn."
+                }
+            },
+            {
+                "name": "Worms",
+                "spawn_locations": {
+                    "start": 5,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "skill",
+                    "effect": "lose_skill",
+                    "spaces": 2,
+                    "description": "A worm crawls onto your path! Cannot use skill for 2 turns."
+                }
+            },
+            {
+                "name": "Ladybug",
+                "spawn_locations": {
+                    "start": 5,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 2,
+                    "description": "A beautiful ladybug lands on your path! You kept on chasing it and moved 2 spaces."
+                }
+            },
+            {
+                "name": "Butterfly",
+                "spawn_locations": {
+                    "start": 5,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 10,
+                    "description": "A butterfly flutters by! You were mesmerized and kept following it, moving 10 spaces."
+                }
+            },
+            {
+                "name": "Snake",
+                "spawn_locations": {
+                    "start": 60,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 3,
+                    "description": "A snake bites you! Cannot move for 3 turns."
+                }
+            },
+            {
+                "name": "Fireflies",
+                "spawn_locations": {
+                    "start": 5,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 5,
+                    "description": "A swarm of fireflies light up your path! You followed their glowing lights and moved 5 spaces."
+                }
+            },
+            {
+                "name": "Giant Scorpion",
+                "spawn_locations": {
+                    "start": 80,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move_back",
+                    "effect": "move_back",
+                    "spaces": 15,
+                    "description": "A giant scorpion scares you! You move back 15 spaces."
+                }
+            }
+        ]
+    }
+]

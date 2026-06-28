@@ -1,0 +1,19 @@
+{
+  "name": "ladders-and-what",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "server": "node server/authoritative.js",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "vite": "^5.4.19",
+    "vue": "^3.5.17",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {}
+}
