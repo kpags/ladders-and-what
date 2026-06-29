@@ -2,6 +2,7 @@
     {
         "name": "Nature",
         "picture": "assets/boards/nature/template.png",
+        "music": "nature",
         "ladders": [
             { "from": 8, "to": 27 },
             { "from": 18, "to": 37 },
@@ -131,6 +132,129 @@
                     "effect": "move_back",
                     "spaces": 15,
                     "description": "A giant scorpion scares you! You move back 15 spaces."
+                }
+            }
+        ]
+    },
+    {
+        "name": "Volcano",
+        "picture": "assets/boards/volcano/template.png",
+        "music": "volcano",
+        "ladders": [
+            { "from": 5, "to": 37 },
+            { "from": 13, "to": 49 },
+            { "from": 42, "to": 63 },
+            { "from": 46, "to": 65 },
+            { "from": 53, "to": 72 },
+            { "from": 64, "to": 83 },
+            { "from": 75, "to": 94 }
+        ],
+        "question_marks": [
+            3, 9, 18, 34, 39, 51, 54, 60, 61, 67, 81, 89, 91, 92, 96, 98
+        ],
+        "whats": [
+            {
+                "name": "Eruption",
+                "spawn_locations": {
+                    "start": 50,
+                    "end": 80
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 3,
+                    "description": "The volcano erupts and you've been hit! Lose your next 3 turns."
+                }
+            },
+            {
+                "name": "Magma Flow",
+                "spawn_locations": {
+                    "start": 20,
+                    "end": 90
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_back",
+                    "spaces": 10,
+                    "description": "A flow of magma is flowing towards you! Move back 10 spaces."
+                }
+            },
+            {
+                "name": "Ash Cloud",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 1,
+                    "description": "An ash cloud engulfs you! Lose your next turn."
+                }
+            },
+            {
+                "name": "Falling Boulder",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "skill",
+                    "effect": "lose_skill",
+                    "spaces": 2,
+                    "description": "A falling boulder crashes beside you! Cannot use skill for 2 turns."
+                }
+            },
+            {
+                "name": "Floating Rock",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 5,
+                    "description": "A floating rock drifts across your path of lava! You hop on it and moved 5 spaces."
+                }
+            },
+            {
+                "name": "Rock Bridge",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 8,
+                    "description": "A rock bridge appears before you! You carefully cross it and moved 8 spaces."
+                }
+            },
+            {
+                "name": "Fireball",
+                "spawn_locations": {
+                    "start": 60,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 3,
+                    "description": "A flying fireball landed in front of you! Cannot move for 3 turns."
+                }
+            },
+            {
+                "name": "Avalanche",
+                "spawn_locations": {
+                    "start": 80,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move_back",
+                    "effect": "move_back",
+                    "spaces": 20,
+                    "description": "An avalanche rushes down the mountain and heading towards you! You move back 20 spaces."
                 }
             }
         ]

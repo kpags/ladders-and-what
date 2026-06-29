@@ -4,7 +4,7 @@ import characters from '../data/characters.json'
 import boards from '../data/boards.json'
 import { audioManager } from './audioManager'
 
-const boardImages = import.meta.glob('../assets/boards/**/*.{png,jpg,jpeg,webp}', {
+const boardImages = import.meta.glob('../assets/boards/**/template.{png,jpg,jpeg,webp}', {
   eager: true,
   query: '?url',
   import: 'default',
@@ -49,6 +49,7 @@ const game = ref(null)
 const turnBusy = ref(false)
 const diceRolling = ref(false)
 const diceStopped = ref(false)
+const diceSpecial = ref(false)
 const displayedDice = ref(null)
 const movingPlayerId = ref(null)
 const climbingPlayerId = ref(null)
@@ -82,16 +83,12 @@ watch([sfx, music, muted], ([nextSfx, nextMusic, nextMuted]) => {
   audioManager.configure({ sfx: nextSfx, music: nextMusic, muted: nextMuted })
 }, { immediate: true })
 
-watch(page, nextPage => {
-  audioManager.setScene(nextPage === 'game' ? 'game' : 'menu')
+watch([page, () => game.value?.board?.music || game.value?.board?.name], ([nextPage, boardMusic]) => {
+  audioManager.setScene(nextPage === 'game' ? 'game' : 'menu', boardMusic)
 }, { immediate: true })
 
 function boardPicture(board) {
   return boardImages[`../${board.picture}`]
-}
-
-function boardGuide(board) {
-  return boardPicture({ picture: board.picture.replace(/template\.[^.]+$/, 'guides.png') })
 }
 
 function addAiPlayer() {
@@ -116,6 +113,7 @@ function clearGamePresentation() {
   window.clearInterval(diceTimer)
   diceRolling.value = false
   diceStopped.value = false
+  diceSpecial.value = false
   moveOverlay.value = null
   whatOverlay.value = null
   skillOverlay.value = null
@@ -139,17 +137,24 @@ async function handleServerEvent(event) {
     audioManager.diceRoll()
     diceStopped.value = false
     diceRolling.value = true
+    diceSpecial.value = Boolean(event.data.specialRoll)
+    const minimum = event.data.min ?? 1
+    const maximum = event.data.max ?? 6
     window.clearInterval(diceTimer)
     diceTimer = window.setInterval(() => {
-      displayedDice.value = Math.floor(Math.random() * 6) + 1
+      displayedDice.value = Math.floor(Math.random() * (maximum - minimum + 1)) + minimum
     }, 45)
   } else if (event.type === 'dice_stopped') {
     audioManager.diceResult()
     window.clearInterval(diceTimer)
     diceRolling.value = false
     diceStopped.value = true
+    diceSpecial.value = Boolean(event.data.specialRoll)
     displayedDice.value = event.data.result
-    window.setTimeout(() => { diceStopped.value = false }, remaining)
+    window.setTimeout(() => {
+      diceStopped.value = false
+      diceSpecial.value = false
+    }, remaining)
   } else if (event.type === 'move_announcement') {
     moveOverlay.value = event.data.spaces
     window.setTimeout(() => { moveOverlay.value = null }, remaining)
@@ -187,8 +192,10 @@ async function handleServerEvent(event) {
     }
   } else if (event.type === 'skip_notice') {
     audioManager.loseTurn()
-    skipOverlay.value = event.data
-    window.setTimeout(() => { skipOverlay.value = null }, remaining)
+    skipOverlay.value = { ...event.data, eventId: event.id }
+    window.setTimeout(() => {
+      if (skipOverlay.value?.eventId === event.id) skipOverlay.value = null
+    }, remaining)
   } else if (event.type === 'penalty') {
     audioManager.penalty()
     penaltyOverlay.value = {
@@ -373,16 +380,24 @@ function leaveOnlineRoom() {
 
 function tokenPosition(space, playerIndex) {
   const offsets = [[-1.15, -1.15], [1.15, -1.15], [-1.15, 1.15], [1.15, 1.15], [0, -1.65], [0, 1.65]]
-  const [offsetX, offsetY] = offsets[playerIndex % offsets.length]
+  const volcano = game.value?.board?.name === 'Volcano'
+  const offsetScale = volcano ? 0.72 : 1
+  const [rawOffsetX, rawOffsetY] = offsets[playerIndex % offsets.length]
+  const offsetX = rawOffsetX * offsetScale
+  const offsetY = rawOffsetY * offsetScale
   if (space === 100) {
-    return { left: `${8.8 + offsetX}%`, top: `${8.8 + offsetY}%`, '--token-color': game.value.players[playerIndex].color }
+    return {
+      left: `${(volcano ? 11.1 : 8.8) + offsetX}%`,
+      top: `${(volcano ? 9 : 8.8) + offsetY}%`,
+      '--token-color': game.value.players[playerIndex].color,
+    }
   }
   const row = Math.floor((space - 1) / 10)
   const positionInRow = (space - 1) % 10
   const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
   return {
-    left: `${9 + column * 9.2 + offsetX}%`,
-    top: `${90.5 - row * 9.15 + offsetY}%`,
+    left: `${(volcano ? 11.1 + column * 8.65 : 9 + column * 9.2) + offsetX}%`,
+    top: `${(volcano ? 86 - row * 8.56 : 90.5 - row * 9.15) + offsetY}%`,
     '--token-color': game.value.players[playerIndex].color,
   }
 }
@@ -667,7 +682,8 @@ onUnmounted(() => {
           <small>Dice result</small>
           <strong>Move for {{ moveOverlay }} {{ moveOverlay === 1 ? 'space' : 'spaces' }}</strong>
         </div>
-        <div v-if="diceRolling || diceStopped" class="dice-roll-overlay" :class="{ stopped: diceStopped }" role="status">
+        <div v-if="diceRolling || diceStopped" class="dice-roll-overlay" :class="{ stopped: diceStopped, special: diceSpecial }" role="status">
+          <small v-if="diceSpecial">Parkour special die · 7–10</small>
           <div v-if="diceRolling" class="large-dice">{{ displayedDice || '?' }}</div>
           <div v-else class="large-dice result-number" :aria-label="`Rolled ${displayedDice}`">{{ displayedDice }}</div>
           <strong>{{ diceStopped ? `Rolled ${displayedDice}` : 'Rolling...' }}</strong>
@@ -742,7 +758,11 @@ onUnmounted(() => {
               :disabled="turnBusy || !isControlledTurn"
               @click="playTurn"
             >
-              {{ isControlledTurn ? 'Roll dice' : `${game.players[game.currentPlayerIndex].name}'s turn` }}
+              {{
+                isControlledTurn
+                  ? (controlledGamePlayer?.specialRollPending ? 'Parkour Roll' : controlledGamePlayer?.rerollPending ? 'Reroll' : 'Roll dice')
+                  : `${game.players[game.currentPlayerIndex].name}'s turn`
+              }}
             </button>
             <button v-else class="game-button green" @click="leaveOnlineRoom">Exit game</button>
           </div>
@@ -751,7 +771,7 @@ onUnmounted(() => {
         <div class="game-layout">
           <div class="game-board-wrap">
             <div class="game-board">
-              <img :src="boardGuide(game.board)" :alt="`${game.board.name} gameplay board`">
+              <img :src="boardPicture(game.board)" :alt="`${game.board.name} gameplay board`">
               <div
                 v-for="(player, index) in game.players"
                 :key="player.id"

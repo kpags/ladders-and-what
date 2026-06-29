@@ -35,9 +35,8 @@ class AudioManager {
     this.outcome = null
     this.playlists = {
       menu: entriesFrom(musicFiles, 'menu'),
-      game: entriesFrom(musicFiles, 'in_game'),
     }
-    this.playlistIndex = { menu: 0, game: 0 }
+    this.playlistIndex = { menu: 0 }
   }
 
   unlock() {
@@ -56,21 +55,30 @@ class AudioManager {
     if (!this.muted && this.unlocked && this.music.paused && !this.outcome) this.startPlaylist()
   }
 
-  setScene(scene) {
-    const next = scene === 'game' ? 'game' : 'menu'
+  setScene(scene, boardMusic = 'nature') {
+    const map = String(boardMusic || 'nature').toLowerCase().replace(/[^a-z0-9_-]/g, '-')
+    const next = scene === 'game' ? `game:${map}` : 'menu'
     if (this.scene === next && !this.music.paused) return
     this.scene = next
     this.startPlaylist(true)
   }
 
+  currentPlaylist() {
+    if (this.scene === 'menu') return this.playlists.menu
+    const map = this.scene.split(':')[1] || 'nature'
+    if (!this.playlists[this.scene]) this.playlists[this.scene] = entriesFrom(musicFiles, `in_game/${map}`)
+    return this.playlists[this.scene]
+  }
+
   startPlaylist(reset = false) {
     if (!this.unlocked || this.outcome) return
-    const list = this.playlists[this.scene]
+    const list = this.currentPlaylist()
     if (!list.length) return
     if (reset) {
       this.music.pause()
       this.playlistIndex[this.scene] = 0
     }
+    if (this.playlistIndex[this.scene] == null) this.playlistIndex[this.scene] = 0
     const url = list[this.playlistIndex[this.scene] % list.length]
     if (this.music.src !== new URL(url, location.href).href) this.music.src = url
     this.music.volume = this.muted ? 0 : this.musicVolume
@@ -78,7 +86,7 @@ class AudioManager {
   }
 
   playNextTrack() {
-    const list = this.playlists[this.scene]
+    const list = this.currentPlaylist()
     if (!list.length || this.outcome) return
     this.playlistIndex[this.scene] = (this.playlistIndex[this.scene] + 1) % list.length
     this.music.src = list[this.playlistIndex[this.scene]]

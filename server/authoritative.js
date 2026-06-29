@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, createGameState, forfeitPlayer, penalizeTurn, takeTurn } from '../src/gameRules.js'
+import { activateSkill, createGameState, endTurnAfterSkill, forfeitPlayer, penalizeTurn, takeTurn } from '../src/gameRules.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const RECONNECT_GRACE_MS = 10_000
@@ -124,8 +124,8 @@ function effectDestination(space, what) {
   return space
 }
 
-async function runTurnSequence(room, player, startSpace, roll, token) {
-  emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll }, 2000)
+async function runTurnSequence(room, player, startSpace, roll, token, specialRoll = false) {
+  emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll, specialRoll }, 2000)
   if (!await wait(room, 2000, token)) return
   emitEvent(room, 'move_announcement', { playerId: player.id, spaces: roll }, 2000)
   if (!await wait(room, 2000, token)) return
@@ -138,6 +138,10 @@ async function runTurnSequence(room, player, startSpace, roll, token) {
   const questionChain = room.game.lastQuestionChain || []
   let resolvedSpace = rollLanding
   for (const resolution of questionChain) {
+    if (resolution.kind === 'reroll_pending') {
+      resolvedSpace = resolution.destination
+      continue
+    }
     if (resolution.kind === 'reroll') {
       const duration = Math.abs(resolution.destination - resolvedSpace) * 540
       if (duration > 0) {
@@ -202,12 +206,15 @@ function stopRoll(room, requesterId, automatic = false) {
     if (player.skillCooldownUntil > room.rolling.startedAt) player.skillCooldownUntil += elapsed
   }
 
-  const roll = Math.floor(Math.random() * 6) + 1
+  const specialRoll = current.specialRollPending
+  const roll = specialRoll
+    ? Math.floor(Math.random() * 4) + 7
+    : Math.floor(Math.random() * 6) + 1
   const startSpace = current.space
   room.rolling = null
   takeTurn(room.game, roll)
   const token = ++room.sequenceToken
-  runTurnSequence(room, current, startSpace, roll, token)
+  runTurnSequence(room, current, startSpace, roll, token, specialRoll)
 }
 
 function startRoll(room, requesterId, automatic = false) {
@@ -219,8 +226,15 @@ function startRoll(room, requesterId, automatic = false) {
   clearTimer(room.turnTimer)
   room.turnDeadline = null
   room.busy = true
-  room.rolling = { playerId: current.id, startedAt: Date.now() }
-  emitEvent(room, 'dice_rolling', { playerId: current.id, autoStopAt: Date.now() + (current.isAI ? 900 : 5000) }, current.isAI ? 900 : 5000)
+  const specialRoll = current.specialRollPending
+  room.rolling = { playerId: current.id, startedAt: Date.now(), specialRoll }
+  emitEvent(room, 'dice_rolling', {
+    playerId: current.id,
+    autoStopAt: Date.now() + (current.isAI ? 900 : 5000),
+    min: specialRoll ? 7 : 1,
+    max: specialRoll ? 10 : 6,
+    specialRoll,
+  }, current.isAI ? 900 : 5000)
   room.rollTimer = setTimeout(() => stopRoll(room, current.id, true), current.isAI ? 900 : 5000)
 }
 
@@ -278,7 +292,15 @@ function beginTurn(room) {
 
   if (current.isAI) {
     room.turnDeadline = null
-    room.turnTimer = setTimeout(() => startRoll(room, current.id, true), 550)
+    room.turnTimer = setTimeout(() => {
+      if (current.rerollPending || current.specialRollPending) {
+        startRoll(room, current.id, true)
+        return
+      }
+      const skill = activateSkill(structuredClone(room.game), Date.now())
+      if (skill.ok) useSkill(room, current.id, null, true)
+      else startRoll(room, current.id, true)
+    }, 550)
   } else {
     room.turnDeadline = Date.now() + TURN_MS
     room.turnTimer = setTimeout(() => applyPenalty(room), TURN_MS)
@@ -286,10 +308,12 @@ function beginTurn(room) {
   broadcastGame(room)
 }
 
-function useSkill(room, requesterId, targetId = null) {
+function useSkill(room, requesterId, targetId = null, automatic = false) {
   if (room.phase !== 'playing' || room.busy || room.game.gameOver) return
   const current = room.game.players[room.game.currentPlayerIndex]
-  if (current.id !== requesterId || current.isAI) return reject(sockets.get(requesterId), 'Skill can only be used during your turn.')
+  if (current.id !== requesterId) return reject(sockets.get(requesterId), 'Skill can only be used during your turn.')
+  if (automatic && !current.isAI) return
+  if (!automatic && current.isAI) return reject(sockets.get(requesterId), 'AI skills are controlled by the server.')
   if (current.skillBlockedTurns > 0) return reject(sockets.get(requesterId), `Skill blocked for ${current.skillBlockedTurns} turn(s).`)
   if (current.skillCooldownUntil > Date.now()) return reject(sockets.get(requesterId), 'Skill is still cooling down.')
   const turnKey = `${room.game.turn}:${room.game.currentPlayerIndex}`
@@ -364,8 +388,14 @@ function useSkill(room, requesterId, targetId = null) {
         if (!resultVisible) return
         room.currentEvent = null
         room.busy = false
-        broadcastGame(room)
-        beginTurn(room)
+        if (result.requiresRoll) {
+          broadcastGame(room)
+          startRoll(room, current.id, current.isAI)
+        } else {
+          endTurnAfterSkill(room.game)
+          broadcastGame(room)
+          beginTurn(room)
+        }
       })
     }
 

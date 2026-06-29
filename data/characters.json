@@ -18,7 +18,7 @@
     "description": "Hot-headed and always ready to blame the dice.",
     "specialSkill": {
       "name": "Rage Reroll",
-      "description": "Reroll one die after landing on a question mark."
+      "description": "Arm your next question mark so you can reroll the die."
     }
   },
   {
@@ -51,7 +51,7 @@
     "description": "Mysterious. Mischievous. Menacing.",
     "specialSkill": {
       "name": "Intersect",
-      "description": "Pull yourself and the closest player within 10 spaces to the median space between you and them."
+      "description": "Pull yourself and the closest player within 10 spaces to the median space between you and them. Cannot be used when only 1 space apart."
     }
   },
   {
@@ -63,6 +63,17 @@
     "specialSkill": {
       "name": "Peek-a-Boo",
       "description": "Move the closest player within 10 spaces to the next question mark space within 10 spaces of them. Choose the target when multiple closest players share the same space."
+    }
+  },
+  {
+    "id": "parkour-joe",
+    "name": "Parkour Joe",
+    "color": "#808080",
+    "face": "ಠ益ಠ",
+    "description": "Agile. Fearless. Always on the move.",
+    "specialSkill": {
+      "name": "Parkour",
+      "description": "Roll a special die that contains numbers from 7-10 instead of 1-6 that will determine how many spaces you move forward."
     }
   }
 ]

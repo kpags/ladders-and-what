@@ -12,6 +12,8 @@ export function createGameState(board, players, startedAt = Date.now()) {
       skillBlockedTurns: 0,
       skillCooldownUntil: startedAt + SKILL_COOLDOWN_MS,
       skillArmed: null,
+      rerollPending: false,
+      specialRollPending: false,
       finished: false,
       rank: null,
     })),
@@ -44,12 +46,22 @@ function chooseWhat(state, space) {
   if (!whats.length) return null
   const history = state.questionHistory[space] || []
   if (!state.questionHistory[space]) state.questionHistory[space] = history
-  let candidates = whats.map((_, index) => index).filter(index => !history.includes(index))
+  let eligible = whats
+    .map((what, index) => ({ what, index }))
+    .filter(({ what }) => {
+      const start = what.spawn_locations?.start ?? 1
+      const end = what.spawn_locations?.end ?? 100
+      return space >= start && space <= end
+    })
+    .map(({ index }) => index)
+  if (!eligible.length) return null
+
+  let candidates = eligible.filter(index => !history.includes(index))
 
   if (!candidates.length) {
     const previous = history.at(-1)
-    candidates = whats.map((_, index) => index).filter(index => index !== previous)
-    if (!candidates.length) candidates = [0]
+    candidates = eligible.filter(index => index !== previous)
+    if (!candidates.length) candidates = [eligible[0]]
     state.questionHistory[space] = []
   }
 
@@ -106,16 +118,13 @@ function resolveLanding(state, player) {
       break
     } else if (player.skillArmed === 'reroll-question') {
       player.skillArmed = null
-      const reroll = Math.floor(Math.random() * 6) + 1
-      player.space = Math.min(100, player.space + reroll)
-      state.lastRoll = reroll
+      player.rerollPending = true
       state.lastQuestionChain.push({
-        kind: 'reroll',
+        kind: 'reroll_pending',
         space: questionSpace,
-        destination: player.space,
-        roll: reroll,
+        destination: questionSpace,
       })
-      addLog(state, `${player.name}'s Rage Reroll rolled ${reroll} and escaped space ${questionSpace}!`)
+      addLog(state, `${player.name}'s Rage Reroll is ready on space ${questionSpace}.`)
     } else {
       const what = chooseWhat(state, questionSpace)
       if (what) {
@@ -134,7 +143,7 @@ function resolveLanding(state, player) {
     if (player.space === questionSpace) break
   }
 
-  const ladder = state.board.ladders.find(item => item.from === player.space)
+  const ladder = !player.rerollPending && state.board.ladders.find(item => item.from === player.space)
   if (ladder) {
     const start = player.space
     player.space = ladder.to
@@ -153,6 +162,10 @@ function advanceTurn(state) {
   state.currentPlayerIndex = nextIndex
 }
 
+export function endTurnAfterSkill(state) {
+  if (!state.gameOver) advanceTurn(state)
+}
+
 export function takeTurn(state, forcedRoll) {
   if (state.gameOver) return
   const player = state.players[state.currentPlayerIndex]
@@ -169,12 +182,14 @@ export function takeTurn(state, forcedRoll) {
   }
 
   const roll = forcedRoll || Math.floor(Math.random() * 6) + 1
+  player.rerollPending = false
+  player.specialRollPending = false
   state.lastRoll = roll
   player.space = Math.min(100, player.space + roll)
   addLog(state, `${player.name} rolled ${roll} and moved to space ${player.space}.`)
   resolveLanding(state, player)
   if (player.skillBlockedTurns > 0) player.skillBlockedTurns--
-  advanceTurn(state)
+  if (!player.rerollPending) advanceTurn(state)
 }
 
 export function penalizeTurn(state) {
@@ -184,6 +199,8 @@ export function penalizeTurn(state) {
   let destination = Math.max(1, from - 1)
   while (destination > 1 && state.board.question_marks.includes(destination)) destination--
   player.space = destination
+  player.rerollPending = false
+  player.specialRollPending = false
   state.lastRoll = null
   state.lastWhat = null
   state.lastQuestionChain = []
@@ -256,6 +273,9 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
     message = `${player.name} used Switcheroo and swapped spaces with ${target.name}.`
   } else if (skill === 'Intersect') {
     if (!target) return { ok: false, message: 'No player is within 10 spaces.' }
+    if (Math.abs(target.space - player.space) === 1) {
+      return { ok: false, message: 'Intersect cannot be used when the closest player is only 1 space away.' }
+    }
     const middle = Math.round((player.space + target.space) / 2)
     player.space = middle
     target.space = middle
@@ -289,11 +309,20 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
   } else if (skill === 'Rage Reroll') {
     player.skillArmed = 'reroll-question'
     message = `${player.name} armed Rage Reroll for their next question mark.`
+  } else if (skill === 'Parkour') {
+    player.specialRollPending = true
+    message = `${player.name} used Parkour and is ready to roll a special 7–10 die.`
   } else {
     return { ok: false, message: 'This skill is not available.' }
   }
 
   player.skillCooldownUntil = now + SKILL_COOLDOWN_MS
   addLog(state, message)
-  return { ok: true, message, movement, landingResolution }
+  return {
+    ok: true,
+    message,
+    movement,
+    landingResolution,
+    requiresRoll: skill === 'Parkour',
+  }
 }
