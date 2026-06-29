@@ -174,15 +174,20 @@ input[type=range] { height:30px; }
 .room-actions .ai-button:disabled { cursor:not-allowed; filter:grayscale(.8) brightness(.7); transform:none; }
 .board-panel { align-self:start; padding:1.2rem; border:4px solid #111827; border-radius:22px; background:#090e18dd; box-shadow:0 10px 0 #02050a; }
 .board-heading { margin:-2.5rem auto 1.2rem; width:80%; padding:.8rem; clip-path:polygon(4% 0,96% 2%,100% 48%,96% 100%,4% 98%,0 53%); background:linear-gradient(#1f73c8,#104083); filter:drop-shadow(0 7px 0 #030813); text-align:center; text-transform:uppercase; font:2rem 'Luckiest Guy'; }
-.board-list { display:grid; gap:.8rem; }
-.board-option { width:100%; min-height:125px; display:grid; grid-template-columns:42% 1fr 54px; align-items:stretch; overflow:hidden; padding:0; border:4px solid #22201b; border-radius:15px; background:#f1dfbd; box-shadow:0 6px 0 #05070c; color:#151319; text-align:left; }
+.board-carousel { position:relative; display:grid; grid-template-columns:54px minmax(0,1fr) 54px; align-items:center; gap:.65rem; }
+.board-option { position:relative; width:100%; min-height:300px; display:grid; grid-template-columns:48% 1fr 54px; align-items:stretch; overflow:hidden; padding:0; border:4px solid #22201b; border-radius:15px; background:#f1dfbd; box-shadow:0 6px 0 #05070c; color:#151319; text-align:left; animation:board-card-in .22s ease both; }
 .board-option.chosen { border-color:#65b92a; box-shadow:0 6px 0 #224d0f,0 0 20px #75dd363d; }
-.board-option img { width:100%; height:100%; min-height:120px; object-fit:cover; }
+.board-option img { width:100%; height:100%; min-height:300px; object-fit:cover; }
 .board-copy { display:flex; flex-direction:column; justify-content:center; gap:.4rem; padding:1rem; }
 .board-copy strong { font:1.7rem/1 'Luckiest Guy'; text-transform:uppercase; }
 .board-copy small { font-size:1.05rem; }
 .board-radio { align-self:center; width:42px; height:42px; display:grid; place-items:center; border:3px solid #141611; border-radius:50%; background:#f8e8c9; font:bold 2rem sans-serif; }
 .chosen .board-radio { border-radius:10px; background:#66bd29; }
+.board-arrow { width:52px; height:68px; display:grid; place-items:center; padding:0 0 .12em; border:3px solid #101722; border-radius:12px; background:linear-gradient(#ffc928,#dc8d0b); box-shadow:0 6px 0 #05080e; color:#12131a; font:bold 3.2rem/1 sans-serif; }
+.board-arrow:not(:disabled):hover { filter:brightness(1.12); transform:translateY(-2px); }
+.board-arrow:disabled { cursor:not-allowed; filter:grayscale(.8); opacity:.4; }
+.board-host-note { display:block; margin:.85rem 0 0; color:#ae9fba; text-align:center; font-size:.9rem; }
+@keyframes board-card-in { from { opacity:.45; transform:scale(.98); } }
 .board-tip { margin-top:1rem; padding:.8rem 1rem; border:2px solid #263244; background:#080e18; color:#d8ccb5; text-align:center; font-size:1.05rem; }
 .board-tip b { color:#ffc019; }
 
@@ -392,12 +397,14 @@ input[type=range] { height:30px; }
   .room-actions { grid-template-columns:1fr; }
   .board-panel { margin-top:1rem; padding:.7rem; }
   .board-heading { width:90%; font-size:1.5rem; }
-  .board-option { grid-template-columns:38% 1fr 42px; min-height:100px; }
-  .board-option img { min-height:100px; }
-  .board-copy { padding:.6rem; }
+  .board-carousel { grid-template-columns:38px minmax(0,1fr) 38px; gap:.35rem; }
+  .board-arrow { width:38px; height:58px; border-width:2px; border-radius:9px; font-size:2.5rem; }
+  .board-option { grid-template-columns:1fr; min-height:0; }
+  .board-option img { height:auto; min-height:0; aspect-ratio:16/10; object-fit:cover; }
+  .board-copy { min-height:82px; align-items:center; padding:.65rem 2.5rem .65rem .6rem; text-align:center; }
   .board-copy strong { font-size:1.25rem; }
   .board-copy small { font-size:.9rem; }
-  .board-radio { width:32px; height:32px; font-size:1.4rem; }
+  .board-radio { position:absolute; right:7px; bottom:28px; width:30px; height:30px; border-width:2px; font-size:1.25rem; }
   .game-screen { padding:.5rem; }
   .game-hud { grid-template-columns:75px 1fr 70px; gap:.5rem; padding:.3rem .5rem; }
   .game-hud > div:nth-child(2) { display:none; }

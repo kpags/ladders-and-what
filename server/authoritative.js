@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, createGameState, endTurnAfterSkill, forfeitPlayer, penalizeTurn, takeTurn } from '../src/gameRules.js'
+import { activateSkill, createGameState, endTurnAfterSkill, forfeitPlayer, penalizeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const RECONNECT_GRACE_MS = 10_000
 const TURN_MS = 15_000
 const boards = JSON.parse(readFileSync(new URL('../data/boards.json', import.meta.url), 'utf8'))
 const characters = JSON.parse(readFileSync(new URL('../data/characters.json', import.meta.url), 'utf8'))
+const parkourWhats = boards.find(board => board.name === 'Nature')?.whats
+  .filter(what => ['Bee Swarm', 'Dung'].includes(what.name)) || []
 const rooms = new Map()
 const sockets = new Map()
 
@@ -195,6 +197,79 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
   beginTurn(room)
 }
 
+async function runParkourWhatSequence(room, result, token) {
+  const player = result.player
+  const icon = result.what.name === 'Bee Swarm' ? '🐝' : '💩'
+  emitEvent(room, 'dice_stopped', {
+    playerId: player.id,
+    result: icon,
+    resultLabel: result.what.name,
+    specialRoll: true,
+  }, 2000)
+  if (!await wait(room, 2000, token)) return
+
+  emitEvent(room, 'what_reveal', {
+    playerId: player.id,
+    playerName: player.name,
+    name: result.what.name,
+    description: affectedDescription(result.what.effect.description, player.name),
+    effect: result.what.effect.effect,
+  }, 3000)
+  if (!await wait(room, 3000, token)) return
+
+  let resolvedSpace = result.from
+  if (result.directDestination !== resolvedSpace) {
+    const duration = Math.abs(result.directDestination - resolvedSpace) * 540
+    emitEvent(room, 'movement', {
+      playerId: player.id,
+      from: resolvedSpace,
+      to: result.directDestination,
+      kind: 'effect',
+    }, duration)
+    if (!await wait(room, duration, token)) return
+    resolvedSpace = result.directDestination
+  }
+
+  for (const resolution of result.questionChain) {
+    if (resolution.kind === 'reroll_pending') continue
+    if (resolution.kind === 'what') {
+      emitEvent(room, 'what_reveal', {
+        playerId: player.id,
+        playerName: player.name,
+        name: resolution.what.name,
+        description: affectedDescription(resolution.what.effect.description, player.name),
+        effect: resolution.what.effect.effect,
+      }, 3000)
+      if (!await wait(room, 3000, token)) return
+    }
+    if (resolution.destination !== resolvedSpace) {
+      const duration = Math.abs(resolution.destination - resolvedSpace) * 540
+      emitEvent(room, 'movement', {
+        playerId: player.id,
+        from: resolvedSpace,
+        to: resolution.destination,
+        kind: resolution.kind === 'reroll' ? 'reroll' : 'effect',
+      }, duration)
+      if (!await wait(room, duration, token)) return
+    }
+    resolvedSpace = resolution.destination
+  }
+
+  if (result.ladder) {
+    emitEvent(room, 'ladder', {
+      playerId: player.id,
+      from: result.ladder.from,
+      to: result.ladder.to,
+    }, 1600)
+    if (!await wait(room, 1600, token)) return
+  }
+
+  room.currentEvent = null
+  room.busy = false
+  broadcastGame(room)
+  beginTurn(room)
+}
+
 function stopRoll(room, requesterId, automatic = false) {
   if (!room.rolling || room.phase !== 'playing') return
   const current = room.game.players[room.game.currentPlayerIndex]
@@ -207,6 +282,14 @@ function stopRoll(room, requesterId, automatic = false) {
   }
 
   const specialRoll = current.specialRollPending
+  if (specialRoll && parkourWhats.length && Math.random() < 0.15) {
+    const what = parkourWhats[Math.floor(Math.random() * parkourWhats.length)]
+    room.rolling = null
+    const result = takeParkourWhat(room.game, what)
+    const token = ++room.sequenceToken
+    runParkourWhatSequence(room, result, token)
+    return
+  }
   const roll = specialRoll
     ? Math.floor(Math.random() * 4) + 7
     : Math.floor(Math.random() * 6) + 1
@@ -234,6 +317,7 @@ function startRoll(room, requesterId, automatic = false) {
     min: specialRoll ? 7 : 1,
     max: specialRoll ? 10 : 6,
     specialRoll,
+    faces: specialRoll ? [7, 8, 9, 10, '🐝', '💩'] : [1, 2, 3, 4, 5, 6],
   }, current.isAI ? 900 : 5000)
   room.rollTimer = setTimeout(() => stopRoll(room, current.id, true), current.isAI ? 900 : 5000)
 }

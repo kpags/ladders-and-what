@@ -192,6 +192,42 @@ export function takeTurn(state, forcedRoll) {
   if (!player.rerollPending) advanceTurn(state)
 }
 
+export function takeParkourWhat(state, what) {
+  if (state.gameOver || !what) return null
+  const player = state.players[state.currentPlayerIndex]
+  const from = player.space
+  player.specialRollPending = false
+  state.lastRoll = null
+  state.lastWhat = { ...what, space: from }
+  state.lastQuestionChain = []
+  applyWhat(player, what)
+  const directDestination = player.space
+  addLog(state, `${player.name}'s Parkour die landed on ${what.name}. ${affectedDescription(what.effect.description, player.name)}`)
+
+  let questionChain = []
+  let ladder = null
+  if (directDestination !== from) {
+    resolveLanding(state, player)
+    questionChain = state.lastQuestionChain.map(item => ({
+      ...item,
+      what: item.what ? { ...item.what } : undefined,
+    }))
+    const afterQuestions = questionChain.at(-1)?.destination ?? directDestination
+    const connectedLadder = state.board.ladders.find(item => item.from === afterQuestions)
+    if (connectedLadder) ladder = { ...connectedLadder }
+  }
+
+  if (!state.gameOver) advanceTurn(state)
+  return {
+    player,
+    what: { ...what },
+    from,
+    directDestination,
+    questionChain,
+    ladder,
+  }
+}
+
 export function penalizeTurn(state) {
   if (state.gameOver) return null
   const player = state.players[state.currentPlayerIndex]

@@ -51,6 +51,7 @@ const diceRolling = ref(false)
 const diceStopped = ref(false)
 const diceSpecial = ref(false)
 const displayedDice = ref(null)
+const diceResultLabel = ref('')
 const movingPlayerId = ref(null)
 const climbingPlayerId = ref(null)
 const resolvingPlayerId = ref(null)
@@ -74,6 +75,7 @@ const turnSeconds = computed(() => turnDeadline.value ? Math.max(0, Math.ceil((t
 const controlledGamePlayer = computed(() => game.value?.players.find(player => player.id === clientId))
 const isControlledTurn = computed(() => Boolean(game.value && controlledGamePlayer.value?.id === game.value.players[game.value.currentPlayerIndex]?.id))
 const isLobbyHost = computed(() => onlineRoom.value?.hostId === clientId)
+const selectedLobbyBoard = computed(() => boards[selectedBoard.value] || boards[0])
 const lobbyPlayers = computed(() => (onlineRoom.value?.players || []).map(player => ({
   ...player,
   character: characters[player.characterIndex % characters.length],
@@ -114,6 +116,7 @@ function clearGamePresentation() {
   diceRolling.value = false
   diceStopped.value = false
   diceSpecial.value = false
+  diceResultLabel.value = ''
   moveOverlay.value = null
   whatOverlay.value = null
   skillOverlay.value = null
@@ -138,11 +141,11 @@ async function handleServerEvent(event) {
     diceStopped.value = false
     diceRolling.value = true
     diceSpecial.value = Boolean(event.data.specialRoll)
-    const minimum = event.data.min ?? 1
-    const maximum = event.data.max ?? 6
+    diceResultLabel.value = ''
+    const faces = event.data.faces || [1, 2, 3, 4, 5, 6]
     window.clearInterval(diceTimer)
     diceTimer = window.setInterval(() => {
-      displayedDice.value = Math.floor(Math.random() * (maximum - minimum + 1)) + minimum
+      displayedDice.value = faces[Math.floor(Math.random() * faces.length)]
     }, 45)
   } else if (event.type === 'dice_stopped') {
     audioManager.diceResult()
@@ -151,9 +154,11 @@ async function handleServerEvent(event) {
     diceStopped.value = true
     diceSpecial.value = Boolean(event.data.specialRoll)
     displayedDice.value = event.data.result
+    diceResultLabel.value = event.data.resultLabel || ''
     window.setTimeout(() => {
       diceStopped.value = false
       diceSpecial.value = false
+      diceResultLabel.value = ''
     }, remaining)
   } else if (event.type === 'move_announcement') {
     moveOverlay.value = event.data.spaces
@@ -357,6 +362,11 @@ function selectLobbyBoard(index) {
   if (onlineRoom.value && !isLobbyHost.value) return
   selectedBoard.value = index
   sendLobby({ type: 'board', boardIndex: index })
+}
+
+function changeLobbyBoard(direction) {
+  if (!isLobbyHost.value || boards.length < 2) return
+  selectLobbyBoard((selectedBoard.value + direction + boards.length) % boards.length)
 }
 
 async function shareInvite() {
@@ -650,22 +660,35 @@ onUnmounted(() => {
 
           <section class="board-panel">
             <div class="board-heading">Choose a board</div>
-            <div class="board-list">
+            <div class="board-carousel">
               <button
-                v-for="(board, index) in boards"
-                :key="board.name"
-                class="board-option"
-                :class="{ chosen: selectedBoard === index }"
-                @click="selectLobbyBoard(index)"
+                type="button"
+                class="board-arrow left"
+                :disabled="!isLobbyHost || boards.length < 2"
+                aria-label="Previous board"
+                @click="changeLobbyBoard(-1)"
               >
-                <img :src="boardPicture(board)" :alt="`${board.name} board`">
+                ‹
+              </button>
+              <article class="board-option chosen" :key="selectedLobbyBoard.name">
+                <img :src="boardPicture(selectedLobbyBoard)" :alt="`${selectedLobbyBoard.name} board`">
                 <span class="board-copy">
-                  <strong>{{ board.name }}</strong>
-                  <small>{{ board.question_marks.length }} surprises · {{ board.ladders.length }} ladders</small>
+                  <strong>{{ selectedLobbyBoard.name }}</strong>
+                  <small>{{ selectedLobbyBoard.question_marks.length }} surprises · {{ selectedLobbyBoard.ladders.length }} ladders</small>
                 </span>
-                <span class="board-radio">{{ selectedBoard === index ? '✓' : '' }}</span>
+                <span class="board-radio">✓</span>
+              </article>
+              <button
+                type="button"
+                class="board-arrow right"
+                :disabled="!isLobbyHost || boards.length < 2"
+                aria-label="Next board"
+                @click="changeLobbyBoard(1)"
+              >
+                ›
               </button>
             </div>
+            <small v-if="!isLobbyHost" class="board-host-note">Only the host can change the board</small>
             <div class="board-tip"><b>💡 Tip:</b> Land on a question mark? Who knows what will happen. That’s the point.</div>
           </section>
         </div>
@@ -686,7 +709,7 @@ onUnmounted(() => {
           <small v-if="diceSpecial">Parkour special die · 7–10</small>
           <div v-if="diceRolling" class="large-dice">{{ displayedDice || '?' }}</div>
           <div v-else class="large-dice result-number" :aria-label="`Rolled ${displayedDice}`">{{ displayedDice }}</div>
-          <strong>{{ diceStopped ? `Rolled ${displayedDice}` : 'Rolling...' }}</strong>
+          <strong>{{ diceStopped ? (diceResultLabel || `Rolled ${displayedDice}`) : 'Rolling...' }}</strong>
           <button
             v-if="diceRolling && isControlledTurn"
             class="stop-dice-button"
