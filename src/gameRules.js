@@ -35,6 +35,7 @@ export function createGameState(board, players, startedAt = Date.now()) {
       skipReason: null,
       skillBlockedTurns: 0,
       skillCooldownUntil: startedAt + SKILL_COOLDOWN_MS,
+      skillRefreshPending: false,
       skillArmed: null,
       rerollPending: false,
       specialRollPending: false,
@@ -244,6 +245,7 @@ function applyWhat(state, player, what) {
     player.skipReason = what.name
   }
   else if (effect.effect === 'lose_skill') player.skillBlockedTurns = Math.max(player.skillBlockedTurns, effect.spaces || effect.turns || 1)
+  else if (effect.effect === 'activate_skill' && player.skillCooldownUntil > Date.now()) player.skillRefreshPending = true
 }
 
 function affectedDescription(description, playerName) {
@@ -319,6 +321,12 @@ function advanceTurn(state) {
     if (nextIndex === 0) state.turn++
   } while (state.players[nextIndex].finished || state.players[nextIndex].eliminated)
   state.currentPlayerIndex = nextIndex
+  const nextPlayer = state.players[nextIndex]
+  if (nextPlayer.skillRefreshPending) {
+    nextPlayer.skillCooldownUntil = 0
+    nextPlayer.skillRefreshPending = false
+    addLog(state, `${nextPlayer.name}'s Water Well refresh is ready. Their skill cooldown was removed.`)
+  }
 }
 
 export function endTurnAfterSkill(state) {

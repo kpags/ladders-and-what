@@ -1,9 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  activateSkill,
   createGameState,
   describeRunAwayRoll,
   destroySpace,
+  endTurnAfterSkill,
   planRunAwayDestruction,
   takeTurn,
 } from '../src/gameRules.js'
@@ -142,4 +144,102 @@ test('simultaneous destruction of every player ends with no winner', () => {
   assert.equal(state.loser, null)
   assert.equal(state.players.every(player => player.eliminated && !player.won), true)
   assert.equal(state.lastEvent, 'Every player was eliminated by the destruction. Nobody wins.')
+})
+
+test('destruction is planned from positions after a skill resolves', () => {
+  const state = createState([25, 15])
+  state.currentPlayerIndex = 1
+  state.turn = 1
+  state.nextExplosionTurn = 2
+  state.players[1].specialSkill = { name: 'Intersect' }
+  state.players[1].skillCooldownUntil = 0
+
+  const result = activateSkill(state, 1)
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(state.players.map(player => player.space), [20, 20])
+  assert.equal(state.lastExplosion, null)
+
+  endTurnAfterSkill(state)
+
+  assert.equal(state.turn, 2)
+  assert.equal(state.lastExplosion.spaces.at(-1), 15)
+})
+
+test('Water Well defers cooldown removal until the affected player next turn', () => {
+  const waterWellBoard = {
+    ...board,
+    question_marks: [2],
+    whats: [{
+      name: 'Water Well',
+      spawn_locations: { start: 1, end: 99 },
+      effect: { type: 'skill', effect: 'activate_skill', description: 'Refresh next turn.' },
+    }],
+  }
+  const state = createGameState(waterWellBoard, [
+    { id: 'player-1', name: 'Player 1' },
+    { id: 'player-2', name: 'Player 2' },
+  ], 0)
+  state.nextExplosionTurn = 99
+  const activeCooldown = Date.now() + 120_000
+  state.players[0].skillCooldownUntil = activeCooldown
+
+  takeTurn(state, 1)
+
+  assert.equal(state.currentPlayerIndex, 1)
+  assert.equal(state.players[0].skillCooldownUntil, activeCooldown)
+  assert.equal(state.players[0].skillRefreshPending, true)
+
+  takeTurn(state, 0)
+
+  assert.equal(state.currentPlayerIndex, 0)
+  assert.equal(state.players[0].skillCooldownUntil, 0)
+  assert.equal(state.players[0].skillRefreshPending, false)
+})
+
+test('Water Well refresh survives a skipped next turn without clearing skill blocks', () => {
+  const state = createState([1, 1])
+  const refreshedPlayer = state.players[0]
+  refreshedPlayer.skillCooldownUntil = 120_000
+  refreshedPlayer.skillRefreshPending = true
+  refreshedPlayer.skillBlockedTurns = 2
+  refreshedPlayer.skipTurns = 1
+  state.currentPlayerIndex = 1
+  state.nextExplosionTurn = 99
+
+  takeTurn(state, 0)
+
+  assert.equal(state.currentPlayerIndex, 0)
+  assert.equal(refreshedPlayer.skillCooldownUntil, 0)
+  assert.equal(refreshedPlayer.skillRefreshPending, false)
+  assert.equal(refreshedPlayer.skillBlockedTurns, 2)
+
+  takeTurn(state)
+
+  assert.equal(refreshedPlayer.skipTurns, 0)
+  assert.equal(refreshedPlayer.skillBlockedTurns, 1)
+  assert.equal(refreshedPlayer.skillCooldownUntil, 0)
+})
+
+test('Water Well does nothing when the skill is already ready', () => {
+  const waterWellBoard = {
+    ...board,
+    question_marks: [2],
+    whats: [{
+      name: 'Water Well',
+      spawn_locations: { start: 1, end: 99 },
+      effect: { type: 'skill', effect: 'activate_skill', description: 'Refresh next turn.' },
+    }],
+  }
+  const state = createGameState(waterWellBoard, [
+    { id: 'player-1', name: 'Player 1' },
+    { id: 'player-2', name: 'Player 2' },
+  ], 0)
+  state.nextExplosionTurn = 99
+  state.players[0].skillCooldownUntil = 0
+
+  takeTurn(state, 1)
+
+  assert.equal(state.players[0].skillRefreshPending, false)
+  assert.equal(state.players[0].skillCooldownUntil, 0)
 })

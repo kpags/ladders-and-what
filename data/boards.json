@@ -357,8 +357,143 @@
                 "effect": {
                     "type": "skill",
                     "effect": "activate_skill",
-                    "detailed_description": "Remove cooldown of player's skill and can be used. If not on cooldown, do nothing.",
-                    "description": "You found a water well and drank from it. You feel energized and skill activated immediately."
+                    "detailed_description": "Remove the player's skill cooldown at the start of their next turn. If not on cooldown, do nothing.",
+                    "description": "You found a water well and drank from it. Your skill cooldown will be removed on your next turn."
+                }
+            }
+        ]
+    },
+    {
+        "name": "Atlantic",
+        "picture": "assets/boards/atlantic/template.png",
+        "type": "standard",
+        "music": "atlantic",
+        "ladders": [
+            { "from": 9, "to": 28 },
+            { "from": 24, "to": 35 },
+            { "from": 48, "to": 52 },
+            { "from": 57, "to": 79 },
+            { "from": 68, "to": 88 }
+        ],
+        "question_marks": [
+            6, 10, 15, 17, 26, 32, 36, 40, 54, 58, 61, 62, 67, 70, 76, 83, 86, 90, 92, 95, 97
+        ],
+        "whats": [
+            {
+                "name": "Shark",
+                "spawn_locations": {
+                    "start": 21,
+                    "end": 98
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_back",
+                    "spaces": 10,
+                    "description": "You saw a nearby shark! Got scared and has to move back 10 spaces."
+                }
+            },
+            {
+                "name": "Octupus",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 45
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 2,
+                    "description": "An octupus entangled your legs! Lose your next 2 turns."
+                }
+            },
+            {
+                "name": "Jellyfish",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 98
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 1,
+                    "description": "You got stung by a jellyfish! Lose your next turn."
+                }
+            },
+            {
+                "name": "Dolphin",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 5,
+                    "description": "A dolphin appears before you! It guides you throughout the ocean and moves you 5 spaces forward."
+                }
+            },
+            {
+                "name": "Blue Whale",
+                "spawn_locations": {
+                    "start": 30,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 20,
+                    "description": "You encountered a gentle blue whale! It carries you on its back and moves you 20 spaces."
+                }
+            },
+            {
+                "name": "Penguin",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 2,
+                    "description": "You found a penguin. It guides you throughout the ice and moves you 2 spaces forward."
+                }
+            },
+            {
+                "name": "Sea Snake",
+                "spawn_locations": {
+                    "start": 50,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 3,
+                    "description": "A sea snake bites you! Lose your next 3 turns."
+                }
+            },
+            {
+                "name": "Kraken",
+                "spawn_locations": {
+                    "start": 80,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 3,
+                    "description": "A kraken appears right in front of you! You move 25 spaces backward and lose your next 2 turns."
+                }
+            },
+            {
+                "name": "Pufferfish",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "skill",
+                    "effect": "lose_skill",
+                    "turns": 2,
+                    "description": "You found a pufferfish. You kept on playing with it and forgot everything. Cannot use skill for 2 turns."
                 }
             }
         ]

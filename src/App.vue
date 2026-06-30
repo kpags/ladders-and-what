@@ -5,6 +5,7 @@ import boards from '../data/boards.json'
 import gameModes from '../data/game_modes.json'
 import explosionGif from '../assets/gifs/run_away/explosion.gif'
 import { audioManager } from './audioManager'
+import { getBoardSpacePosition } from './boardLayout'
 
 const boardImages = import.meta.glob('../assets/boards/**/template.{png,jpg,jpeg,webp}', {
   eager: true,
@@ -516,17 +517,7 @@ function leaveOnlineRoom() {
 }
 
 function boardSpacePosition(space) {
-  const volcano = game.value?.board?.name === 'Volcano'
-  const desert = game.value?.board?.type === 'run_away'
-  const row = Math.floor((space - 1) / 10)
-  const positionInRow = (space - 1) % 10
-  const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
-  if (desert) return { left: `${5 + column * 10}%`, top: `${95 - row * 10}%` }
-  if (space === 100) return { left: `${volcano ? 11.1 : 8.8}%`, top: `${volcano ? 9 : 8.8}%` }
-  return {
-    left: `${volcano ? 11.1 + column * 8.65 : 9 + column * 9.2}%`,
-    top: `${volcano ? 86 - row * 8.56 : 90.5 - row * 9.15}%`,
-  }
+  return getBoardSpacePosition(game.value?.board, space)
 }
 
 function destructionCellPosition(space) {
