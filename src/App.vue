@@ -283,6 +283,8 @@ async function handleServerEvent(event) {
       playerName: event.data.playerName,
       name: event.data.name,
       displayDescription: event.data.description,
+      effectIndex: event.data.effectIndex,
+      effectCount: event.data.effectCount,
       eventId: event.id,
     }
     window.setTimeout(() => {
@@ -978,7 +980,12 @@ onUnmounted(() => {
           </div>
         </div>
         <div v-if="whatOverlay" class="what-overlay" role="status">
-          <small>What?!</small>
+          <small>
+            What?!
+            <span v-if="whatOverlay.effectCount > 1">
+              Effect {{ whatOverlay.effectIndex + 1 }} of {{ whatOverlay.effectCount }}
+            </span>
+          </small>
           <strong>{{ whatOverlay.name }}</strong>
           <p><b>{{ whatOverlay.playerName }}</b>: {{ whatOverlay.displayDescription }}</p>
         </div>

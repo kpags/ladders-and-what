@@ -190,13 +190,15 @@ function finishSequenceAndBeginTurn(room) {
 }
 
 async function playWhatEffects(room, player, what, effects, resolvedSpace, token) {
-  for (const step of effects) {
+  for (const [effectIndex, step] of effects.entries()) {
     emitEvent(room, 'what_reveal', {
       playerId: player.id,
       playerName: player.name,
       name: what.name,
       description: affectedDescription(step.definition.description, player.name),
       effect: step.definition.effect,
+      effectIndex,
+      effectCount: effects.length,
     }, 3000)
     if (!await wait(room, 3000, token)) return null
 

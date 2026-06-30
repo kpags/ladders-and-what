@@ -435,7 +435,7 @@
                 "name": "Blue Whale",
                 "spawn_locations": {
                     "start": 30,
-                    "end": 99
+                    "end": 80
                 },
                 "effects": [{
                     "type": "move",
@@ -481,6 +481,12 @@
                     "effect": "move_back",
                     "spaces": 25,
                     "description": "A kraken appears right in front of you! You move 25 spaces backwards."
+                },
+                {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 2,
+                    "description": "The kraken managed to hit you before you could react! Lose your next 2 turns."
                 }]
             },
             {
