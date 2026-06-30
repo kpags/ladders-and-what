@@ -236,16 +236,27 @@ function chooseWhat(state, space) {
   return whats[chosenIndex]
 }
 
-function applyWhat(state, player, what) {
-  const effect = what.effect
-  if (effect.effect === 'move_back') movePlayer(state, player, player.space - (effect.spaces || 0))
-  else if (effect.effect === 'move_forward') movePlayer(state, player, player.space + (effect.spaces || 0))
-  else if (effect.effect === 'lose_turn') {
-    player.skipTurns += effect.turns || 1
-    player.skipReason = what.name
+export function applyWhatEffects(state, player, what, now = Date.now()) {
+  const steps = []
+  for (const effect of what.effects || []) {
+    const from = player.space
+    if (effect.effect === 'move_back') movePlayer(state, player, player.space - (effect.spaces || 0))
+    else if (effect.effect === 'move_forward') movePlayer(state, player, player.space + (effect.spaces || 0))
+    else if (effect.effect === 'lose_turn') {
+      player.skipTurns += effect.turns || 1
+      player.skipReason = what.name
+    }
+    else if (effect.effect === 'lose_skill') player.skillBlockedTurns = Math.max(player.skillBlockedTurns, effect.spaces || effect.turns || 1)
+    else if (effect.effect === 'activate_skill' && player.skillCooldownUntil > now) player.skillRefreshPending = true
+
+    steps.push({
+      definition: { ...effect },
+      from,
+      destination: player.space,
+    })
+    if (player.eliminated) break
   }
-  else if (effect.effect === 'lose_skill') player.skillBlockedTurns = Math.max(player.skillBlockedTurns, effect.spaces || effect.turns || 1)
-  else if (effect.effect === 'activate_skill' && player.skillCooldownUntil > Date.now()) player.skillRefreshPending = true
+  return steps
 }
 
 function affectedDescription(description, playerName) {
@@ -289,14 +300,16 @@ function resolveLanding(state, player) {
       const what = chooseWhat(state, questionSpace)
       if (what) {
         state.lastWhat = { ...what, space: questionSpace }
-        applyWhat(state, player, what)
+        const effects = applyWhatEffects(state, player, what)
         state.lastQuestionChain.push({
           kind: 'what',
           space: questionSpace,
           destination: player.space,
           what: { ...what },
+          effects,
         })
-        addLog(state, `${player.name} found ${what.name} on space ${questionSpace}. ${affectedDescription(what.effect.description, player.name)}`)
+        const descriptions = what.effects.map(effect => affectedDescription(effect.description, player.name)).join(' ')
+        addLog(state, `${player.name} found ${what.name} on space ${questionSpace}. ${descriptions}`)
       }
     }
     chainCount++
@@ -384,9 +397,10 @@ export function takeParkourWhat(state, what) {
   state.lastWhat = { ...what, space: from }
   state.lastQuestionChain = []
   state.lastTraversalElimination = null
-  applyWhat(state, player, what)
+  const effects = applyWhatEffects(state, player, what)
   const directDestination = player.space
-  addLog(state, `${player.name}'s Parkour die landed on ${what.name}. ${affectedDescription(what.effect.description, player.name)}`)
+  const descriptions = what.effects.map(effect => affectedDescription(effect.description, player.name)).join(' ')
+  addLog(state, `${player.name}'s Parkour die landed on ${what.name}. ${descriptions}`)
 
   let questionChain = []
   let ladder = null
@@ -408,6 +422,7 @@ export function takeParkourWhat(state, what) {
     what: { ...what },
     from,
     directDestination,
+    effects,
     questionChain,
     ladder,
   }

@@ -24,12 +24,12 @@
                     "start": 50,
                     "end": 80
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 2,
                     "description": "The spider has trapped you in its web! Lose your next 2 turns."
-                }
+                }]
             },
             {
                 "name": "Bee Swarm",
@@ -37,12 +37,12 @@
                     "start": 20,
                     "end": 90
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_back",
                     "spaces": 10,
                     "description": "A swarm of bees is chasing you! Move back 10 spaces."
-                }
+                }]
             },
             {
                 "name": "Dung",
@@ -50,12 +50,12 @@
                     "start": 5,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 1,
                     "description": "You stepped in dung! Lose your next turn."
-                }
+                }]
             },
             {
                 "name": "Worms",
@@ -63,12 +63,12 @@
                     "start": 5,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "skill",
                     "effect": "lose_skill",
                     "spaces": 2,
                     "description": "A worm crawls onto your path! Cannot use skill for 2 turns."
-                }
+                }]
             },
             {
                 "name": "Ladybug",
@@ -76,12 +76,12 @@
                     "start": 5,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 2,
                     "description": "A beautiful ladybug lands on your path! You kept on chasing it and moved 2 spaces."
-                }
+                }]
             },
             {
                 "name": "Butterfly",
@@ -89,12 +89,12 @@
                     "start": 5,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 10,
                     "description": "A butterfly flutters by! You were mesmerized and kept following it, moving 10 spaces."
-                }
+                }]
             },
             {
                 "name": "Snake",
@@ -102,12 +102,12 @@
                     "start": 60,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 3,
                     "description": "A snake bites you! Cannot move for 3 turns."
-                }
+                }]
             },
             {
                 "name": "Fireflies",
@@ -115,12 +115,12 @@
                     "start": 5,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 5,
                     "description": "A swarm of fireflies light up your path! You followed their glowing lights and moved 5 spaces."
-                }
+                }]
             },
             {
                 "name": "Giant Scorpion",
@@ -128,12 +128,12 @@
                     "start": 80,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move_back",
                     "effect": "move_back",
                     "spaces": 15,
                     "description": "A giant scorpion scares you! You move back 15 spaces."
-                }
+                }]
             }
         ]
     },
@@ -161,12 +161,12 @@
                     "start": 50,
                     "end": 80
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 3,
                     "description": "The volcano erupts and you've been hit! Lose your next 3 turns."
-                }
+                }]
             },
             {
                 "name": "Magma Flow",
@@ -174,12 +174,12 @@
                     "start": 20,
                     "end": 90
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_back",
                     "spaces": 10,
                     "description": "A flow of magma is flowing towards you! Move back 10 spaces."
-                }
+                }]
             },
             {
                 "name": "Ash Cloud",
@@ -187,12 +187,12 @@
                     "start": 2,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 1,
                     "description": "An ash cloud engulfs you! Lose your next turn."
-                }
+                }]
             },
             {
                 "name": "Falling Boulder",
@@ -200,12 +200,12 @@
                     "start": 2,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "skill",
                     "effect": "lose_skill",
                     "spaces": 2,
                     "description": "A falling boulder crashes beside you! Cannot use skill for 2 turns."
-                }
+                }]
             },
             {
                 "name": "Floating Rock",
@@ -213,12 +213,12 @@
                     "start": 2,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 5,
                     "description": "A floating rock drifts across your path of lava! You hop on it and moved 5 spaces."
-                }
+                }]
             },
             {
                 "name": "Rock Bridge",
@@ -226,12 +226,12 @@
                     "start": 2,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 8,
                     "description": "A rock bridge appears before you! You carefully cross it and moved 8 spaces."
-                }
+                }]
             },
             {
                 "name": "Fireball",
@@ -239,12 +239,12 @@
                     "start": 60,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 3,
                     "description": "A flying fireball landed in front of you! Cannot move for 3 turns."
-                }
+                }]
             },
             {
                 "name": "Avalanche",
@@ -252,12 +252,12 @@
                     "start": 80,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move_back",
                     "effect": "move_back",
                     "spaces": 20,
                     "description": "An avalanche rushes down the mountain and heading towards you! You move back 20 spaces."
-                }
+                }]
             }
         ]
     },
@@ -276,12 +276,12 @@
                     "start": 30,
                     "end": 98
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 2,
                     "description": "You stepped on a hidden quicksand! Lose your next 2 turns."
-                }
+                }]
             },
             {
                 "name": "Pitfall",
@@ -289,12 +289,12 @@
                     "start": 30,
                     "end": 98
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 2,
                     "description": "You fell into a pitfall! Lose your next 2 turns."
-                }
+                }]
             },
             {
                 "name": "Bear Trap",
@@ -302,12 +302,12 @@
                     "start": 20,
                     "end": 90
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 1,
                     "description": "You stepped on a bear trap! Lose your next turn."
-                }
+                }]
             },
             {
                 "name": "Camel",
@@ -315,12 +315,12 @@
                     "start": 20,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 6,
                     "description": "A camel appears before you! You ride it and moved 6 spaces."
-                }
+                }]
             },
             {
                 "name": "Lost Quad Bike",
@@ -328,12 +328,12 @@
                     "start": 20,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 8,
                     "description": "You found a working quad bike. You used it and moved 8 spaces."
-                }
+                }]
             },
             {
                 "name": "Bicycle",
@@ -341,12 +341,12 @@
                     "start": 20,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 2,
                     "description": "You found a bicycle. You used it and moved 2 spaces."
-                }
+                }]
             },
             {
                 "name": "Water Well",
@@ -354,12 +354,12 @@
                     "start": 20,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "skill",
                     "effect": "activate_skill",
                     "detailed_description": "Remove the player's skill cooldown at the start of their next turn. If not on cooldown, do nothing.",
                     "description": "You found a water well and drank from it. Your skill cooldown will be removed on your next turn."
-                }
+                }]
             }
         ]
     },
@@ -385,12 +385,12 @@
                     "start": 21,
                     "end": 98
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_back",
                     "spaces": 10,
                     "description": "You saw a nearby shark! Got scared and has to move back 10 spaces."
-                }
+                }]
             },
             {
                 "name": "Octupus",
@@ -398,12 +398,12 @@
                     "start": 2,
                     "end": 45
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 2,
                     "description": "An octupus entangled your legs! Lose your next 2 turns."
-                }
+                }]
             },
             {
                 "name": "Jellyfish",
@@ -411,12 +411,12 @@
                     "start": 2,
                     "end": 98
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 1,
                     "description": "You got stung by a jellyfish! Lose your next turn."
-                }
+                }]
             },
             {
                 "name": "Dolphin",
@@ -424,12 +424,12 @@
                     "start": 2,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 5,
                     "description": "A dolphin appears before you! It guides you throughout the ocean and moves you 5 spaces forward."
-                }
+                }]
             },
             {
                 "name": "Blue Whale",
@@ -437,12 +437,12 @@
                     "start": 30,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 20,
                     "description": "You encountered a gentle blue whale! It carries you on its back and moves you 20 spaces."
-                }
+                }]
             },
             {
                 "name": "Penguin",
@@ -450,12 +450,12 @@
                     "start": 2,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "move",
                     "effect": "move_forward",
                     "spaces": 2,
                     "description": "You found a penguin. It guides you throughout the ice and moves you 2 spaces forward."
-                }
+                }]
             },
             {
                 "name": "Sea Snake",
@@ -463,12 +463,12 @@
                     "start": 50,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "stop",
                     "effect": "lose_turn",
                     "turns": 3,
                     "description": "A sea snake bites you! Lose your next 3 turns."
-                }
+                }]
             },
             {
                 "name": "Kraken",
@@ -476,12 +476,12 @@
                     "start": 80,
                     "end": 99
                 },
-                "effect": {
-                    "type": "stop",
-                    "effect": "lose_turn",
-                    "turns": 3,
-                    "description": "A kraken appears right in front of you! You move 25 spaces backward and lose your next 2 turns."
-                }
+                "effects": [{
+                    "type": "move",
+                    "effect": "move_back",
+                    "spaces": 25,
+                    "description": "A kraken appears right in front of you! You move 25 spaces backwards."
+                }]
             },
             {
                 "name": "Pufferfish",
@@ -489,12 +489,12 @@
                     "start": 2,
                     "end": 99
                 },
-                "effect": {
+                "effects": [{
                     "type": "skill",
                     "effect": "lose_skill",
                     "turns": 2,
                     "description": "You found a pufferfish. You kept on playing with it and forgot everything. Cannot use skill for 2 turns."
-                }
+                }]
             }
         ]
     }

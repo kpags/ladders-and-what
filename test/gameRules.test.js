@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  applyWhatEffects,
   activateSkill,
   createGameState,
   describeRunAwayRoll,
@@ -173,7 +174,7 @@ test('Water Well defers cooldown removal until the affected player next turn', (
     whats: [{
       name: 'Water Well',
       spawn_locations: { start: 1, end: 99 },
-      effect: { type: 'skill', effect: 'activate_skill', description: 'Refresh next turn.' },
+      effects: [{ type: 'skill', effect: 'activate_skill', description: 'Refresh next turn.' }],
     }],
   }
   const state = createGameState(waterWellBoard, [
@@ -228,7 +229,7 @@ test('Water Well does nothing when the skill is already ready', () => {
     whats: [{
       name: 'Water Well',
       spawn_locations: { start: 1, end: 99 },
-      effect: { type: 'skill', effect: 'activate_skill', description: 'Refresh next turn.' },
+      effects: [{ type: 'skill', effect: 'activate_skill', description: 'Refresh next turn.' }],
     }],
   }
   const state = createGameState(waterWellBoard, [
@@ -242,4 +243,62 @@ test('Water Well does nothing when the skill is already ready', () => {
 
   assert.equal(state.players[0].skillRefreshPending, false)
   assert.equal(state.players[0].skillCooldownUntil, 0)
+})
+
+test('WHAT effects are applied and recorded in array order', () => {
+  const state = createState([10, 40])
+  const player = state.players[0]
+  const what = {
+    name: 'Ordered WHAT',
+    effects: [
+      { type: 'move', effect: 'move_forward', spaces: 4, description: 'Forward.' },
+      { type: 'move', effect: 'move_back', spaces: 1, description: 'Backward.' },
+      { type: 'stop', effect: 'lose_turn', turns: 2, description: 'Stop.' },
+      { type: 'skill', effect: 'lose_skill', turns: 3, description: 'Blocked.' },
+    ],
+  }
+
+  const effects = applyWhatEffects(state, player, what)
+
+  assert.equal(player.space, 13)
+  assert.equal(player.skipTurns, 2)
+  assert.equal(player.skillBlockedTurns, 3)
+  assert.deepEqual(
+    effects.map(step => [step.definition.effect, step.from, step.destination]),
+    [
+      ['move_forward', 10, 14],
+      ['move_back', 14, 13],
+      ['lose_turn', 13, 13],
+      ['lose_skill', 13, 13],
+    ],
+  )
+})
+
+test('question resolution preserves ordered WHAT effect steps', () => {
+  const orderedBoard = {
+    ...board,
+    question_marks: [2],
+    whats: [{
+      name: 'Two Moves',
+      spawn_locations: { start: 1, end: 99 },
+      effects: [
+        { type: 'move', effect: 'move_forward', spaces: 4, description: 'Forward four.' },
+        { type: 'move', effect: 'move_back', spaces: 2, description: 'Back two.' },
+      ],
+    }],
+  }
+  const state = createGameState(orderedBoard, [
+    { id: 'player-1', name: 'Player 1' },
+    { id: 'player-2', name: 'Player 2' },
+  ], 0)
+  state.nextExplosionTurn = 99
+
+  takeTurn(state, 1)
+
+  assert.equal(state.players[0].space, 4)
+  assert.deepEqual(
+    state.lastQuestionChain[0].effects.map(step => step.destination),
+    [6, 4],
+  )
+  assert.match(state.log[0], /Forward four\. Back two\./)
 })

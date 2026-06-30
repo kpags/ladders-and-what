@@ -46,16 +46,16 @@ function chooseWhat(state, space) {
 }
 
 function applyWhat(state, player, what) {
-  const effect = what.effect
-
-  if (effect.effect === 'move_back') {
-    player.space = Math.max(1, player.space - (effect.spaces || 0))
-  } else if (effect.effect === 'move_forward') {
-    player.space = Math.min(100, player.space + (effect.spaces || 0))
-  } else if (effect.effect === 'lose_turn') {
-    player.skipTurns += effect.turns || 1
-  } else if (effect.effect === 'lose_skill') {
-    player.skillBlockedTurns = Math.max(player.skillBlockedTurns, effect.spaces || effect.turns || 1)
+  for (const effect of what.effects || []) {
+    if (effect.effect === 'move_back') {
+      player.space = Math.max(1, player.space - (effect.spaces || 0))
+    } else if (effect.effect === 'move_forward') {
+      player.space = Math.min(100, player.space + (effect.spaces || 0))
+    } else if (effect.effect === 'lose_turn') {
+      player.skipTurns += effect.turns || 1
+    } else if (effect.effect === 'lose_skill') {
+      player.skillBlockedTurns = Math.max(player.skillBlockedTurns, effect.spaces || effect.turns || 1)
+    }
   }
 }
 
@@ -68,7 +68,7 @@ function resolveLanding(state, player) {
     if (what) {
       state.lastWhat = { ...what, space: questionSpace }
       applyWhat(state, player, what)
-      addLog(state, `${player.name} found ${what.name} on space ${questionSpace}. ${what.effect.description}`)
+      addLog(state, `${player.name} found ${what.name} on space ${questionSpace}. ${what.effects.map(effect => effect.description).join(' ')}`)
     }
   }
 

@@ -283,8 +283,11 @@ async function handleServerEvent(event) {
       playerName: event.data.playerName,
       name: event.data.name,
       displayDescription: event.data.description,
+      eventId: event.id,
     }
-    window.setTimeout(() => { whatOverlay.value = null }, remaining)
+    window.setTimeout(() => {
+      if (whatOverlay.value?.eventId === event.id) whatOverlay.value = null
+    }, remaining)
   } else if (event.type === 'skill_pending') {
     if (event.data.playerId !== clientId) {
       skillOverlay.value = { ...event.data, result: false }

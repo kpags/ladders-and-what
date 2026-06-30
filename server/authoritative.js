@@ -143,13 +143,6 @@ function normalizePlayerName(value) {
     .slice(0, 20)
 }
 
-function effectDestination(space, what) {
-  if (!what) return space
-  if (what.effect.effect === 'move_back') return Math.max(1, space - (what.effect.spaces || 0))
-  if (what.effect.effect === 'move_forward') return Math.min(100, space + (what.effect.spaces || 0))
-  return space
-}
-
 async function showCaughtPlayer(room, player, space, token) {
   emitEvent(room, 'destruction_caught', {
     playerId: player.id,
@@ -194,6 +187,32 @@ function finishSequenceAndBeginTurn(room) {
   room.rollTimer = null
   unlockRoomForNextTurn(room)
   beginTurn(room)
+}
+
+async function playWhatEffects(room, player, what, effects, resolvedSpace, token) {
+  for (const step of effects) {
+    emitEvent(room, 'what_reveal', {
+      playerId: player.id,
+      playerName: player.name,
+      name: what.name,
+      description: affectedDescription(step.definition.description, player.name),
+      effect: step.definition.effect,
+    }, 3000)
+    if (!await wait(room, 3000, token)) return null
+
+    if (step.destination !== resolvedSpace) {
+      const duration = Math.abs(step.destination - resolvedSpace) * 540
+      emitEvent(room, 'movement', {
+        playerId: player.id,
+        from: resolvedSpace,
+        to: step.destination,
+        kind: 'effect',
+      }, duration)
+      if (!await wait(room, duration, token)) return null
+    }
+    resolvedSpace = step.destination
+  }
+  return resolvedSpace
 }
 
 async function runTurnSequence(room, player, startSpace, roll, token, specialRoll = false, diceAlreadyShown = false, movementOverride = null) {
@@ -242,26 +261,9 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
       continue
     }
 
-    const what = resolution.what
-    emitEvent(room, 'what_reveal', {
-      playerId: player.id,
-      playerName: player.name,
-      name: what.name,
-      description: affectedDescription(what.effect.description, player.name),
-      effect: what.effect.effect,
-    }, 3000)
-    if (!await wait(room, 3000, token)) return
-    if (resolution.destination !== resolvedSpace) {
-      const duration = Math.abs(resolution.destination - resolvedSpace) * 540
-      emitEvent(room, 'movement', {
-        playerId: player.id,
-        from: resolvedSpace,
-        to: resolution.destination,
-        kind: 'effect',
-      }, duration)
-      if (!await wait(room, duration, token)) return
-    }
-    resolvedSpace = resolution.destination
+    const nextSpace = await playWhatEffects(room, player, resolution.what, resolution.effects, resolvedSpace, token)
+    if (nextSpace == null) return
+    resolvedSpace = nextSpace
   }
 
   const ladder = !player.eliminated && room.game.board.ladders.find(item => item.from === resolvedSpace)
@@ -297,50 +299,28 @@ async function runParkourWhatSequence(room, result, token) {
   }, 2000)
   if (!await wait(room, 2000, token)) return
 
-  emitEvent(room, 'what_reveal', {
-    playerId: player.id,
-    playerName: player.name,
-    name: result.what.name,
-    description: affectedDescription(result.what.effect.description, player.name),
-    effect: result.what.effect.effect,
-  }, 3000)
-  if (!await wait(room, 3000, token)) return
-
   let resolvedSpace = result.from
-  if (result.directDestination !== resolvedSpace) {
-    const duration = Math.abs(result.directDestination - resolvedSpace) * 540
-    emitEvent(room, 'movement', {
-      playerId: player.id,
-      from: resolvedSpace,
-      to: result.directDestination,
-      kind: 'effect',
-    }, duration)
-    if (!await wait(room, duration, token)) return
-    resolvedSpace = result.directDestination
-  }
+  const directSpace = await playWhatEffects(room, player, result.what, result.effects, resolvedSpace, token)
+  if (directSpace == null) return
+  resolvedSpace = directSpace
 
   for (const resolution of result.questionChain) {
     if (resolution.kind === 'reroll_pending') continue
     if (resolution.kind === 'what') {
-      emitEvent(room, 'what_reveal', {
-        playerId: player.id,
-        playerName: player.name,
-        name: resolution.what.name,
-        description: affectedDescription(resolution.what.effect.description, player.name),
-        effect: resolution.what.effect.effect,
-      }, 3000)
-      if (!await wait(room, 3000, token)) return
+      const nextSpace = await playWhatEffects(room, player, resolution.what, resolution.effects, resolvedSpace, token)
+      if (nextSpace == null) return
+      resolvedSpace = nextSpace
+      continue
     }
-    if (resolution.destination !== resolvedSpace) {
-      const duration = Math.abs(resolution.destination - resolvedSpace) * 540
-      emitEvent(room, 'movement', {
-        playerId: player.id,
-        from: resolvedSpace,
-        to: resolution.destination,
-        kind: resolution.kind === 'reroll' ? 'reroll' : 'effect',
-      }, duration)
-      if (!await wait(room, duration, token)) return
-    }
+    if (resolution.destination === resolvedSpace) continue
+    const duration = Math.abs(resolution.destination - resolvedSpace) * 540
+    emitEvent(room, 'movement', {
+      playerId: player.id,
+      from: resolvedSpace,
+      to: resolution.destination,
+      kind: 'reroll',
+    }, duration)
+    if (!await wait(room, duration, token)) return
     resolvedSpace = resolution.destination
   }
 
@@ -558,26 +538,28 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
       let resolvedSpace = result.movement.to
       for (const resolution of result.landingResolution.questionChain) {
         if (resolution.kind === 'what') {
-          emitEvent(room, 'what_reveal', {
-            playerId: result.landingResolution.playerId,
-            playerName: result.landingResolution.playerName,
-            name: resolution.what.name,
-            description: affectedDescription(resolution.what.effect.description, result.landingResolution.playerName),
-            effect: resolution.what.effect.effect,
-          }, 3000)
-          if (!await wait(room, 3000, token)) return false
+          const landingPlayer = room.game.players.find(item => item.id === result.landingResolution.playerId)
+          const nextSpace = await playWhatEffects(
+            room,
+            landingPlayer,
+            resolution.what,
+            resolution.effects,
+            resolvedSpace,
+            token,
+          )
+          if (nextSpace == null) return false
+          resolvedSpace = nextSpace
+          continue
         }
-
-        if (resolution.destination !== resolvedSpace) {
-          const duration = Math.abs(resolution.destination - resolvedSpace) * 540
-          emitEvent(room, 'movement', {
-            playerId: result.landingResolution.playerId,
-            from: resolvedSpace,
-            to: resolution.destination,
-            kind: resolution.kind === 'reroll' ? 'reroll' : 'effect',
-          }, duration)
-          if (!await wait(room, duration, token)) return false
-        }
+        if (resolution.destination === resolvedSpace) continue
+        const duration = Math.abs(resolution.destination - resolvedSpace) * 540
+        emitEvent(room, 'movement', {
+          playerId: result.landingResolution.playerId,
+          from: resolvedSpace,
+          to: resolution.destination,
+          kind: 'reroll',
+        }, duration)
+        if (!await wait(room, duration, token)) return false
         resolvedSpace = resolution.destination
       }
 
