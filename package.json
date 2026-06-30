@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "server": "node server/authoritative.js",
+    "test": "node --test",
     "build": "vite build",
     "preview": "vite preview"
   },

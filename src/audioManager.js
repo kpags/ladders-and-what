@@ -178,6 +178,10 @@ class AudioManager {
     this.random('run_away/safe')
   }
 
+  runAwaySigh() {
+    this.random('run_away/sigh', { channel: 'run-away-sigh', volume: 0.55 })
+  }
+
   pauseMusic() {
     this.music.pause()
   }

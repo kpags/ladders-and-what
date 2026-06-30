@@ -72,10 +72,63 @@ function activePlayers(state) {
   return state.players.filter(player => !player.finished && !player.eliminated)
 }
 
+export function planRunAwayDestruction(state, fallbackAmount = randomInteger(4, 7)) {
+  if (state.mode !== 'run_away' || state.gameOver) return []
+
+  const lastDestroyed = state.destroyedSpaces.at(-1) || 0
+  const closestPlayer = activePlayers(state)
+    .filter(player => !player.forfeited && player.space > lastDestroyed)
+    .sort((a, b) => a.space - b.space)[0]
+  const distance = closestPlayer ? closestPlayer.space - lastDestroyed : 0
+  const finalSquare = distance >= 15
+    ? Math.min(99, closestPlayer.space - 5)
+    : Math.min(99, lastDestroyed + fallbackAmount)
+
+  const spaces = []
+  for (let square = lastDestroyed + 1; square <= finalSquare; square++) {
+    if (!state.destroyedSpaces.includes(square)) spaces.push(square)
+  }
+  return spaces
+}
+
+export function describeRunAwayRoll(playerName, startSpace, result) {
+  if (result < 0 && startSpace === 1) {
+    const message = `${playerName} stays on Square 1`
+    return {
+      resultLabel: message,
+      movement: {
+        spaces: 0,
+        signedSpaces: 0,
+        direction: 'stay',
+        message,
+      },
+    }
+  }
+
+  return {
+    resultLabel: result > 0
+      ? `Move ${result} space${result === 1 ? '' : 's'} forward`
+      : result < 0
+        ? `Move ${Math.abs(result)} spaces backward`
+        : 'Stay on this square',
+    movement: {
+      spaces: Math.abs(result),
+      signedSpaces: result,
+      direction: result > 0 ? 'forward' : result < 0 ? 'backward' : 'stay',
+    },
+  }
+}
+
 function concludeIfOneRemains(state) {
   const remaining = activePlayers(state)
   if (remaining.length === 0) {
+    state.winner = null
+    state.loser = null
+    state.players.forEach(player => {
+      player.won = false
+    })
     state.gameOver = true
+    addLog(state, 'Every player was eliminated by the destruction. Nobody wins.')
     return
   }
   if (remaining.length !== 1) return
@@ -132,14 +185,7 @@ function triggerExplosion(state) {
   if (state.mode !== 'run_away' || state.gameOver) return
   if (state.turn < state.nextExplosionTurn) return
 
-  const amount = randomInteger(4, 7)
-  const destroyed = []
-  let square = (state.destroyedSpaces.at(-1) || 0) + 1
-  while (destroyed.length < amount && square <= 99) {
-    if (!state.destroyedSpaces.includes(square)) destroyed.push(square)
-    square++
-  }
-  state.lastExplosion = { spaces: destroyed }
+  state.lastExplosion = { spaces: planRunAwayDestruction(state) }
   state.nextExplosionTurn = state.turn + randomInteger(3, 5)
 }
 
@@ -303,13 +349,18 @@ export function takeTurn(state, forcedRoll) {
   state.lastRoll = roll
   state.lastWhat = null
   state.lastQuestionChain = []
+  const startSpace = player.space
   movePlayer(state, player, player.space + roll)
-  const movementText = roll > 0
-    ? `moved forward ${roll} space(s)`
-    : roll < 0
-      ? `moved backward ${Math.abs(roll)} space(s)`
-      : 'stayed in place'
-  addLog(state, `${player.name} rolled ${roll}, ${movementText}, and is on space ${player.space}.`)
+  if (state.mode === 'run_away' && roll < 0 && startSpace === 1 && player.space === 1) {
+    addLog(state, `${player.name} rolled ${roll} and stays on Square 1.`)
+  } else {
+    const movementText = roll > 0
+      ? `moved forward ${roll} space(s)`
+      : roll < 0
+        ? `moved backward ${Math.abs(roll)} space(s)`
+        : 'stayed in place'
+    addLog(state, `${player.name} rolled ${roll}, ${movementText}, and is on space ${player.space}.`)
+  }
   if (!player.eliminated && roll !== 0) resolveLanding(state, player)
   if (player.skillBlockedTurns > 0) player.skillBlockedTurns--
   if (!state.gameOver && !player.rerollPending) advanceTurn(state)

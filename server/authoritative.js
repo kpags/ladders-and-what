@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, createGameState, destroySpace, endTurnAfterSkill, forfeitPlayer, penalizeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateSkill, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, penalizeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const RECONNECT_GRACE_MS = 10_000
@@ -67,7 +67,10 @@ function broadcastGame(room, type = 'game_state') {
     currentEvent: room.currentEvent,
     serverNow: Date.now(),
   })
-  if (room.game?.gameOver && !room.busy && !room.currentEvent && !room.memorialShown) {
+  const allPlayersEliminated = room.game?.mode === 'run_away'
+    && room.game.players.length > 0
+    && room.game.players.every(player => player.eliminated)
+  if (room.game?.gameOver && !allPlayersEliminated && !room.busy && !room.currentEvent && !room.memorialShown) {
     room.memorialShown = true
     const names = room.game.players.filter(player => player.eliminated).map(player => player.name)
     if (names.length) {
@@ -79,6 +82,12 @@ function broadcastGame(room, type = 'game_state') {
       }, 3000)
     }
   }
+}
+
+function allRunAwayPlayersEliminated(game) {
+  return game?.mode === 'run_away'
+    && game.players.length > 0
+    && game.players.every(player => player.eliminated)
 }
 
 function emitEvent(room, eventType, data, duration) {
@@ -169,21 +178,27 @@ async function runDestructionSequence(room, token) {
     if (room.game.gameOver) break
     if (index < spaces.length - 1 && !await wait(room, 1000, token)) return false
   }
+  if (allRunAwayPlayersEliminated(room.game)) {
+    emitEvent(room, 'run_away_sigh', {}, 3000)
+    if (!await wait(room, 3000, token)) return false
+  }
   room.game.lastExplosion = null
   return true
 }
 
-async function runTurnSequence(room, player, startSpace, roll, token, specialRoll = false, diceAlreadyShown = false) {
+async function runTurnSequence(room, player, startSpace, roll, token, specialRoll = false, diceAlreadyShown = false, movementOverride = null) {
   if (!diceAlreadyShown) {
     emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll, specialRoll }, 2000)
     if (!await wait(room, 2000, token)) return
   }
-  const direction = roll > 0 ? 'forward' : roll < 0 ? 'backward' : 'stay'
-  emitEvent(room, 'move_announcement', {
-    playerId: player.id,
+  const movement = movementOverride || {
     spaces: Math.abs(roll),
     signedSpaces: roll,
-    direction,
+    direction: roll > 0 ? 'forward' : roll < 0 ? 'backward' : 'stay',
+  }
+  emitEvent(room, 'move_announcement', {
+    playerId: player.id,
+    ...movement,
   }, 2000)
   if (!await wait(room, 2000, token)) return
 
@@ -354,22 +369,18 @@ async function runAwayRollSequence(room, player, startSpace, dice, token) {
 
   const operator = Math.random() < 0.5 ? '+' : '−'
   const result = operator === '+' ? dice[0] + dice[1] : dice[0] - dice[1]
+  const description = describeRunAwayRoll(player.name, startSpace, result)
   takeTurn(room.game, result)
-  const resultLabel = result > 0
-    ? `Move ${result} space${result === 1 ? '' : 's'} forward`
-    : result < 0
-      ? `Move ${Math.abs(result)} spaces backward`
-      : 'Stay on this square'
   emitEvent(room, 'dice_stopped', {
     playerId: player.id,
     dual: true,
     dice,
     operator,
     result,
-    resultLabel,
+    resultLabel: description.resultLabel,
   }, 2000)
   if (!await wait(room, 2000, token)) return
-  runTurnSequence(room, player, startSpace, result, token, false, true)
+  runTurnSequence(room, player, startSpace, result, token, false, true, description.movement)
 }
 
 function stopRoll(room, requesterId, automatic = false) {

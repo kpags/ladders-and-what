@@ -77,6 +77,7 @@ const turnDeadline = ref(null)
 const penaltyOverlay = ref(null)
 const destructionOverlay = ref(null)
 const destructionSpace = ref(null)
+const sighOverlay = ref(null)
 const ripOverlay = ref(null)
 let clockTimer
 let diceTimer
@@ -89,6 +90,11 @@ const controlledGamePlayer = computed(() => game.value?.players.find(player => p
 const isControlledTurn = computed(() => Boolean(game.value && controlledGamePlayer.value?.id === game.value.players[game.value.currentPlayerIndex]?.id))
 const isLobbyHost = computed(() => onlineRoom.value?.hostId === clientId)
 const selectedGameMode = computed(() => gameModes.find(mode => mode.key === selectedMode.value) || gameModes[0])
+const bloodiedSpaces = computed(() => [...new Set(
+  (game.value?.players || [])
+    .filter(player => player.eliminated && player.space >= 1 && player.space <= 99)
+    .map(player => player.space),
+)].sort((a, b) => a - b))
 const availableBoards = computed(() => boards
   .map((board, index) => ({ ...board, sourceIndex: index }))
   .filter(board => board.type === selectedMode.value))
@@ -149,6 +155,7 @@ function clearGamePresentation() {
   penaltyOverlay.value = null
   destructionOverlay.value = null
   destructionSpace.value = null
+  sighOverlay.value = null
   ripOverlay.value = null
   movingPlayerId.value = null
   climbingPlayerId.value = null
@@ -244,6 +251,13 @@ async function handleServerEvent(event) {
     }, remaining)
   } else if (event.type === 'safe') {
     audioManager.runAwaySafe()
+  } else if (event.type === 'run_away_sigh') {
+    audioManager.pauseMusic()
+    audioManager.runAwaySigh()
+    sighOverlay.value = { eventId: event.id }
+    window.setTimeout(() => {
+      if (sighOverlay.value?.eventId === event.id) sighOverlay.value = null
+    }, remaining)
   } else if (event.type === 'rip_memorial') {
     ripOverlay.value = { ...event.data, eventId: event.id }
     window.setTimeout(() => {
@@ -512,6 +526,27 @@ function boardSpacePosition(space) {
   return {
     left: `${volcano ? 11.1 + column * 8.65 : 9 + column * 9.2}%`,
     top: `${volcano ? 86 - row * 8.56 : 90.5 - row * 9.15}%`,
+  }
+}
+
+function destructionCellPosition(space) {
+  const row = Math.floor((space - 1) / 10)
+  const positionInRow = (space - 1) % 10
+  const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
+  const imageHeight = 1217 / 1254 * 100
+  const imageTop = (100 - imageHeight) / 2
+  const cellHeight = imageHeight / 10
+  return {
+    left: `${5 + column * 10}%`,
+    top: `${imageTop + imageHeight - (row + 0.5) * cellHeight}%`,
+    '--destroyed-cell-height': `calc(${cellHeight}% + 1px)`,
+  }
+}
+
+function bloodSplatPosition(space) {
+  return {
+    ...destructionCellPosition(space),
+    '--splat-rotation': `${(space * 47) % 360 - 180}deg`,
   }
 }
 
@@ -870,6 +905,9 @@ onUnmounted(() => {
           <strong>Penalty</strong>
           <small>{{ penaltyOverlay.message }}</small>
         </div>
+        <div v-if="sighOverlay" class="sigh-overlay" role="status">
+          <strong>*Sigh*</strong>
+        </div>
         <div v-if="destructionOverlay" class="destruction-overlay" :class="destructionOverlay.type" role="alert">
           <template v-if="destructionOverlay.type === 'warning'">
             <strong>Destruction</strong>
@@ -882,7 +920,8 @@ onUnmounted(() => {
         </div>
         <div v-if="moveOverlay" class="move-overlay" role="status">
           <small>Dice result</small>
-          <strong v-if="moveOverlay.direction === 'forward'">
+          <strong v-if="moveOverlay.message">{{ moveOverlay.message }}</strong>
+          <strong v-else-if="moveOverlay.direction === 'forward'">
             Move {{ moveOverlay.spaces }} {{ moveOverlay.spaces === 1 ? 'space' : 'spaces' }} forward
           </strong>
           <strong v-else-if="moveOverlay.direction === 'backward'">
@@ -996,8 +1035,15 @@ onUnmounted(() => {
                 v-for="space in game.destroyedSpaces || []"
                 :key="`destroyed-${space}`"
                 class="destroyed-space"
-                :style="boardSpacePosition(space)"
+                :style="destructionCellPosition(space)"
                 :title="`Destroyed square ${space}`"
+              ></span>
+              <span
+                v-for="space in bloodiedSpaces"
+                :key="`blood-${space}`"
+                class="blood-splat"
+                :style="bloodSplatPosition(space)"
+                aria-hidden="true"
               ></span>
               <img
                 v-if="destructionSpace"
