@@ -2,6 +2,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import characters from '../data/characters.json'
 import boards from '../data/boards.json'
+import gameModes from '../data/game_modes.json'
+import explosionGif from '../assets/gifs/run_away/explosion.gif'
 import { audioManager } from './audioManager'
 
 const boardImages = import.meta.glob('../assets/boards/**/template.{png,jpg,jpeg,webp}', {
@@ -31,6 +33,9 @@ const muted = ref(false)
 const selected = ref(0)
 const playerCharacter = ref(0)
 const selectedBoard = ref(0)
+const selectedMode = ref(gameModes[0]?.key || 'standard')
+const playerNameDraft = ref('')
+const editingPlayerName = ref(false)
 const clientId = localStorage.getItem('ladders-client-id') || createClientId()
 localStorage.setItem('ladders-client-id', clientId)
 const roomCode = ref('')
@@ -50,7 +55,11 @@ const turnBusy = ref(false)
 const diceRolling = ref(false)
 const diceStopped = ref(false)
 const diceSpecial = ref(false)
+const diceDual = ref(false)
 const displayedDice = ref(null)
+const displayedDicePair = ref([1, 1])
+const displayedOperator = ref('+')
+const operatorSpinning = ref(false)
 const diceResultLabel = ref('')
 const movingPlayerId = ref(null)
 const climbingPlayerId = ref(null)
@@ -66,8 +75,12 @@ const skillNotice = ref('')
 const skillTargetOptions = ref([])
 const turnDeadline = ref(null)
 const penaltyOverlay = ref(null)
+const destructionOverlay = ref(null)
+const destructionSpace = ref(null)
+const ripOverlay = ref(null)
 let clockTimer
 let diceTimer
+let operatorTimer
 
 const hero = computed(() => characters[selected.value])
 const currentPlayer = computed(() => characters[playerCharacter.value])
@@ -75,7 +88,11 @@ const turnSeconds = computed(() => turnDeadline.value ? Math.max(0, Math.ceil((t
 const controlledGamePlayer = computed(() => game.value?.players.find(player => player.id === clientId))
 const isControlledTurn = computed(() => Boolean(game.value && controlledGamePlayer.value?.id === game.value.players[game.value.currentPlayerIndex]?.id))
 const isLobbyHost = computed(() => onlineRoom.value?.hostId === clientId)
-const selectedLobbyBoard = computed(() => boards[selectedBoard.value] || boards[0])
+const selectedGameMode = computed(() => gameModes.find(mode => mode.key === selectedMode.value) || gameModes[0])
+const availableBoards = computed(() => boards
+  .map((board, index) => ({ ...board, sourceIndex: index }))
+  .filter(board => board.type === selectedMode.value))
+const selectedLobbyBoard = computed(() => availableBoards.value.find(board => board.sourceIndex === selectedBoard.value) || availableBoards.value[0] || null)
 const lobbyPlayers = computed(() => (onlineRoom.value?.players || []).map(player => ({
   ...player,
   character: characters[player.characterIndex % characters.length],
@@ -101,6 +118,10 @@ function removeAiPlayer(playerId) {
   sendLobby({ type: 'remove_ai', playerId })
 }
 
+function kickPlayer(playerId) {
+  sendLobby({ type: 'kick_player', playerId })
+}
+
 function socketUrl() {
   if (import.meta.env.VITE_WS_URL) return import.meta.env.VITE_WS_URL
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -113,9 +134,12 @@ function eventRemaining(event) {
 
 function clearGamePresentation() {
   window.clearInterval(diceTimer)
+  window.clearInterval(operatorTimer)
   diceRolling.value = false
   diceStopped.value = false
   diceSpecial.value = false
+  diceDual.value = false
+  operatorSpinning.value = false
   diceResultLabel.value = ''
   moveOverlay.value = null
   whatOverlay.value = null
@@ -123,6 +147,9 @@ function clearGamePresentation() {
   skillTargetOptions.value = []
   skipOverlay.value = null
   penaltyOverlay.value = null
+  destructionOverlay.value = null
+  destructionSpace.value = null
+  ripOverlay.value = null
   movingPlayerId.value = null
   climbingPlayerId.value = null
 }
@@ -141,28 +168,87 @@ async function handleServerEvent(event) {
     diceStopped.value = false
     diceRolling.value = true
     diceSpecial.value = Boolean(event.data.specialRoll)
+    diceDual.value = Boolean(event.data.dual)
     diceResultLabel.value = ''
     const faces = event.data.faces || [1, 2, 3, 4, 5, 6]
     window.clearInterval(diceTimer)
     diceTimer = window.setInterval(() => {
-      displayedDice.value = faces[Math.floor(Math.random() * faces.length)]
+      if (diceDual.value) {
+        displayedDicePair.value = [
+          faces[Math.floor(Math.random() * faces.length)],
+          faces[Math.floor(Math.random() * faces.length)],
+        ]
+      } else {
+        displayedDice.value = faces[Math.floor(Math.random() * faces.length)]
+      }
     }, 45)
+    if (diceDual.value) displayedOperator.value = '±'
+  } else if (event.type === 'run_away_dice_locked') {
+    audioManager.diceResult()
+    window.clearInterval(diceTimer)
+    diceRolling.value = false
+    diceStopped.value = true
+    diceDual.value = true
+    displayedDicePair.value = event.data.dice
+    diceResultLabel.value = 'Calculating...'
+    displayedOperator.value = '+'
+    operatorSpinning.value = true
+    window.clearInterval(operatorTimer)
+    operatorTimer = window.setInterval(() => {
+      displayedOperator.value = displayedOperator.value === '+' ? '−' : '+'
+    }, 90)
   } else if (event.type === 'dice_stopped') {
     audioManager.diceResult()
     window.clearInterval(diceTimer)
     diceRolling.value = false
     diceStopped.value = true
     diceSpecial.value = Boolean(event.data.specialRoll)
+    diceDual.value = Boolean(event.data.dual)
+    operatorSpinning.value = false
+    window.clearInterval(operatorTimer)
+    if (event.data.dual) {
+      displayedDicePair.value = event.data.dice
+      displayedOperator.value = event.data.operator
+    }
     displayedDice.value = event.data.result
     diceResultLabel.value = event.data.resultLabel || ''
     window.setTimeout(() => {
       diceStopped.value = false
       diceSpecial.value = false
+      diceDual.value = false
       diceResultLabel.value = ''
     }, remaining)
   } else if (event.type === 'move_announcement') {
-    moveOverlay.value = event.data.spaces
+    moveOverlay.value = event.data
     window.setTimeout(() => { moveOverlay.value = null }, remaining)
+  } else if (event.type === 'destruction_warning') {
+    audioManager.runAwayWarning()
+    destructionOverlay.value = { type: 'warning', count: event.data.count, eventId: event.id }
+    window.setTimeout(() => {
+      if (destructionOverlay.value?.eventId === event.id) destructionOverlay.value = null
+    }, remaining)
+  } else if (event.type === 'destruction_square') {
+    destructionOverlay.value = null
+    audioManager.runAwayExplosion()
+    destructionSpace.value = event.data.space
+    window.setTimeout(() => {
+      if (destructionSpace.value === event.data.space) destructionSpace.value = null
+    }, remaining)
+  } else if (event.type === 'destruction_caught') {
+    audioManager.pauseMusic()
+    audioManager.runAwayDeath()
+    destructionOverlay.value = { type: 'caught', ...event.data, eventId: event.id }
+    window.setTimeout(() => {
+      if (destructionOverlay.value?.eventId === event.id) destructionOverlay.value = null
+      audioManager.resumeMusic()
+    }, remaining)
+  } else if (event.type === 'safe') {
+    audioManager.runAwaySafe()
+  } else if (event.type === 'rip_memorial') {
+    ripOverlay.value = { ...event.data, eventId: event.id }
+    window.setTimeout(() => {
+      if (ripOverlay.value?.eventId === event.id) ripOverlay.value = null
+    }, remaining)
   } else if (event.type === 'movement') {
     audioManager.movement(remaining)
     const player = game.value?.players.find(item => item.id === event.data.playerId)
@@ -207,6 +293,8 @@ async function handleServerEvent(event) {
       player: { name: event.data.playerName },
       from: event.data.from,
       destination: event.data.to,
+      message: event.data.message,
+      cooldownAddedMs: event.data.cooldownAddedMs,
     }
     visualSpaces.value[event.data.playerId] = event.data.to
     window.setTimeout(() => { penaltyOverlay.value = null }, remaining)
@@ -219,12 +307,17 @@ function applyGameSnapshot(message) {
   roomCode.value = message.room.code
   localStorage.setItem('ladders-room-code', message.room.code)
   selectedBoard.value = message.room.boardIndex
+  selectedMode.value = message.room.modeKey || boards[message.room.boardIndex]?.type || gameModes[0]?.key
   const previousPlayer = game.value?.players.find(player => player.id === clientId)
+  const previousWinnerId = game.value?.winner?.id
   const wasGameOver = game.value?.gameOver
   game.value = message.game
   const currentPlayerState = message.game?.players.find(player => player.id === clientId)
-  if (currentPlayerState?.finished && !currentPlayerState.forfeited && !previousPlayer?.finished) {
+  if (currentPlayerState?.finished && !currentPlayerState.eliminated && !currentPlayerState.forfeited && !previousPlayer?.finished) {
     audioManager.playOutcome('winner', true)
+  }
+  if (message.game?.winner?.id === clientId && previousWinnerId !== clientId) {
+    audioManager.playOutcome('winner', false)
   }
   if (message.game?.gameOver && !wasGameOver && message.game?.loser?.id === clientId) {
     audioManager.playOutcome('loser', false)
@@ -244,6 +337,8 @@ function resetOnlineRoom(reason = '') {
   onlineRoom.value = null
   game.value = null
   roomCode.value = ''
+  editingPlayerName.value = false
+  playerNameDraft.value = ''
   turnDeadline.value = null
   localStorage.removeItem('ladders-room-code')
   lastRevision = 0
@@ -263,8 +358,14 @@ function handleSocketMessage(event) {
     roomCode.value = message.room.code
     localStorage.setItem('ladders-room-code', message.room.code)
     selectedBoard.value = message.room.boardIndex
+    selectedMode.value = message.room.modeKey || boards[message.room.boardIndex]?.type || gameModes[0]?.key
     const me = message.room.players.find(player => player.id === clientId)
-    if (me) playerCharacter.value = me.characterIndex
+    if (me) {
+      playerCharacter.value = me.characterIndex
+      if (!editingPlayerName.value) {
+        playerNameDraft.value = me.customName || characters[me.characterIndex % characters.length].name
+      }
+    }
     if (message.room.phase === 'lobby') page.value = 'lobby'
     onlineError.value = ''
   } else if (message.type === 'game_started' || message.type === 'game_state') {
@@ -325,6 +426,10 @@ function sendLobby(payload) {
 }
 
 async function createOnlineLobby() {
+  if (onlineRoom.value) {
+    page.value = 'lobby'
+    return
+  }
   onlineError.value = ''
   lastRevision = 0
   seenEvents.clear()
@@ -352,9 +457,10 @@ function changeLobbyCharacter(direction) {
   sendLobby({ type: 'character', characterIndex: playerCharacter.value })
 }
 
-function updateLobbyPlayerName(event) {
-  const name = event.currentTarget.value.trim().slice(0, 20)
-  event.currentTarget.value = name
+function updateLobbyPlayerName() {
+  const name = playerNameDraft.value.trim().slice(0, 20)
+  playerNameDraft.value = name
+  editingPlayerName.value = false
   sendLobby({ type: 'player_name', name })
 }
 
@@ -365,8 +471,15 @@ function selectLobbyBoard(index) {
 }
 
 function changeLobbyBoard(direction) {
-  if (!isLobbyHost.value || boards.length < 2) return
-  selectLobbyBoard((selectedBoard.value + direction + boards.length) % boards.length)
+  if (!isLobbyHost.value || availableBoards.value.length < 2) return
+  const current = availableBoards.value.findIndex(board => board.sourceIndex === selectedBoard.value)
+  const next = (Math.max(0, current) + direction + availableBoards.value.length) % availableBoards.value.length
+  selectLobbyBoard(availableBoards.value[next].sourceIndex)
+}
+
+function changeGameMode(event) {
+  if (!isLobbyHost.value) return
+  sendLobby({ type: 'mode', modeKey: event.target.value })
 }
 
 async function shareInvite() {
@@ -388,26 +501,31 @@ function leaveOnlineRoom() {
   resetOnlineRoom('You left the room.')
 }
 
+function boardSpacePosition(space) {
+  const volcano = game.value?.board?.name === 'Volcano'
+  const desert = game.value?.board?.type === 'run_away'
+  const row = Math.floor((space - 1) / 10)
+  const positionInRow = (space - 1) % 10
+  const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
+  if (desert) return { left: `${5 + column * 10}%`, top: `${95 - row * 10}%` }
+  if (space === 100) return { left: `${volcano ? 11.1 : 8.8}%`, top: `${volcano ? 9 : 8.8}%` }
+  return {
+    left: `${volcano ? 11.1 + column * 8.65 : 9 + column * 9.2}%`,
+    top: `${volcano ? 86 - row * 8.56 : 90.5 - row * 9.15}%`,
+  }
+}
+
 function tokenPosition(space, playerIndex) {
-  const offsets = [[-1.15, -1.15], [1.15, -1.15], [-1.15, 1.15], [1.15, 1.15], [0, -1.65], [0, 1.65]]
+  const offsets = [[-.9, -.9], [.9, -.9], [-.9, .9], [.9, .9], [0, -1.25], [0, 1.25]]
   const volcano = game.value?.board?.name === 'Volcano'
   const offsetScale = volcano ? 0.72 : 1
   const [rawOffsetX, rawOffsetY] = offsets[playerIndex % offsets.length]
   const offsetX = rawOffsetX * offsetScale
   const offsetY = rawOffsetY * offsetScale
-  if (space === 100) {
-    return {
-      left: `${(volcano ? 11.1 : 8.8) + offsetX}%`,
-      top: `${(volcano ? 9 : 8.8) + offsetY}%`,
-      '--token-color': game.value.players[playerIndex].color,
-    }
-  }
-  const row = Math.floor((space - 1) / 10)
-  const positionInRow = (space - 1) % 10
-  const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
+  const position = boardSpacePosition(space)
   return {
-    left: `${(volcano ? 11.1 + column * 8.65 : 9 + column * 9.2) + offsetX}%`,
-    top: `${(volcano ? 86 - row * 8.56 : 90.5 - row * 9.15) + offsetY}%`,
+    left: `calc(${position.left} + ${offsetX}%)`,
+    top: `calc(${position.top} + ${offsetY}%)`,
     '--token-color': game.value.players[playerIndex].color,
   }
 }
@@ -517,6 +635,39 @@ onMounted(() => {
   document.addEventListener('pointerdown', handleAudioUnlock, { once: true, capture: true })
   document.addEventListener('pointerover', handleButtonHover)
   document.addEventListener('click', handleButtonClick)
+  window.render_game_to_text = () => JSON.stringify({
+    page: page.value,
+    room: onlineRoom.value ? {
+      code: onlineRoom.value.code,
+      mode: selectedMode.value,
+      board: selectedLobbyBoard.value?.name || null,
+      availableBoards: availableBoards.value.map(board => board.name),
+      players: lobbyPlayers.value.length,
+      canStart: isLobbyHost.value && lobbyPlayers.value.length >= 2 && Boolean(selectedLobbyBoard.value),
+    } : null,
+    game: game.value ? {
+      mode: game.value.mode,
+      board: game.value.board.name,
+      turn: game.value.turn,
+      nextDestructionTurn: game.value.nextExplosionTurn,
+      currentPlayer: game.value.players[game.value.currentPlayerIndex]?.name,
+      players: game.value.players.map(player => ({
+        name: player.name,
+        space: player.space,
+        finished: player.finished,
+        eliminated: player.eliminated,
+      })),
+      destroyedSpaces: game.value.destroyedSpaces,
+      winners: game.value.winners.map(player => player.name),
+      winner: game.value.winner?.name || null,
+      loser: game.value.loser?.name || null,
+      gameOver: game.value.gameOver,
+    } : null,
+    coordinates: 'Board squares ascend from 1 to 100 in alternating left-to-right and right-to-left rows.',
+  })
+  window.advanceTime = milliseconds => {
+    now.value += Math.max(0, Number(milliseconds) || 0)
+  }
   const invitedRoom = new URLSearchParams(location.search).get('room')
   if (invitedRoom) {
     joinCode.value = invitedRoom.toUpperCase()
@@ -534,12 +685,15 @@ onUnmounted(() => {
   shuttingDown = true
   window.clearInterval(clockTimer)
   window.clearInterval(diceTimer)
+  window.clearInterval(operatorTimer)
   window.clearTimeout(reconnectTimer)
   lobbySocket?.close()
   window.removeEventListener('keydown', handleGameKey)
   document.removeEventListener('pointerover', handleButtonHover)
   document.removeEventListener('click', handleButtonClick)
   audioManager.destroy()
+  delete window.render_game_to_text
+  delete window.advanceTime
 })
 </script>
 
@@ -608,17 +762,25 @@ onUnmounted(() => {
                 :style="lobbyPlayers[slot - 1] ? { '--player-color': lobbyPlayers[slot - 1].character.color } : null"
               >
                 <template v-if="lobbyPlayers[slot - 1]">
-                  <button v-if="lobbyPlayers[slot - 1].isAI && isLobbyHost" class="remove-ai" @click="removeAiPlayer(lobbyPlayers[slot - 1].id)" aria-label="Remove AI player">×</button>
+                  <button v-if="lobbyPlayers[slot - 1].isAI && isLobbyHost" type="button" class="remove-ai" @click.stop="removeAiPlayer(lobbyPlayers[slot - 1].id)" aria-label="Remove AI player">×</button>
+                  <button
+                    v-if="isLobbyHost && !lobbyPlayers[slot - 1].isAI && lobbyPlayers[slot - 1].id !== clientId"
+                    type="button"
+                    class="kick-player"
+                    @click.stop="kickPlayer(lobbyPlayers[slot - 1].id)"
+                    :aria-label="`Kick ${lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name}`"
+                    title="Kick player"
+                  >×</button>
                   <span v-if="lobbyPlayers[slot - 1].isAI" class="ai-label">AI</span>
                   <span v-if="lobbyPlayers[slot - 1].id === onlineRoom?.hostId" class="host-crown">♛</span>
-                  <button v-if="lobbyPlayers[slot - 1].id === clientId" class="lobby-char-arrow left" @click="changeLobbyCharacter(-1)">‹</button>
+                  <button v-if="lobbyPlayers[slot - 1].id === clientId" type="button" class="lobby-char-arrow left" @click.stop.prevent="changeLobbyCharacter(-1)">‹</button>
                   <div
                     class="lobby-pawn"
                     :class="{ owned: lobbyPlayers[slot - 1].id === clientId }"
                     :tabindex="lobbyPlayers[slot - 1].id === clientId ? 0 : null"
                     :aria-describedby="lobbyPlayers[slot - 1].id === clientId ? `lobby-character-tip-${slot}` : null"
                   ><span>{{ lobbyPlayers[slot - 1].character.face }}</span></div>
-                  <button v-if="lobbyPlayers[slot - 1].id === clientId" class="lobby-char-arrow right" @click="changeLobbyCharacter(1)">›</button>
+                  <button v-if="lobbyPlayers[slot - 1].id === clientId" type="button" class="lobby-char-arrow right" @click.stop.prevent="changeLobbyCharacter(1)">›</button>
                   <div
                     v-if="lobbyPlayers[slot - 1].id === clientId"
                     :id="`lobby-character-tip-${slot}`"
@@ -632,11 +794,12 @@ onUnmounted(() => {
                   <input
                     v-if="lobbyPlayers[slot - 1].id === clientId"
                     class="lobby-player-name"
-                    :value="lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name"
+                    v-model="playerNameDraft"
                     maxlength="20"
                     aria-label="Edit your player name"
                     title="Edit your player name"
-                    @change="updateLobbyPlayerName"
+                    @focus="editingPlayerName = true"
+                    @blur="updateLobbyPlayerName"
                     @keydown.enter="$event.currentTarget.blur()"
                   >
                   <strong v-else>{{ lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name }}</strong>
@@ -654,17 +817,22 @@ onUnmounted(() => {
               <button class="game-button purple" @click="shareInvite">♟ Invite</button>
               <button class="game-button ai-button" :disabled="!isLobbyHost || lobbyPlayers.length >= 6" @click="addAiPlayer">＋ Add AI</button>
               <button class="game-button exit" @click="leaveOnlineRoom">↪ Exit room</button>
-              <button class="game-button green" :disabled="!isLobbyHost || lobbyPlayers.length < 2" @click="requestStartGame">▶ Start game</button>
+              <button class="game-button green" :disabled="!isLobbyHost || lobbyPlayers.length < 2 || !selectedLobbyBoard" @click="requestStartGame">▶ Start game</button>
             </div>
           </section>
 
           <section class="board-panel">
-            <div class="board-heading">Choose a board</div>
-            <div class="board-carousel">
+            <label class="mode-heading">
+              <span>Game mode</span>
+              <select :value="selectedMode" :disabled="!isLobbyHost" @change="changeGameMode">
+                <option v-for="mode in gameModes" :key="mode.key" :value="mode.key">{{ mode.name }}</option>
+              </select>
+            </label>
+            <div v-if="selectedLobbyBoard" class="board-carousel">
               <button
                 type="button"
                 class="board-arrow left"
-                :disabled="!isLobbyHost || boards.length < 2"
+                :disabled="!isLobbyHost || availableBoards.length < 2"
                 aria-label="Previous board"
                 @click="changeLobbyBoard(-1)"
               >
@@ -674,22 +842,23 @@ onUnmounted(() => {
                 <img :src="boardPicture(selectedLobbyBoard)" :alt="`${selectedLobbyBoard.name} board`">
                 <span class="board-copy">
                   <strong>{{ selectedLobbyBoard.name }}</strong>
-                  <small>{{ selectedLobbyBoard.question_marks.length }} surprises · {{ selectedLobbyBoard.ladders.length }} ladders</small>
+                  <small>{{ selectedLobbyBoard.question_marks?.length || 0 }} surprises · {{ selectedLobbyBoard.ladders?.length || 0 }} ladders</small>
                 </span>
                 <span class="board-radio">✓</span>
               </article>
               <button
                 type="button"
                 class="board-arrow right"
-                :disabled="!isLobbyHost || boards.length < 2"
+                :disabled="!isLobbyHost || availableBoards.length < 2"
                 aria-label="Next board"
                 @click="changeLobbyBoard(1)"
               >
                 ›
               </button>
             </div>
+            <div v-else class="no-boards">No boards yet</div>
             <small v-if="!isLobbyHost" class="board-host-note">Only the host can change the board</small>
-            <div class="board-tip"><b>💡 Tip:</b> Land on a question mark? Who knows what will happen. That’s the point.</div>
+            <div class="board-tip">{{ selectedGameMode.description }}</div>
           </section>
         </div>
       </section>
@@ -699,22 +868,48 @@ onUnmounted(() => {
       <section class="game-screen">
         <div v-if="penaltyOverlay" class="penalty-overlay" role="status">
           <strong>Penalty</strong>
-          <small>{{ penaltyOverlay.player.name }} moved from {{ penaltyOverlay.from }} to {{ penaltyOverlay.destination }}</small>
+          <small>{{ penaltyOverlay.message }}</small>
+        </div>
+        <div v-if="destructionOverlay" class="destruction-overlay" :class="destructionOverlay.type" role="alert">
+          <template v-if="destructionOverlay.type === 'warning'">
+            <strong>Destruction</strong>
+            <small>Destroying {{ destructionOverlay.count }} squares</small>
+          </template>
+          <template v-else>
+            <strong>{{ destructionOverlay.playerName }} has been caught in the destruction</strong>
+            <small>Eliminated on square {{ destructionOverlay.space }}</small>
+          </template>
         </div>
         <div v-if="moveOverlay" class="move-overlay" role="status">
           <small>Dice result</small>
-          <strong>Move for {{ moveOverlay }} {{ moveOverlay === 1 ? 'space' : 'spaces' }}</strong>
+          <strong v-if="moveOverlay.direction === 'forward'">
+            Move {{ moveOverlay.spaces }} {{ moveOverlay.spaces === 1 ? 'space' : 'spaces' }} forward
+          </strong>
+          <strong v-else-if="moveOverlay.direction === 'backward'">
+            Move {{ moveOverlay.spaces }} {{ moveOverlay.spaces === 1 ? 'space' : 'spaces' }} backward
+          </strong>
+          <strong v-else>Stay on this square</strong>
+        </div>
+        <div v-if="ripOverlay" class="rip-overlay" role="status">
+          <strong>R.I.P</strong>
+          <small>{{ ripOverlay.names.join(' · ') }}</small>
         </div>
         <div v-if="diceRolling || diceStopped" class="dice-roll-overlay" :class="{ stopped: diceStopped, special: diceSpecial }" role="status">
           <small v-if="diceSpecial">Parkour special die · 7–10</small>
-          <div v-if="diceRolling" class="large-dice">{{ displayedDice || '?' }}</div>
+          <small v-else-if="diceDual">Run Away dice · 1–4 each</small>
+          <div v-if="diceDual" class="run-away-dice-row">
+            <div class="large-dice">{{ displayedDicePair[0] }}</div>
+            <div class="operator-die" :class="{ spinning: operatorSpinning }">{{ displayedOperator }}</div>
+            <div class="large-dice">{{ displayedDicePair[1] }}</div>
+          </div>
+          <div v-else-if="diceRolling" class="large-dice">{{ displayedDice || '?' }}</div>
           <div v-else class="large-dice result-number" :aria-label="`Rolled ${displayedDice}`">{{ displayedDice }}</div>
           <strong>{{ diceStopped ? (diceResultLabel || `Rolled ${displayedDice}`) : 'Rolling...' }}</strong>
           <button
             v-if="diceRolling && isControlledTurn"
             class="stop-dice-button"
             @click="stopDiceRoll"
-          >Stop</button>
+          >{{ diceDual ? 'Stop both' : 'Stop' }}</button>
         </div>
         <div v-if="skipOverlay" class="skip-overlay" role="status">
           <small :style="{ color: skipOverlay.color }">{{ skipOverlay.playerName }}</small>
@@ -767,8 +962,10 @@ onUnmounted(() => {
             </strong>
           </div>
           <div class="turn-banner winner-banner" v-else>
-            <small>Game over · Loser</small>
-            <strong :style="{ color: game.loser?.color }">{{ game.loser?.name || 'Nobody' }}</strong>
+            <small>Game over · {{ game.loser ? 'Loser' : game.winner ? 'Winner' : 'Finished' }}</small>
+            <strong :style="{ color: (game.loser || game.winner)?.color }">
+              {{ game.loser?.name || game.winner?.name || 'Everyone' }}
+            </strong>
           </div>
           <div v-if="!game.gameOver" class="turn-timer" :class="{ urgent: turnSeconds <= 5 }">
             <small>Time left</small>
@@ -795,6 +992,20 @@ onUnmounted(() => {
           <div class="game-board-wrap">
             <div class="game-board">
               <img :src="boardPicture(game.board)" :alt="`${game.board.name} gameplay board`">
+              <span
+                v-for="space in game.destroyedSpaces || []"
+                :key="`destroyed-${space}`"
+                class="destroyed-space"
+                :style="boardSpacePosition(space)"
+                :title="`Destroyed square ${space}`"
+              ></span>
+              <img
+                v-if="destructionSpace"
+                class="destruction-effect"
+                :src="explosionGif"
+                alt=""
+                :style="boardSpacePosition(destructionSpace)"
+              >
               <div
                 v-for="(player, index) in game.players"
                 :key="player.id"
@@ -803,7 +1014,8 @@ onUnmounted(() => {
                   active: index === game.currentPlayerIndex && !game.gameOver,
                   moving: movingPlayerId === player.id,
                   climbing: climbingPlayerId === player.id,
-                  finished: player.finished && resolvingPlayerId !== player.id
+                  finished: player.finished && resolvingPlayerId !== player.id,
+                  eliminated: player.eliminated
                 }"
                 :style="tokenPosition(visualSpace(player), index)"
                 :title="`${player.name}: space ${player.space}`"
@@ -825,7 +1037,7 @@ onUnmounted(() => {
                 <span class="console-pawn">{{ player.face }}</span>
                 <div>
                   <strong>{{ player.name }}</strong>
-                  <small>{{ player.finished && resolvingPlayerId !== player.id ? `Finished #${player.rank}` : `Space ${visualSpace(player)}` }}</small>
+                  <small>{{ player.won ? 'Winner · Last standing' : player.eliminated ? 'Spectating · Eliminated' : player.finished && resolvingPlayerId !== player.id ? `Finished #${player.rank}` : `Space ${visualSpace(player)}` }}</small>
                 </div>
                 <div v-if="resolvingPlayerId !== player.id" class="statuses">
                   <i v-if="player.skipTurns">⏳ {{ player.skipTurns }}</i>

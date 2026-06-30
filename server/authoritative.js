@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, createGameState, endTurnAfterSkill, forfeitPlayer, penalizeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateSkill, createGameState, destroySpace, endTurnAfterSkill, forfeitPlayer, penalizeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const RECONNECT_GRACE_MS = 10_000
 const TURN_MS = 15_000
 const boards = JSON.parse(readFileSync(new URL('../data/boards.json', import.meta.url), 'utf8'))
+const gameModes = JSON.parse(readFileSync(new URL('../data/game_modes.json', import.meta.url), 'utf8'))
 const characters = JSON.parse(readFileSync(new URL('../data/characters.json', import.meta.url), 'utf8'))
 const parkourWhats = boards.find(board => board.name === 'Nature')?.whats
   .filter(what => ['Bee Swarm', 'Dung'].includes(what.name)) || []
@@ -33,6 +34,7 @@ function roomView(room) {
     code: room.code,
     phase: room.phase,
     hostId: room.hostId,
+    modeKey: room.modeKey,
     boardIndex: room.boardIndex,
     players: room.players,
   }
@@ -65,6 +67,18 @@ function broadcastGame(room, type = 'game_state') {
     currentEvent: room.currentEvent,
     serverNow: Date.now(),
   })
+  if (room.game?.gameOver && !room.busy && !room.currentEvent && !room.memorialShown) {
+    room.memorialShown = true
+    const names = room.game.players.filter(player => player.eliminated).map(player => player.name)
+    if (names.length) {
+      const memorial = emitEvent(room, 'rip_memorial', { names }, 3000)
+      setTimeout(() => {
+        if (!rooms.has(room.code) || room.currentEvent?.id !== memorial.id) return
+        room.currentEvent = null
+        broadcastGame(room)
+      }, 3000)
+    }
+  }
 }
 
 function emitEvent(room, eventType, data, duration) {
@@ -126,16 +140,60 @@ function effectDestination(space, what) {
   return space
 }
 
-async function runTurnSequence(room, player, startSpace, roll, token, specialRoll = false) {
-  emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll, specialRoll }, 2000)
-  if (!await wait(room, 2000, token)) return
-  emitEvent(room, 'move_announcement', { playerId: player.id, spaces: roll }, 2000)
+async function showCaughtPlayer(room, player, space, token) {
+  emitEvent(room, 'destruction_caught', {
+    playerId: player.id,
+    playerName: player.name,
+    space,
+  }, 3000)
+  return wait(room, 3000, token)
+}
+
+async function runDestructionSequence(room, token) {
+  const spaces = room.game.lastExplosion?.spaces || []
+  if (!spaces.length) return true
+
+  emitEvent(room, 'destruction_warning', { count: spaces.length }, 3000)
+  if (!await wait(room, 3000, token)) return false
+
+  for (const [index, space] of spaces.entries()) {
+    // Show the explosion first, then commit its darkened square. The next
+    // iteration starts only after caught-player handling and the pause below.
+    emitEvent(room, 'destruction_square', { space }, 500)
+    if (!await wait(room, 500, token)) return false
+    const result = destroySpace(room.game, space)
+    broadcastGame(room)
+    for (const player of result.players) {
+      if (!await showCaughtPlayer(room, player, space, token)) return false
+    }
+    if (room.game.gameOver) break
+    if (index < spaces.length - 1 && !await wait(room, 1000, token)) return false
+  }
+  room.game.lastExplosion = null
+  return true
+}
+
+async function runTurnSequence(room, player, startSpace, roll, token, specialRoll = false, diceAlreadyShown = false) {
+  if (!diceAlreadyShown) {
+    emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll, specialRoll }, 2000)
+    if (!await wait(room, 2000, token)) return
+  }
+  const direction = roll > 0 ? 'forward' : roll < 0 ? 'backward' : 'stay'
+  emitEvent(room, 'move_announcement', {
+    playerId: player.id,
+    spaces: Math.abs(roll),
+    signedSpaces: roll,
+    direction,
+  }, 2000)
   if (!await wait(room, 2000, token)) return
 
-  const rollLanding = Math.min(100, startSpace + roll)
-  const rollDuration = Math.max(1, Math.abs(rollLanding - startSpace)) * 540
-  emitEvent(room, 'movement', { playerId: player.id, from: startSpace, to: rollLanding, kind: 'roll' }, rollDuration)
-  if (!await wait(room, rollDuration, token)) return
+  const traversal = room.game.lastTraversalElimination
+  const rollLanding = traversal?.from === startSpace ? traversal.space : Math.max(1, Math.min(100, startSpace + roll))
+  const rollDuration = Math.abs(rollLanding - startSpace) * 540
+  if (rollDuration > 0) {
+    emitEvent(room, 'movement', { playerId: player.id, from: startSpace, to: rollLanding, kind: 'roll' }, rollDuration)
+    if (!await wait(room, rollDuration, token)) return
+  }
 
   const questionChain = room.game.lastQuestionChain || []
   let resolvedSpace = rollLanding
@@ -181,7 +239,7 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
     resolvedSpace = resolution.destination
   }
 
-  const ladder = room.game.board.ladders.find(item => item.from === resolvedSpace)
+  const ladder = !player.eliminated && room.game.board.ladders.find(item => item.from === resolvedSpace)
   if (ladder) {
     emitEvent(room, 'ladder', { playerId: player.id, from: ladder.from, to: ladder.to }, 1600)
     if (!await wait(room, 1600, token)) return
@@ -190,6 +248,15 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
     emitEvent(room, 'movement', { playerId: player.id, from: resolvedSpace, to: player.space, kind: 'skill' }, duration)
     if (!await wait(room, duration, token)) return
   }
+
+  if (traversal && !await showCaughtPlayer(room, player, traversal.space, token)) return
+
+  if (room.game.mode === 'run_away' && player.finished && !player.eliminated && player.space === 100) {
+    emitEvent(room, 'safe', { playerId: player.id, playerName: player.name }, 1200)
+    if (!await wait(room, 1200, token)) return
+  }
+
+  if (!await runDestructionSequence(room, token)) return
 
   room.currentEvent = null
   room.busy = false
@@ -264,10 +331,45 @@ async function runParkourWhatSequence(room, result, token) {
     if (!await wait(room, 1600, token)) return
   }
 
+  const traversal = room.game.lastTraversalElimination
+  if (traversal && !await showCaughtPlayer(room, player, traversal.space, token)) return
+  if (room.game.mode === 'run_away' && player.finished && !player.eliminated && player.space === 100) {
+    emitEvent(room, 'safe', { playerId: player.id, playerName: player.name }, 1200)
+    if (!await wait(room, 1200, token)) return
+  }
+  if (!await runDestructionSequence(room, token)) return
+
   room.currentEvent = null
   room.busy = false
   broadcastGame(room)
   beginTurn(room)
+}
+
+async function runAwayRollSequence(room, player, startSpace, dice, token) {
+  emitEvent(room, 'run_away_dice_locked', {
+    playerId: player.id,
+    dice,
+  }, 2000)
+  if (!await wait(room, 2000, token)) return
+
+  const operator = Math.random() < 0.5 ? '+' : '−'
+  const result = operator === '+' ? dice[0] + dice[1] : dice[0] - dice[1]
+  takeTurn(room.game, result)
+  const resultLabel = result > 0
+    ? `Move ${result} space${result === 1 ? '' : 's'} forward`
+    : result < 0
+      ? `Move ${Math.abs(result)} spaces backward`
+      : 'Stay on this square'
+  emitEvent(room, 'dice_stopped', {
+    playerId: player.id,
+    dual: true,
+    dice,
+    operator,
+    result,
+    resultLabel,
+  }, 2000)
+  if (!await wait(room, 2000, token)) return
+  runTurnSequence(room, player, startSpace, result, token, false, true)
 }
 
 function stopRoll(room, requesterId, automatic = false) {
@@ -282,6 +384,18 @@ function stopRoll(room, requesterId, automatic = false) {
   }
 
   const specialRoll = current.specialRollPending
+  const dualRoll = room.game.mode === 'run_away' && !specialRoll
+  if (dualRoll) {
+    const dice = [
+      Math.floor(Math.random() * 4) + 1,
+      Math.floor(Math.random() * 4) + 1,
+    ]
+    const startSpace = current.space
+    room.rolling = null
+    const token = ++room.sequenceToken
+    runAwayRollSequence(room, current, startSpace, dice, token)
+    return
+  }
   if (specialRoll && parkourWhats.length && Math.random() < 0.15) {
     const what = parkourWhats[Math.floor(Math.random() * parkourWhats.length)]
     room.rolling = null
@@ -310,16 +424,19 @@ function startRoll(room, requesterId, automatic = false) {
   room.turnDeadline = null
   room.busy = true
   const specialRoll = current.specialRollPending
-  room.rolling = { playerId: current.id, startedAt: Date.now(), specialRoll }
+  const dualRoll = room.game.mode === 'run_away' && !specialRoll
+  const rollDuration = dualRoll ? 3000 : current.isAI ? 900 : 5000
+  room.rolling = { playerId: current.id, startedAt: Date.now(), specialRoll, dualRoll }
   emitEvent(room, 'dice_rolling', {
     playerId: current.id,
-    autoStopAt: Date.now() + (current.isAI ? 900 : 5000),
+    autoStopAt: Date.now() + rollDuration,
     min: specialRoll ? 7 : 1,
-    max: specialRoll ? 10 : 6,
+    max: specialRoll ? 10 : dualRoll ? 4 : 6,
     specialRoll,
-    faces: specialRoll ? [7, 8, 9, 10, '🐝', '💩'] : [1, 2, 3, 4, 5, 6],
-  }, current.isAI ? 900 : 5000)
-  room.rollTimer = setTimeout(() => stopRoll(room, current.id, true), current.isAI ? 900 : 5000)
+    dual: dualRoll,
+    faces: specialRoll ? [7, 8, 9, 10, '🐝', '💩'] : dualRoll ? [1, 2, 3, 4] : [1, 2, 3, 4, 5, 6],
+  }, rollDuration)
+  room.rollTimer = setTimeout(() => stopRoll(room, current.id, true), rollDuration)
 }
 
 function applyPenalty(room) {
@@ -334,10 +451,13 @@ function applyPenalty(room) {
     playerName: result.player.name,
     from: result.from,
     to: result.destination,
+    cooldownAddedMs: result.cooldownAddedMs,
+    message: result.message,
     ignoreLadder: true,
   }, 2000)
-  wait(room, 2000, token).then(valid => {
+  wait(room, 2000, token).then(async valid => {
     if (!valid) return
+    if (!await runDestructionSequence(room, token)) return
     room.currentEvent = null
     room.busy = false
     broadcastGame(room)
@@ -363,9 +483,10 @@ function beginTurn(room) {
       turns: current.skipTurns,
       whatName: current.skipReason || 'unknown what',
     }, 3000)
-    wait(room, 3000, token).then(valid => {
+    wait(room, 3000, token).then(async valid => {
       if (!valid) return
       takeTurn(room.game)
+      if (!await runDestructionSequence(room, token)) return
       room.currentEvent = null
       room.busy = false
       broadcastGame(room)
@@ -468,7 +589,7 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
         message: result.message,
         ok: result.ok,
       }, 2000)
-      wait(room, 2000, token).then(resultVisible => {
+      wait(room, 2000, token).then(async resultVisible => {
         if (!resultVisible) return
         room.currentEvent = null
         room.busy = false
@@ -477,6 +598,9 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
           startRoll(room, current.id, current.isAI)
         } else {
           endTurnAfterSkill(room.game)
+          room.busy = true
+          if (!await runDestructionSequence(room, token)) return
+          room.busy = false
           broadcastGame(room)
           beginTurn(room)
         }
@@ -499,6 +623,8 @@ function startGame(room, requesterId) {
   if (room.hostId !== requesterId) return reject(sockets.get(requesterId), 'Only the host can start the game.')
   if (room.phase !== 'lobby') return reject(sockets.get(requesterId), 'The game has already started.')
   if (room.players.length < 2) return reject(sockets.get(requesterId), 'Add at least one player or AI.')
+  const board = boards[room.boardIndex]
+  if (!board || board.type !== room.modeKey) return reject(sockets.get(requesterId), 'Choose an available board for this game mode.')
 
   const definitions = room.players.map(player => {
     const character = characters[player.characterIndex % characters.length]
@@ -509,7 +635,7 @@ function startGame(room, requesterId) {
       isAI: player.isAI,
     }
   })
-  room.game = createGameState(boards[room.boardIndex], definitions)
+  room.game = createGameState(board, definitions)
   room.phase = 'playing'
   room.busy = false
   room.currentEvent = null
@@ -596,7 +722,8 @@ wss.on('connection', socket => {
         code: createCode(),
         phase: 'lobby',
         hostId: clientId,
-        boardIndex: 0,
+        modeKey: gameModes[0]?.key || 'standard',
+        boardIndex: Math.max(0, boards.findIndex(board => board.type === (gameModes[0]?.key || 'standard'))),
         players: [{ id: clientId, characterIndex: message.characterIndex || 0, isAI: false, connected: true }],
         revision: 0,
         eventId: 0,
@@ -604,6 +731,7 @@ wss.on('connection', socket => {
         sequenceToken: 0,
         turnDeadline: null,
         busy: false,
+        memorialShown: false,
       }
       rooms.set(room.code, room)
       broadcastRoom(room)
@@ -646,11 +774,21 @@ wss.on('connection', socket => {
       const player = room.players.find(item => item.id === clientId)
       player.characterIndex = Math.max(0, Number(message.characterIndex) || 0)
       broadcastRoom(room)
+    } else if (message.type === 'mode') {
+      if (room.hostId !== clientId) reject(socket, 'Only the host can select the game mode.')
+      else if (room.phase === 'lobby' && gameModes.some(mode => mode.key === message.modeKey)) {
+        room.modeKey = message.modeKey
+        room.boardIndex = boards.findIndex(board => board.type === room.modeKey)
+        broadcastRoom(room)
+      }
     } else if (message.type === 'board') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can select the board.')
       else if (room.phase === 'lobby') {
-        room.boardIndex = Math.max(0, Math.min(boards.length - 1, Number(message.boardIndex) || 0))
-        broadcastRoom(room)
+        const boardIndex = Number(message.boardIndex)
+        if (boards[boardIndex]?.type === room.modeKey) {
+          room.boardIndex = boardIndex
+          broadcastRoom(room)
+        } else reject(socket, 'That board is not available for this game mode.')
       }
     } else if (message.type === 'player_name') {
       const player = room.players.find(item => item.id === clientId && !item.isAI)
@@ -674,6 +812,21 @@ wss.on('connection', socket => {
       else if (room.phase === 'lobby') {
         room.players = room.players.filter(item => item.id !== message.playerId || !item.isAI)
         broadcastRoom(room)
+      }
+    } else if (message.type === 'kick_player') {
+      if (room.hostId !== clientId) reject(socket, 'Only the host can kick players.')
+      else if (room.phase !== 'lobby') reject(socket, 'Players can only be kicked from the lobby.')
+      else {
+        const player = room.players.find(item => item.id === message.playerId && item.id !== room.hostId)
+        if (!player) reject(socket, 'Player cannot be kicked.')
+        else {
+          clearTimer(room.disconnectTimers.get(player.id))
+          room.disconnectTimers.delete(player.id)
+          room.players = room.players.filter(item => item.id !== player.id)
+          const kickedSocket = sockets.get(player.id)
+          if (kickedSocket) send(kickedSocket, { type: 'room_closed', reason: 'The host removed you from the room.' })
+          broadcastRoom(room)
+        }
       }
     } else if (message.type === 'start_game') startGame(room, clientId)
     else if (message.type === 'start_roll') startRoll(room, clientId)

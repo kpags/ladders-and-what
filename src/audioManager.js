@@ -162,6 +162,30 @@ class AudioManager {
     this.play(fileFrom(soundFiles, '/system/in_game/penalty.mp3'))
   }
 
+  runAwayWarning() {
+    this.random('run_away/warning')
+  }
+
+  runAwayExplosion() {
+    this.random('run_away/explosion')
+  }
+
+  runAwayDeath() {
+    this.random('run_away/death')
+  }
+
+  runAwaySafe() {
+    this.random('run_away/safe')
+  }
+
+  pauseMusic() {
+    this.music.pause()
+  }
+
+  resumeMusic() {
+    if (!this.muted && this.unlocked && !this.outcome) this.music.play().catch(() => {})
+  }
+
   buttonHover() {
     this.play(fileFrom(soundFiles, '/system/button_hovered.mp3'), { channel: 'button-hover', volume: 0.65 })
   }

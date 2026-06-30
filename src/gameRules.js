@@ -1,8 +1,32 @@
 export const SKILL_COOLDOWN_MS = 120_000
 
+function randomInteger(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
+function prepareBoard(board) {
+  const prepared = structuredClone(board)
+  prepared.ladders ||= []
+  prepared.question_marks ||= []
+  prepared.whats ||= []
+  if (prepared.type === 'guess_what') {
+    const count = prepared.question_marks.length || 13
+    const candidates = Array.from({ length: 94 }, (_, index) => index + 5)
+    prepared.question_marks = []
+    while (prepared.question_marks.length < Math.min(count, candidates.length)) {
+      prepared.question_marks.push(candidates.splice(randomInteger(0, candidates.length - 1), 1)[0])
+    }
+    prepared.question_marks.sort((a, b) => a - b)
+    prepared.hiddenQuestionMarks = true
+  }
+  return prepared
+}
+
 export function createGameState(board, players, startedAt = Date.now()) {
+  const preparedBoard = prepareBoard(board)
   return {
-    board,
+    mode: preparedBoard.type || 'standard',
+    board: preparedBoard,
     players: players.map((player, index) => ({
       ...player,
       id: player.id || `${player.isAI ? 'ai' : 'player'}-${index}`,
@@ -15,10 +39,13 @@ export function createGameState(board, players, startedAt = Date.now()) {
       rerollPending: false,
       specialRollPending: false,
       finished: false,
+      eliminated: false,
+      won: false,
       rank: null,
     })),
     currentPlayerIndex: 0,
     winners: [],
+    winner: null,
     loser: null,
     gameOver: false,
     turn: 1,
@@ -28,6 +55,10 @@ export function createGameState(board, players, startedAt = Date.now()) {
     lastEvent: 'The race to 100 is ready to begin.',
     log: ['Game started. Reach 100—and do not be the last player left!'],
     questionHistory: {},
+    destroyedSpaces: [],
+    nextExplosionTurn: preparedBoard.type === 'run_away' ? randomInteger(3, 5) : null,
+    lastExplosion: null,
+    lastTraversalElimination: null,
   }
 }
 
@@ -38,7 +69,95 @@ function addLog(state, message) {
 }
 
 function activePlayers(state) {
-  return state.players.filter(player => !player.finished)
+  return state.players.filter(player => !player.finished && !player.eliminated)
+}
+
+function concludeIfOneRemains(state) {
+  const remaining = activePlayers(state)
+  if (remaining.length === 0) {
+    state.gameOver = true
+    return
+  }
+  if (remaining.length !== 1) return
+
+  const survivor = remaining[0]
+  const eliminatedCount = state.players.filter(player => player.eliminated).length
+  const forfeitedCount = state.players.filter(player => player.forfeited).length
+  const allOthersEliminated = eliminatedCount === state.players.length - 1
+  const allOthersFinished = state.winners.length === state.players.length - 1
+  const allOthersForfeited = forfeitedCount === state.players.length - 1
+
+  if (state.mode === 'run_away' && allOthersEliminated) {
+    survivor.won = true
+    state.winner = survivor
+    state.gameOver = true
+    addLog(state, `${survivor.name} is the last player standing and wins the game!`)
+  } else if (allOthersFinished || allOthersForfeited) {
+    state.loser = survivor
+    state.gameOver = true
+    addLog(state, `${survivor.name} is the last player left and loses the game.`)
+  }
+}
+
+function eliminatePlayer(state, player, message) {
+  if (player.finished || player.eliminated) return false
+  player.eliminated = true
+  player.finished = true
+  player.rank = null
+  addLog(state, message || `${player.name} was eliminated and is now spectating.`)
+  concludeIfOneRemains(state)
+  return true
+}
+
+function movePlayer(state, player, destination) {
+  const from = player.space
+  const intended = Math.max(1, Math.min(100, destination))
+  if (state.mode === 'run_away' && intended !== from) {
+    const direction = intended > from ? 1 : -1
+    for (let square = from + direction; direction > 0 ? square <= intended : square >= intended; square += direction) {
+      if (state.destroyedSpaces.includes(square)) {
+        player.space = square
+        eliminatePlayer(state, player, `${player.name} traversed destroyed square ${square} and is now spectating.`)
+        state.lastTraversalElimination = { playerId: player.id, playerName: player.name, from, intended, space: square }
+        return square
+      }
+    }
+  }
+  player.space = intended
+  return intended
+}
+
+function triggerExplosion(state) {
+  state.lastExplosion = null
+  if (state.mode !== 'run_away' || state.gameOver) return
+  if (state.turn < state.nextExplosionTurn) return
+
+  const amount = randomInteger(4, 7)
+  const destroyed = []
+  let square = (state.destroyedSpaces.at(-1) || 0) + 1
+  while (destroyed.length < amount && square <= 99) {
+    if (!state.destroyedSpaces.includes(square)) destroyed.push(square)
+    square++
+  }
+  state.lastExplosion = { spaces: destroyed }
+  state.nextExplosionTurn = state.turn + randomInteger(3, 5)
+}
+
+export function destroySpace(state, space) {
+  if (state.mode !== 'run_away' || space < 1 || space > 99 || state.destroyedSpaces.includes(space)) {
+    return { space, players: [] }
+  }
+  state.destroyedSpaces.push(space)
+  state.destroyedSpaces.sort((a, b) => a - b)
+  addLog(state, `Square ${space} was destroyed.`)
+  const caught = activePlayers(state).filter(player => player.space === space)
+  for (const player of caught) {
+    eliminatePlayer(state, player, `${player.name} was caught in the destruction on square ${space} and is now spectating.`)
+  }
+  if (!state.gameOver && (state.players[state.currentPlayerIndex].finished || state.players[state.currentPlayerIndex].eliminated)) {
+    advanceTurn(state)
+  }
+  return { space, players: caught }
 }
 
 function chooseWhat(state, space) {
@@ -70,10 +189,10 @@ function chooseWhat(state, space) {
   return whats[chosenIndex]
 }
 
-function applyWhat(player, what) {
+function applyWhat(state, player, what) {
   const effect = what.effect
-  if (effect.effect === 'move_back') player.space = Math.max(1, player.space - (effect.spaces || 0))
-  else if (effect.effect === 'move_forward') player.space = Math.min(100, player.space + (effect.spaces || 0))
+  if (effect.effect === 'move_back') movePlayer(state, player, player.space - (effect.spaces || 0))
+  else if (effect.effect === 'move_forward') movePlayer(state, player, player.space + (effect.spaces || 0))
   else if (effect.effect === 'lose_turn') {
     player.skipTurns += effect.turns || 1
     player.skipReason = what.name
@@ -95,14 +214,7 @@ function finishPlayer(state, player) {
   state.winners.push(player)
   addLog(state, `${player.name} reached 100 and finished #${player.rank}!`)
 
-  const remaining = activePlayers(state)
-  if (remaining.length === 1) {
-    state.loser = remaining[0]
-    state.gameOver = true
-    addLog(state, `${state.loser.name} is the last player left and loses the game.`)
-  } else if (remaining.length === 0) {
-    state.gameOver = true
-  }
+  concludeIfOneRemains(state)
 }
 
 function resolveLanding(state, player) {
@@ -129,7 +241,7 @@ function resolveLanding(state, player) {
       const what = chooseWhat(state, questionSpace)
       if (what) {
         state.lastWhat = { ...what, space: questionSpace }
-        applyWhat(player, what)
+        applyWhat(state, player, what)
         state.lastQuestionChain.push({
           kind: 'what',
           space: questionSpace,
@@ -140,10 +252,11 @@ function resolveLanding(state, player) {
       }
     }
     chainCount++
+    if (player.eliminated) break
     if (player.space === questionSpace) break
   }
 
-  const ladder = !player.rerollPending && state.board.ladders.find(item => item.from === player.space)
+  const ladder = !player.eliminated && !player.rerollPending && state.board.ladders.find(item => item.from === player.space)
   if (ladder) {
     const start = player.space
     player.space = ladder.to
@@ -158,17 +271,19 @@ function advanceTurn(state) {
   do {
     nextIndex = (nextIndex + 1) % state.players.length
     if (nextIndex === 0) state.turn++
-  } while (state.players[nextIndex].finished)
+  } while (state.players[nextIndex].finished || state.players[nextIndex].eliminated)
   state.currentPlayerIndex = nextIndex
 }
 
 export function endTurnAfterSkill(state) {
   if (!state.gameOver) advanceTurn(state)
+  triggerExplosion(state)
 }
 
 export function takeTurn(state, forcedRoll) {
   if (state.gameOver) return
   const player = state.players[state.currentPlayerIndex]
+  state.lastTraversalElimination = null
   if (player.skipTurns > 0) {
     player.skipTurns--
     if (player.skillBlockedTurns > 0) player.skillBlockedTurns--
@@ -178,18 +293,27 @@ export function takeTurn(state, forcedRoll) {
     addLog(state, `${player.name} cannot move due to ${player.skipReason || 'a what'}. ${player.skipTurns} skipped turn(s) remain.`)
     if (player.skipTurns === 0) player.skipReason = null
     advanceTurn(state)
+    triggerExplosion(state)
     return
   }
 
-  const roll = forcedRoll || Math.floor(Math.random() * 6) + 1
+  const roll = forcedRoll ?? Math.floor(Math.random() * 6) + 1
   player.rerollPending = false
   player.specialRollPending = false
   state.lastRoll = roll
-  player.space = Math.min(100, player.space + roll)
-  addLog(state, `${player.name} rolled ${roll} and moved to space ${player.space}.`)
-  resolveLanding(state, player)
+  state.lastWhat = null
+  state.lastQuestionChain = []
+  movePlayer(state, player, player.space + roll)
+  const movementText = roll > 0
+    ? `moved forward ${roll} space(s)`
+    : roll < 0
+      ? `moved backward ${Math.abs(roll)} space(s)`
+      : 'stayed in place'
+  addLog(state, `${player.name} rolled ${roll}, ${movementText}, and is on space ${player.space}.`)
+  if (!player.eliminated && roll !== 0) resolveLanding(state, player)
   if (player.skillBlockedTurns > 0) player.skillBlockedTurns--
-  if (!player.rerollPending) advanceTurn(state)
+  if (!state.gameOver && !player.rerollPending) advanceTurn(state)
+  triggerExplosion(state)
 }
 
 export function takeParkourWhat(state, what) {
@@ -200,13 +324,14 @@ export function takeParkourWhat(state, what) {
   state.lastRoll = null
   state.lastWhat = { ...what, space: from }
   state.lastQuestionChain = []
-  applyWhat(player, what)
+  state.lastTraversalElimination = null
+  applyWhat(state, player, what)
   const directDestination = player.space
   addLog(state, `${player.name}'s Parkour die landed on ${what.name}. ${affectedDescription(what.effect.description, player.name)}`)
 
   let questionChain = []
   let ladder = null
-  if (directDestination !== from) {
+  if (directDestination !== from && !player.eliminated) {
     resolveLanding(state, player)
     questionChain = state.lastQuestionChain.map(item => ({
       ...item,
@@ -218,6 +343,7 @@ export function takeParkourWhat(state, what) {
   }
 
   if (!state.gameOver) advanceTurn(state)
+  triggerExplosion(state)
   return {
     player,
     what: { ...what },
@@ -232,18 +358,28 @@ export function penalizeTurn(state) {
   if (state.gameOver) return null
   const player = state.players[state.currentPlayerIndex]
   const from = player.space
-  let destination = Math.max(1, from - 1)
-  while (destination > 1 && state.board.question_marks.includes(destination)) destination--
-  player.space = destination
+  let destination = from
+  let cooldownAddedMs = 0
+  if (state.mode === 'run_away') {
+    cooldownAddedMs = 30_000
+    player.skillCooldownUntil = Math.max(player.skillCooldownUntil, Date.now()) + cooldownAddedMs
+  } else {
+    destination = Math.max(1, from - 1)
+    while (destination > 1 && state.board.question_marks.includes(destination)) destination--
+    player.space = destination
+  }
   player.rerollPending = false
   player.specialRollPending = false
   state.lastRoll = null
   state.lastWhat = null
   state.lastQuestionChain = []
-  const message = `${player.name} ran out of time and was moved back from space ${from} to normal space ${destination}.`
+  const message = state.mode === 'run_away'
+    ? `${player.name} ran out of time, stayed on square ${from}, and gained 30 seconds of skill cooldown.`
+    : `${player.name} ran out of time and was moved back from space ${from} to normal space ${destination}.`
   addLog(state, message)
   advanceTurn(state)
-  return { player, from, destination, message }
+  triggerExplosion(state)
+  return { player, from, destination, cooldownAddedMs, message }
 }
 
 export function forfeitPlayer(state, playerId) {
@@ -258,9 +394,7 @@ export function forfeitPlayer(state, playerId) {
 
   const remaining = activePlayers(state)
   if (remaining.length <= 1) {
-    state.loser = remaining[0] || null
-    state.gameOver = true
-    if (state.loser) addLog(state, `${state.loser.name} is the last player left and loses the game.`)
+    concludeIfOneRemains(state)
   } else if (wasCurrent) {
     advanceTurn(state)
   }

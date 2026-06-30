@@ -2,6 +2,7 @@
     {
         "name": "Nature",
         "picture": "assets/boards/nature/template.png",
+        "type": "standard",
         "music": "nature",
         "ladders": [
             { "from": 8, "to": 27 },
@@ -138,6 +139,7 @@
     },
     {
         "name": "Volcano",
+        "type": "standard",
         "picture": "assets/boards/volcano/template.png",
         "music": "volcano",
         "ladders": [
@@ -255,6 +257,108 @@
                     "effect": "move_back",
                     "spaces": 20,
                     "description": "An avalanche rushes down the mountain and heading towards you! You move back 20 spaces."
+                }
+            }
+        ]
+    },
+    {
+        "name": "Desert",
+        "type": "run_away",
+        "picture": "assets/boards/desert/template.png",
+        "music": "desert",
+        "question_marks": [
+            22, 27, 34, 46, 62, 65, 68, 72, 84, 87, 89, 95, 97
+        ],
+        "whats": [
+            {
+                "name": "Quicksand",
+                "spawn_locations": {
+                    "start": 30,
+                    "end": 98
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 2,
+                    "description": "You stepped on a hidden quicksand! Lose your next 2 turns."
+                }
+            },
+            {
+                "name": "Pitfall",
+                "spawn_locations": {
+                    "start": 30,
+                    "end": 98
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 2,
+                    "description": "You fell into a pitfall! Lose your next 2 turns."
+                }
+            },
+            {
+                "name": "Bear Trap",
+                "spawn_locations": {
+                    "start": 20,
+                    "end": 90
+                },
+                "effect": {
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 1,
+                    "description": "You stepped on a bear trap! Lose your next turn."
+                }
+            },
+            {
+                "name": "Camel",
+                "spawn_locations": {
+                    "start": 20,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 6,
+                    "description": "A camel appears before you! You ride it and moved 6 spaces."
+                }
+            },
+            {
+                "name": "Lost Quad Bike",
+                "spawn_locations": {
+                    "start": 20,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 8,
+                    "description": "You found a working quad bike. You used it and moved 8 spaces."
+                }
+            },
+            {
+                "name": "Bicycle",
+                "spawn_locations": {
+                    "start": 20,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 2,
+                    "description": "You found a bicycle. You used it and moved 2 spaces."
+                }
+            },
+            {
+                "name": "Water Well",
+                "spawn_locations": {
+                    "start": 20,
+                    "end": 99
+                },
+                "effect": {
+                    "type": "skill",
+                    "effect": "activate_skill",
+                    "detailed_description": "Remove cooldown of player's skill and can be used. If not on cooldown, do nothing.",
+                    "description": "You found a water well and drank from it. You feel energized and skill activated immediately."
                 }
             }
         ]
