@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
 import { activateSkill, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, penalizeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const RECONNECT_GRACE_MS = 10_000
@@ -186,6 +187,15 @@ async function runDestructionSequence(room, token) {
   return true
 }
 
+function finishSequenceAndBeginTurn(room) {
+  clearTimer(room.turnTimer)
+  clearTimer(room.rollTimer)
+  room.turnTimer = null
+  room.rollTimer = null
+  unlockRoomForNextTurn(room)
+  beginTurn(room)
+}
+
 async function runTurnSequence(room, player, startSpace, roll, token, specialRoll = false, diceAlreadyShown = false, movementOverride = null) {
   if (!diceAlreadyShown) {
     emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll, specialRoll }, 2000)
@@ -273,10 +283,7 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
 
   if (!await runDestructionSequence(room, token)) return
 
-  room.currentEvent = null
-  room.busy = false
-  broadcastGame(room)
-  beginTurn(room)
+  finishSequenceAndBeginTurn(room)
 }
 
 async function runParkourWhatSequence(room, result, token) {
@@ -354,10 +361,7 @@ async function runParkourWhatSequence(room, result, token) {
   }
   if (!await runDestructionSequence(room, token)) return
 
-  room.currentEvent = null
-  room.busy = false
-  broadcastGame(room)
-  beginTurn(room)
+  finishSequenceAndBeginTurn(room)
 }
 
 async function runAwayRollSequence(room, player, startSpace, dice, token) {
@@ -425,11 +429,14 @@ function stopRoll(room, requesterId, automatic = false) {
   runTurnSequence(room, current, startSpace, roll, token, specialRoll)
 }
 
-function startRoll(room, requesterId, automatic = false) {
-  if (room.phase !== 'playing' || room.busy || room.rolling || room.game.gameOver) return
+function startRoll(room, requesterId, automatic = false, continuingSequence = false) {
+  if (!canStartRoll(room, requesterId, automatic, continuingSequence)) {
+    if (!automatic && room.phase === 'playing' && !room.busy && !room.rolling && !room.game.gameOver) {
+      reject(sockets.get(requesterId), 'It is not your turn.')
+    }
+    return
+  }
   const current = room.game.players[room.game.currentPlayerIndex]
-  if (!automatic && current.id !== requesterId) return reject(sockets.get(requesterId), 'It is not your turn.')
-  if (automatic && !current.isAI) return
 
   clearTimer(room.turnTimer)
   room.turnDeadline = null
@@ -469,10 +476,7 @@ function applyPenalty(room) {
   wait(room, 2000, token).then(async valid => {
     if (!valid) return
     if (!await runDestructionSequence(room, token)) return
-    room.currentEvent = null
-    room.busy = false
-    broadcastGame(room)
-    beginTurn(room)
+    finishSequenceAndBeginTurn(room)
   })
 }
 
@@ -498,10 +502,7 @@ function beginTurn(room) {
       if (!valid) return
       takeTurn(room.game)
       if (!await runDestructionSequence(room, token)) return
-      room.currentEvent = null
-      room.busy = false
-      broadcastGame(room)
-      beginTurn(room)
+      finishSequenceAndBeginTurn(room)
     })
     return
   }
@@ -603,17 +604,12 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
       wait(room, 2000, token).then(async resultVisible => {
         if (!resultVisible) return
         room.currentEvent = null
-        room.busy = false
         if (result.requiresRoll) {
-          broadcastGame(room)
-          startRoll(room, current.id, current.isAI)
+          startRoll(room, current.id, current.isAI, true)
         } else {
           endTurnAfterSkill(room.game)
-          room.busy = true
           if (!await runDestructionSequence(room, token)) return
-          room.busy = false
-          broadcastGame(room)
-          beginTurn(room)
+          finishSequenceAndBeginTurn(room)
         }
       })
     }
