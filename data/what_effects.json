@@ -1,0 +1,18 @@
+{
+    "move": {
+        "effects": [
+            {
+                "type": "move",
+                "effect": "move_forward",
+                "spaces": 5,
+                "description": "You found a secret passage! Move forward 5 spaces."
+            },
+            {
+                "type": "move",
+                "effect": "move_back",
+                "spaces": 3,
+                "description": "You fell into a trap! Move back 3 spaces."
+            }
+        ]
+    }
+}

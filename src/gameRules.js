@@ -1,3 +1,5 @@
+import { executeRegisteredWhatEffects } from './whatEffectRegistry.js'
+
 export const SKILL_COOLDOWN_MS = 120_000
 
 function randomInteger(min, max) {
@@ -237,26 +239,12 @@ function chooseWhat(state, space) {
 }
 
 export function applyWhatEffects(state, player, what, now = Date.now()) {
-  const steps = []
-  for (const effect of what.effects || []) {
-    const from = player.space
-    if (effect.effect === 'move_back') movePlayer(state, player, player.space - (effect.spaces || 0))
-    else if (effect.effect === 'move_forward') movePlayer(state, player, player.space + (effect.spaces || 0))
-    else if (effect.effect === 'lose_turn') {
-      player.skipTurns += effect.turns || 1
-      player.skipReason = what.name
-    }
-    else if (effect.effect === 'lose_skill') player.skillBlockedTurns = Math.max(player.skillBlockedTurns, effect.spaces || effect.turns || 1)
-    else if (effect.effect === 'activate_skill' && player.skillCooldownUntil > now) player.skillRefreshPending = true
-
-    steps.push({
-      definition: { ...effect },
-      from,
-      destination: player.space,
-    })
-    if (player.eliminated) break
-  }
-  return steps
+  return executeRegisteredWhatEffects({
+    player,
+    what,
+    now,
+    move: destination => movePlayer(state, player, destination),
+  })
 }
 
 function affectedDescription(description, playerName) {

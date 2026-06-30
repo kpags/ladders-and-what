@@ -1,3 +1,5 @@
+import { executeRegisteredWhatEffects } from './whatEffectRegistry.js'
+
 export function createGameState(board, players) {
   return {
     board,
@@ -46,17 +48,13 @@ function chooseWhat(state, space) {
 }
 
 function applyWhat(state, player, what) {
-  for (const effect of what.effects || []) {
-    if (effect.effect === 'move_back') {
-      player.space = Math.max(1, player.space - (effect.spaces || 0))
-    } else if (effect.effect === 'move_forward') {
-      player.space = Math.min(100, player.space + (effect.spaces || 0))
-    } else if (effect.effect === 'lose_turn') {
-      player.skipTurns += effect.turns || 1
-    } else if (effect.effect === 'lose_skill') {
-      player.skillBlockedTurns = Math.max(player.skillBlockedTurns, effect.spaces || effect.turns || 1)
-    }
-  }
+  executeRegisteredWhatEffects({
+    player,
+    what,
+    move: destination => {
+      player.space = Math.max(1, Math.min(100, destination))
+    },
+  })
 }
 
 function resolveLanding(state, player) {

@@ -2,11 +2,13 @@ import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
 import { activateSkill, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, penalizeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
+import { validateBoardWhats } from '../src/whatEffectRegistry.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const RECONNECT_GRACE_MS = 10_000
 const TURN_MS = 15_000
 const boards = JSON.parse(readFileSync(new URL('../data/boards.json', import.meta.url), 'utf8'))
+validateBoardWhats(boards)
 const gameModes = JSON.parse(readFileSync(new URL('../data/game_modes.json', import.meta.url), 'utf8'))
 const characters = JSON.parse(readFileSync(new URL('../data/characters.json', import.meta.url), 'utf8'))
 const parkourWhats = boards.find(board => board.name === 'Nature')?.whats
