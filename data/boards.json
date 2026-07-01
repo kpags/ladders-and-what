@@ -635,7 +635,10 @@
             { "from": 89, "to": 69, "direction": "down" },
             { "from": 81, "to": 61, "direction": "down" }
         ],
-        "default_weapon": "crucifix",
+        "default_weapon": {
+            "name": "Crucifix",
+            "description": "A crucifix that can be used to ward off evil spirits."
+        },
         "keys_count": 3,
         "max_player_lives": 5,
         "max_players": 4

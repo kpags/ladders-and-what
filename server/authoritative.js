@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, applyDestroyedSquareEffect, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, chooseEscapeAiDirection, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, skipEscapeTurn, takeEscapeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 
 const PORT = Number(process.env.PORT || 8787)
@@ -13,6 +14,27 @@ const parkourWhats = boards.find(board => board.name === 'Nature')?.whats
   .filter(what => ['Bee Swarm', 'Dung'].includes(what.name)) || []
 const rooms = new Map()
 const sockets = new Map()
+const ESCAPE_ROLL_MS = 10_000
+const ESCAPE_DIRECTION_MS = 10_000
+
+function firstBoardIndex(modeKey) {
+  return boardIndicesForMode(boards, modeKey)[0] ?? -1
+}
+
+function roomMaxPlayers(room) {
+  return room.modeKey === 'escape_from' ? 4 : 6
+}
+
+function normalizeRoomCharacter(room, requestedIndex, fallbackOffset = 0) {
+  return normalizeCharacterIndex(characters, room.modeKey, requestedIndex, fallbackOffset)
+}
+
+function remapRoomCharacters(room) {
+  room.players.forEach((player, index) => {
+    const normalized = normalizeRoomCharacter(room, player.characterIndex, index)
+    if (normalized != null) player.characterIndex = normalized
+  })
+}
 
 function createCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -122,6 +144,8 @@ function clearTimer(timer) {
 function clearRoomTimers(room) {
   clearTimer(room.turnTimer)
   clearTimer(room.rollTimer)
+  clearTimer(room.directionTimer)
+  room.directionChoice = null
   for (const timer of room.disconnectTimers.values()) clearTimer(timer)
   room.disconnectTimers.clear()
   clearTimer(room.pendingMine?.timer)
@@ -197,10 +221,66 @@ async function runDestructionSequence(room, token) {
 function finishSequenceAndBeginTurn(room) {
   clearTimer(room.turnTimer)
   clearTimer(room.rollTimer)
+  clearTimer(room.directionTimer)
   room.turnTimer = null
   room.rollTimer = null
+  room.directionTimer = null
   unlockRoomForNextTurn(room)
   beginTurn(room)
+}
+
+async function finishEscapeDirection(room, direction) {
+  const choice = room.directionChoice
+  if (!choice || room.game.gameOver) return
+  clearTimer(room.directionTimer)
+  room.directionTimer = null
+  room.directionChoice = null
+  room.currentEvent = null
+  const token = ++room.sequenceToken
+  if (!direction) {
+    skipEscapeTurn(room.game)
+    broadcastGame(room)
+    finishSequenceAndBeginTurn(room)
+    return
+  }
+  const result = takeEscapeTurn(room.game, choice.roll, direction)
+  emitEvent(room, 'dice_stopped', {
+    playerId: choice.playerId,
+    result: choice.roll,
+    resultLabel: `Move ${choice.roll} spaces ${direction}`,
+  }, 500)
+  if (!await wait(room, 500, token)) return
+  const duration = Math.abs(result.rollLanding - result.from) * 540
+  emitEvent(room, 'movement', { playerId: choice.playerId, from: result.from, to: result.rollLanding, kind: 'escape' }, duration)
+  if (!await wait(room, duration, token)) return
+  if (result.ladder) {
+    emitEvent(room, 'ladder', {
+      playerId: choice.playerId,
+      from: result.ladder.from,
+      to: result.ladder.to,
+    }, 1600)
+    if (!await wait(room, 1600, token)) return
+  }
+  if (result.encounter) {
+    emitEvent(room, 'escape_entity_revealed', result.encounter, 1200)
+    if (!await wait(room, 1200, token)) return
+    emitEvent(room, 'escape_entity_encounter', {
+      ...result.encounter,
+      ghost: ['old_woman', 'red_eyes', 'white_face'][Math.floor(Math.random() * 3)],
+    }, 4000)
+    if (!await wait(room, 4000, token)) return
+    emitEvent(room, result.encounter.prevented ? 'escape_exorcised' : 'escape_attacked', result.encounter, 3000)
+    if (!await wait(room, 3000, token)) return
+    broadcastGame(room)
+  } else broadcastGame(room)
+  finishSequenceAndBeginTurn(room)
+}
+
+function chooseEscapeDirection(room, requesterId, direction) {
+  const choice = room.directionChoice
+  if (!choice || choice.playerId !== requesterId) return reject(sockets.get(requesterId), 'There is no direction choice for this player.')
+  if (!['forward', 'backward'].includes(direction)) return reject(sockets.get(requesterId), 'Choose forward or backward.')
+  finishEscapeDirection(room, direction)
 }
 
 async function playWhatEffects(room, player, what, effects, resolvedSpace, token) {
@@ -439,6 +519,29 @@ function stopRoll(room, requesterId, automatic = false) {
   if (!automatic && current.id !== requesterId) return reject(sockets.get(requesterId), 'Only the active player can stop the dice.')
 
   clearTimer(room.rollTimer)
+  if (room.game.mode === 'escape_from') {
+    room.rolling = null
+    room.currentEvent = null
+    if (automatic && !current.isAI) {
+      skipEscapeTurn(room.game)
+      broadcastGame(room)
+      finishSequenceAndBeginTurn(room)
+      return
+    }
+    const roll = Math.floor(Math.random() * 6) + 1
+    room.directionChoice = { playerId: current.id, roll, startedAt: Date.now() }
+    if (current.isAI) {
+      finishEscapeDirection(room, chooseEscapeAiDirection(room.game, current, roll))
+      return
+    }
+    emitEvent(room, 'escape_direction_choice', {
+      playerId: current.id,
+      roll,
+      expiresAt: Date.now() + ESCAPE_DIRECTION_MS,
+    }, ESCAPE_DIRECTION_MS)
+    room.directionTimer = setTimeout(() => finishEscapeDirection(room, null), ESCAPE_DIRECTION_MS)
+    return
+  }
   const elapsed = Date.now() - room.rolling.startedAt
   for (const player of room.game.players) {
     if (player.skillCooldownUntil > room.rolling.startedAt) player.skillCooldownUntil += elapsed
@@ -489,7 +592,9 @@ function startRoll(room, requesterId, automatic = false, continuingSequence = fa
   room.busy = true
   const specialRoll = current.specialRollPending
   const dualRoll = room.game.mode === 'run_away' && !specialRoll
-  const rollDuration = dualRoll ? 3000 : current.isAI ? 900 : 5000
+  const rollDuration = room.game.mode === 'escape_from'
+    ? (current.isAI ? 900 : ESCAPE_ROLL_MS)
+    : dualRoll ? 3000 : current.isAI ? 900 : 5000
   room.rolling = { playerId: current.id, startedAt: Date.now(), specialRoll, dualRoll }
   emitEvent(room, 'dice_rolling', {
     playerId: current.id,
@@ -534,6 +639,27 @@ function beginTurn(room) {
   }
 
   const current = room.game.players[room.game.currentPlayerIndex]
+  if (room.game.mode === 'escape_from' && current.isAI) {
+    const nearEntity = room.game.entities.some(entity => Math.abs(entity.space - current.space) <= 4)
+    const weaponReady = current.weaponProtectFromTurn == null && current.weaponCooldownUntil <= Date.now()
+    if (nearEntity && weaponReady && Math.random() < 0.5) {
+      room.busy = true
+      armEscapeWeapon(room.game, current)
+      emitEvent(room, 'escape_weapon_armed', {
+        playerId: current.id,
+        playerName: current.name,
+        protectFromTurn: current.weaponProtectFromTurn,
+        protectThroughTurn: current.weaponProtectThroughTurn,
+      }, 1000)
+      const token = ++room.sequenceToken
+      wait(room, 1000, token).then(valid => {
+        if (!valid) return
+        broadcastGame(room)
+        finishSequenceAndBeginTurn(room)
+      })
+      return
+    }
+  }
   if (current.skipTurns > 0) {
     room.busy = true
     const token = ++room.sequenceToken
@@ -735,8 +861,10 @@ function startGame(room, requesterId) {
   if (room.hostId !== requesterId) return reject(sockets.get(requesterId), 'Only the host can start the game.')
   if (room.phase !== 'lobby') return reject(sockets.get(requesterId), 'The game has already started.')
   if (room.players.length < 2) return reject(sockets.get(requesterId), 'Add at least one player or AI.')
+  if (room.players.length > roomMaxPlayers(room)) return reject(sockets.get(requesterId), 'This game mode allows at most four players.')
   const board = boards[room.boardIndex]
-  if (!board || board.type !== room.modeKey) return reject(sockets.get(requesterId), 'Choose an available board for this game mode.')
+  if (!board || board.type !== room.modeKey || !boardIsAvailable(board)) return reject(sockets.get(requesterId), 'Choose an available board for this game mode.')
+  if (!characterIndicesForMode(characters, room.modeKey).length) return reject(sockets.get(requesterId), 'No characters are available for this game mode.')
 
   const definitions = room.players.map(player => {
     const character = characters[player.characterIndex % characters.length]
@@ -835,8 +963,8 @@ wss.on('connection', socket => {
         phase: 'lobby',
         hostId: clientId,
         modeKey: gameModes[0]?.key || 'standard',
-        boardIndex: Math.max(0, boards.findIndex(board => board.type === (gameModes[0]?.key || 'standard'))),
-        players: [{ id: clientId, characterIndex: message.characterIndex || 0, isAI: false, connected: true }],
+        boardIndex: firstBoardIndex(gameModes[0]?.key || 'standard'),
+        players: [],
         revision: 0,
         eventId: 0,
         disconnectTimers: new Map(),
@@ -845,6 +973,12 @@ wss.on('connection', socket => {
         busy: false,
         memorialShown: false,
       }
+      room.players.push({
+        id: clientId,
+        characterIndex: normalizeRoomCharacter(room, message.characterIndex) ?? 0,
+        isAI: false,
+        connected: true,
+      })
       rooms.set(room.code, room)
       broadcastRoom(room)
       return
@@ -856,8 +990,10 @@ wss.on('connection', socket => {
       const existing = room.players.find(player => player.id === clientId)
       if (existing) return reconnect(room, clientId, socket)
       if (room.phase !== 'lobby') return reject(socket, 'The game has already started.')
-      if (room.players.length >= 6) return reject(socket, 'Room is full.')
-      room.players.push({ id: clientId, characterIndex: message.characterIndex || 0, isAI: false, connected: true })
+      if (room.players.length >= roomMaxPlayers(room)) return reject(socket, 'Room is full.')
+      const characterIndex = normalizeRoomCharacter(room, message.characterIndex, room.players.length)
+      if (characterIndex == null) return reject(socket, 'No characters are available for this game mode.')
+      room.players.push({ id: clientId, characterIndex, isAI: false, connected: true })
       broadcastRoom(room)
       return
     }
@@ -884,20 +1020,29 @@ wss.on('connection', socket => {
     }
     if (message.type === 'character' && room.phase === 'lobby') {
       const player = room.players.find(item => item.id === clientId)
-      player.characterIndex = Math.max(0, Number(message.characterIndex) || 0)
-      broadcastRoom(room)
+      const characterIndex = normalizeRoomCharacter(room, message.characterIndex, room.players.indexOf(player))
+      if (characterIndex == null) reject(socket, 'No characters are available for this game mode.')
+      else {
+        player.characterIndex = characterIndex
+        broadcastRoom(room)
+      }
     } else if (message.type === 'mode') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can select the game mode.')
       else if (room.phase === 'lobby' && gameModes.some(mode => mode.key === message.modeKey)) {
+        if (message.modeKey === 'escape_from' && room.players.length > 4) {
+          reject(socket, 'Escape From supports at most four players. Remove players first.')
+          return
+        }
         room.modeKey = message.modeKey
-        room.boardIndex = boards.findIndex(board => board.type === room.modeKey)
+        room.boardIndex = firstBoardIndex(room.modeKey)
+        remapRoomCharacters(room)
         broadcastRoom(room)
       }
     } else if (message.type === 'board') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can select the board.')
       else if (room.phase === 'lobby') {
         const boardIndex = Number(message.boardIndex)
-        if (boards[boardIndex]?.type === room.modeKey) {
+        if (boards[boardIndex]?.type === room.modeKey && boardIsAvailable(boards[boardIndex])) {
           room.boardIndex = boardIndex
           broadcastRoom(room)
         } else reject(socket, 'That board is not available for this game mode.')
@@ -912,12 +1057,15 @@ wss.on('connection', socket => {
       }
     } else if (message.type === 'add_ai') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can add AI players.')
-      else if (room.phase === 'lobby' && room.players.length < 6) {
-        const used = room.players.map(item => item.characterIndex)
-        let characterIndex = 0
-        while (used.includes(characterIndex) && characterIndex < characters.length - 1) characterIndex++
-        room.players.push({ id: `ai-${Date.now()}-${Math.random()}`, characterIndex, isAI: true, connected: true })
-        broadcastRoom(room)
+      else if (room.phase === 'lobby' && room.players.length < roomMaxPlayers(room)) {
+        const available = characterIndicesForMode(characters, room.modeKey)
+        if (!available.length) reject(socket, 'No characters are available for this game mode.')
+        else {
+          const used = new Set(room.players.map(item => item.characterIndex))
+          const characterIndex = available.find(index => !used.has(index)) ?? available[room.players.length % available.length]
+          room.players.push({ id: `ai-${Date.now()}-${Math.random()}`, characterIndex, isAI: true, connected: true })
+          broadcastRoom(room)
+        }
       }
     } else if (message.type === 'remove_ai') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can remove AI players.')
@@ -945,6 +1093,30 @@ wss.on('connection', socket => {
     else if (message.type === 'stop_roll') stopRoll(room, clientId)
     else if (message.type === 'use_skill') useSkill(room, clientId, message.targetId)
     else if (message.type === 'place_mine') finishHiddenMinePlacement(room, clientId, message.space)
+    else if (message.type === 'choose_direction') chooseEscapeDirection(room, clientId, message.direction)
+    else if (message.type === 'arm_weapon') {
+      if (room.game?.mode !== 'escape_from' || room.phase !== 'playing') reject(socket, 'Weapon unavailable.')
+      else if (room.busy || room.game.players[room.game.currentPlayerIndex]?.id !== clientId) reject(socket, 'It is not your turn.')
+      else {
+        const result = armEscapeWeapon(room.game)
+        if (!result.ok) reject(socket, result.message)
+        else {
+          room.busy = true
+          const token = ++room.sequenceToken
+          emitEvent(room, 'escape_weapon_armed', {
+            playerId: result.player.id,
+            playerName: result.player.name,
+            protectFromTurn: result.player.weaponProtectFromTurn,
+            protectThroughTurn: result.player.weaponProtectThroughTurn,
+          }, 1000)
+          wait(room, 1000, token).then(valid => {
+            if (!valid) return
+            broadcastGame(room)
+            finishSequenceAndBeginTurn(room)
+          })
+        }
+      }
+    }
   })
 
   socket.on('close', () => {

@@ -3,6 +3,12 @@ const soundFiles = import.meta.glob('../assets/sounds/**/*.mp3', {
   query: '?url',
   import: 'default',
 })
+const escapeVoiceFiles = import.meta.glob('../assets/gifs/escape_from/**/*.mp3', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+})
+Object.assign(soundFiles, escapeVoiceFiles)
 
 const musicFiles = import.meta.glob('../assets/musics/**/*.mp3', {
   eager: true,
@@ -196,6 +202,25 @@ class AudioManager {
 
   ghostTownGunshot(weapon) {
     this.play(fileFrom(soundFiles, `/run_away/gunshot/${weapon}.mp3`))
+  }
+
+  escapeVoice(ghost) {
+    this.random(`quiet_mansion/ghosts/${ghost}`)
+  }
+
+  escapeOutcome(type) {
+    this.random(`quiet_mansion/${type}`)
+  }
+
+  escapeDanger(distance) {
+    const rate = ({ 4: 0.75, 3: 0.95, 2: 1.2, 1: 1.5, 0: 1.8 })[distance] || 0.75
+    let audio = this.channels.get('escape-danger')
+    if (!audio) audio = this.random('quiet_mansion/drums', { channel: 'escape-danger', loop: true, volume: 0.55 })
+    if (audio) audio.playbackRate = rate
+  }
+
+  stopEscapeDanger() {
+    this.stop('escape-danger')
   }
 
   pauseMusic() {

@@ -37,6 +37,15 @@ test('Ghost Town uses its measured serpentine cell centers', () => {
   assert.deepEqual(getBoardSpacePosition(ghostTown, 100), { left: '8.41%', top: '7.58%' })
 })
 
+test('Quiet Mansion uses exact ten-by-ten cell centers', () => {
+  const quietMansion = boards.find(board => board.name === 'Quiet Mansion')
+
+  assert.deepEqual(getBoardSpacePosition(quietMansion, 1), { left: '5%', top: '95%' })
+  assert.deepEqual(getBoardSpacePosition(quietMansion, 10), { left: '95%', top: '95%' })
+  assert.deepEqual(getBoardSpacePosition(quietMansion, 11), { left: '95%', top: '85%' })
+  assert.deepEqual(getBoardSpacePosition(quietMansion, 100), { left: '5%', top: '5%' })
+})
+
 test('Atlantic Kraken moves the player back before applying lost turns', () => {
   const kraken = atlantic.whats.find(what => what.name === 'Kraken')
   const state = createGameState(atlantic, [

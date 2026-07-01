@@ -5,8 +5,19 @@ import boards from '../data/boards.json'
 import gameModes from '../data/game_modes.json'
 import explosionGif from '../assets/gifs/run_away/explosion.gif'
 import zombieGif from '../assets/gifs/run_away/zombie.gif'
+import escapeKeyGif from '../assets/gifs/escape_from/quiet_mansion/transparent/keys.gif'
+import escapeEntityGif from '../assets/gifs/escape_from/quiet_mansion/transparent/entity_board_model.gif'
+import escapeAttackedGif from '../assets/gifs/escape_from/quiet_mansion/transparent/attacked/gif.gif'
+import escapeExorcisedGif from '../assets/gifs/escape_from/quiet_mansion/transparent/exorcised/gif.gif'
+import oldWomanGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/old_woman/gif.gif'
+import redEyesGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/red_eyes/gif.gif'
+import whiteFaceGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/white_face/gif.gif'
+import oldWomanLastGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/old_woman/last_frame.gif'
+import redEyesLastGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/red_eyes/last_frame.gif'
+import whiteFaceLastGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/white_face/last_frame.gif'
 import { audioManager } from './audioManager'
 import { getBoardSpacePosition } from './boardLayout'
+import { boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
 
 const boardImages = import.meta.glob('../assets/boards/**/template.{png,jpg,jpeg,webp}', {
   eager: true,
@@ -85,11 +96,20 @@ const ripOverlay = ref(null)
 const minePlacement = ref(null)
 const mineExplosionSpace = ref(null)
 const blownPlayerId = ref(null)
+const directionChoice = ref(null)
+const rollDeadline = ref(null)
+const escapeOverlay = ref(null)
+const healthBlinkPlayerId = ref(null)
+const displayedHealth = ref({})
+const escapeEncounterSpace = ref(null)
 let clockTimer
 let diceTimer
 let operatorTimer
 
-const hero = computed(() => characters[selected.value])
+const defaultModeKey = gameModes[0]?.key || 'standard'
+const homeCharacterIndices = computed(() => characterIndicesForMode(characters, defaultModeKey))
+const lobbyCharacterIndices = computed(() => characterIndicesForMode(characters, selectedMode.value))
+const hero = computed(() => characters[selected.value] || characters[homeCharacterIndices.value[0]])
 const currentPlayer = computed(() => characters[playerCharacter.value])
 const turnSeconds = computed(() => turnDeadline.value ? Math.max(0, Math.ceil((turnDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
 const controlledGamePlayer = computed(() => game.value?.players.find(player => player.id === clientId))
@@ -103,12 +123,27 @@ const bloodiedSpaces = computed(() => [...new Set(
 )].sort((a, b) => a - b))
 const availableBoards = computed(() => boards
   .map((board, index) => ({ ...board, sourceIndex: index }))
-  .filter(board => board.type === selectedMode.value))
+  .filter(board => board.type === selectedMode.value && boardIsAvailable(board)))
 const selectedLobbyBoard = computed(() => availableBoards.value.find(board => board.sourceIndex === selectedBoard.value) || availableBoards.value[0] || null)
 const lobbyPlayers = computed(() => (onlineRoom.value?.players || []).map(player => ({
   ...player,
   character: characters[player.characterIndex % characters.length],
 })))
+const lobbySlotCount = computed(() => selectedMode.value === 'escape_from' ? 4 : 6)
+const lobbyMaxPlayers = computed(() => lobbySlotCount.value)
+const rollSeconds = computed(() => rollDeadline.value ? Math.max(0, Math.ceil((rollDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
+const directionSeconds = computed(() => directionChoice.value ? Math.max(0, Math.ceil((directionChoice.value.expiresAt - (now.value + serverClockOffset)) / 1000)) : 0)
+const escapeVisiblePlayers = computed(() => game.value?.mode === 'escape_from'
+  ? game.value.players.filter(player => !player.eliminated && !player.finished)
+  : [])
+const escapeCollectedKeys = computed(() => game.value?.keys?.filter(key => key.holderId).length || 0)
+const dangerDistance = computed(() => {
+  if (game.value?.mode !== 'escape_from' || !controlledGamePlayer.value || controlledGamePlayer.value.eliminated) return null
+  const distances = (game.value.entities || []).map(entity => Math.abs(entity.space - controlledGamePlayer.value.space))
+  return distances.length ? Math.min(...distances) : null
+})
+const ghostGifs = { old_woman: oldWomanGif, red_eyes: redEyesGif, white_face: whiteFaceGif }
+const ghostLastGifs = { old_woman: oldWomanLastGif, red_eyes: redEyesLastGif, white_face: whiteFaceLastGif }
 
 watch([sfx, music, muted], ([nextSfx, nextMusic, nextMuted]) => {
   audioManager.configure({ sfx: nextSfx, music: nextMusic, muted: nextMuted })
@@ -117,6 +152,11 @@ watch([sfx, music, muted], ([nextSfx, nextMusic, nextMuted]) => {
 watch([page, () => game.value?.board?.music || game.value?.board?.name], ([nextPage, boardMusic]) => {
   audioManager.setScene(nextPage === 'game' ? 'game' : 'menu', boardMusic)
 }, { immediate: true })
+
+watch(dangerDistance, distance => {
+  if (distance != null && distance <= 4) audioManager.escapeDanger(distance)
+  else audioManager.stopEscapeDanger()
+})
 
 function boardPicture(board) {
   return boardImages[`../${board.picture}`]
@@ -167,6 +207,11 @@ function clearGamePresentation() {
   minePlacement.value = null
   mineExplosionSpace.value = null
   blownPlayerId.value = null
+  directionChoice.value = null
+  rollDeadline.value = null
+  escapeOverlay.value = null
+  healthBlinkPlayerId.value = null
+  escapeEncounterSpace.value = null
   movingPlayerId.value = null
   climbingPlayerId.value = null
 }
@@ -187,6 +232,7 @@ async function handleServerEvent(event) {
     diceSpecial.value = Boolean(event.data.specialRoll)
     diceDual.value = Boolean(event.data.dual)
     diceResultLabel.value = ''
+    rollDeadline.value = event.data.autoStopAt || (event.startedAt + event.duration)
     const faces = event.data.faces || [1, 2, 3, 4, 5, 6]
     window.clearInterval(diceTimer)
     diceTimer = window.setInterval(() => {
@@ -229,6 +275,8 @@ async function handleServerEvent(event) {
     }
     displayedDice.value = event.data.result
     diceResultLabel.value = event.data.resultLabel || ''
+    rollDeadline.value = null
+    directionChoice.value = null
     window.setTimeout(() => {
       diceStopped.value = false
       diceSpecial.value = false
@@ -364,6 +412,46 @@ async function handleServerEvent(event) {
     }
     visualSpaces.value[event.data.playerId] = event.data.to
     window.setTimeout(() => { penaltyOverlay.value = null }, remaining)
+  } else if (event.type === 'escape_direction_choice') {
+    window.clearInterval(diceTimer)
+    diceRolling.value = false
+    rollDeadline.value = null
+    displayedDice.value = event.data.roll
+    directionChoice.value = { ...event.data, eventId: event.id }
+    window.setTimeout(() => {
+      if (directionChoice.value?.eventId === event.id) directionChoice.value = null
+    }, remaining)
+  } else if (event.type === 'escape_entity_revealed') {
+    escapeEncounterSpace.value = event.data.space
+    window.setTimeout(() => {
+      if (escapeEncounterSpace.value === event.data.space) escapeEncounterSpace.value = null
+    }, remaining)
+  } else if (event.type === 'escape_entity_encounter') {
+    escapeEncounterSpace.value = null
+    audioManager.escapeVoice(event.data.ghost)
+    escapeOverlay.value = { type: 'ghost', src: ghostGifs[event.data.ghost], eventId: event.id }
+    const animationMs = 1000
+    window.setTimeout(() => {
+      if (escapeOverlay.value?.eventId === event.id) escapeOverlay.value.src = ghostLastGifs[event.data.ghost]
+    }, Math.min(animationMs, remaining))
+    window.setTimeout(() => {
+      if (escapeOverlay.value?.eventId === event.id) escapeOverlay.value = null
+    }, remaining)
+  } else if (event.type === 'escape_exorcised' || event.type === 'escape_attacked') {
+    const type = event.type === 'escape_exorcised' ? 'exorcised' : 'attacked'
+    audioManager.escapeOutcome(type)
+    escapeOverlay.value = { type, src: type === 'exorcised' ? escapeExorcisedGif : escapeAttackedGif, eventId: event.id }
+    if (type === 'attacked') {
+      displayedHealth.value[event.data.playerId] = event.data.healthBefore
+      healthBlinkPlayerId.value = event.data.playerId
+      window.setTimeout(() => {
+        displayedHealth.value[event.data.playerId] = event.data.healthAfter
+        if (healthBlinkPlayerId.value === event.data.playerId) healthBlinkPlayerId.value = null
+      }, Math.min(1200, remaining))
+    }
+    window.setTimeout(() => {
+      if (escapeOverlay.value?.eventId === event.id) escapeOverlay.value = null
+    }, remaining)
   }
 }
 
@@ -392,6 +480,7 @@ function applyGameSnapshot(message) {
   visibleLog.value = [...(message.game?.log || [])]
   for (const player of message.game?.players || []) {
     if (visualSpaces.value[player.id] == null || !message.currentEvent) visualSpaces.value[player.id] = player.space
+    if (healthBlinkPlayerId.value !== player.id && player.health != null) displayedHealth.value[player.id] = player.health
   }
   page.value = 'game'
   turnBusy.value = Boolean(message.currentEvent)
@@ -519,7 +608,11 @@ async function joinOnlineLobby() {
 }
 
 function changeLobbyCharacter(direction) {
-  playerCharacter.value = (playerCharacter.value + direction + characters.length) % characters.length
+  const available = lobbyCharacterIndices.value
+  if (!available.length) return
+  const current = available.indexOf(playerCharacter.value)
+  const next = (Math.max(0, current) + direction + available.length) % available.length
+  playerCharacter.value = available[next]
   sendLobby({ type: 'character', characterIndex: playerCharacter.value })
 }
 
@@ -603,7 +696,8 @@ function tokenPosition(space, playerIndex) {
   const offsets = [[-.9, -.9], [.9, -.9], [-.9, .9], [.9, .9], [0, -1.25], [0, 1.25]]
   const volcano = game.value?.board?.name === 'Volcano'
   const ghostTown = game.value?.board?.name === 'Ghost Town'
-  const offsetScale = volcano ? 0.72 : ghostTown ? 0.55 : 1
+  const quietMansion = game.value?.board?.name === 'Quiet Mansion'
+  const offsetScale = volcano ? 0.72 : ghostTown ? 0.55 : quietMansion ? 0.35 : 1
   const [rawOffsetX, rawOffsetY] = offsets[playerIndex % offsets.length]
   const offsetX = rawOffsetX * offsetScale
   const offsetY = rawOffsetY * offsetScale
@@ -667,6 +761,10 @@ function useSkill(targetId = null) {
     skillNotice.value = 'Skill can only be used during your turn.'
     return
   }
+  if (game.value.mode === 'escape_from') {
+    sendLobby({ type: 'arm_weapon' })
+    return
+  }
   if (player.skillBlockedTurns > 0) {
     skillNotice.value = `Skill blocked for ${player.skillBlockedTurns} more turn(s).`
     return
@@ -715,7 +813,25 @@ function handleButtonClick(event) {
 }
 
 function move(direction) {
-  selected.value = (selected.value + direction + characters.length) % characters.length
+  const available = homeCharacterIndices.value
+  if (!available.length) return
+  const current = available.indexOf(selected.value)
+  const next = (Math.max(0, current) + direction + available.length) % available.length
+  selected.value = available[next]
+}
+
+function chooseDirection(direction) {
+  if (!directionChoice.value) return
+  directionChoice.value = null
+  sendLobby({ type: 'choose_direction', direction })
+}
+
+function escapeObjectVisible(space) {
+  return game.value?.mode !== 'escape_from' || escapeVisiblePlayers.value.some(player => visualSpace(player) === space)
+}
+
+function shownHealth(player) {
+  return displayedHealth.value[player.id] ?? player.health ?? 0
 }
 
 onMounted(() => {
@@ -749,6 +865,10 @@ onMounted(() => {
         eliminated: player.eliminated,
       })),
       destroyedSpaces: game.value.destroyedSpaces,
+      keys: game.value.keys,
+      entities: game.value.mode === 'escape_from' ? game.value.entities : undefined,
+      exitRevealed: game.value.exitRevealed,
+      exitUnlocked: game.value.exitUnlocked,
       winners: game.value.winners.map(player => player.name),
       winner: game.value.winner?.name || null,
       loser: game.value.loser?.name || null,
@@ -846,7 +966,7 @@ onUnmounted(() => {
 
             <div class="player-slots">
               <article
-                v-for="slot in 6"
+                v-for="slot in lobbySlotCount"
                 :key="slot"
                 class="lobby-player"
                 :class="lobbyPlayers[slot - 1] ? 'occupied' : 'empty'"
@@ -864,14 +984,14 @@ onUnmounted(() => {
                   >×</button>
                   <span v-if="lobbyPlayers[slot - 1].isAI" class="ai-label">AI</span>
                   <span v-if="lobbyPlayers[slot - 1].id === onlineRoom?.hostId" class="host-crown">♛</span>
-                  <button v-if="lobbyPlayers[slot - 1].id === clientId" type="button" class="lobby-char-arrow left" @click.stop.prevent="changeLobbyCharacter(-1)">‹</button>
+                  <button v-if="lobbyPlayers[slot - 1].id === clientId && lobbyCharacterIndices.length" type="button" class="lobby-char-arrow left" @click.stop.prevent="changeLobbyCharacter(-1)">‹</button>
                   <div
                     class="lobby-pawn"
                     :class="{ owned: lobbyPlayers[slot - 1].id === clientId }"
                     :tabindex="lobbyPlayers[slot - 1].id === clientId ? 0 : null"
                     :aria-describedby="lobbyPlayers[slot - 1].id === clientId ? `lobby-character-tip-${slot}` : null"
                   ><span>{{ lobbyPlayers[slot - 1].character.face }}</span></div>
-                  <button v-if="lobbyPlayers[slot - 1].id === clientId" type="button" class="lobby-char-arrow right" @click.stop.prevent="changeLobbyCharacter(1)">›</button>
+                  <button v-if="lobbyPlayers[slot - 1].id === clientId && lobbyCharacterIndices.length" type="button" class="lobby-char-arrow right" @click.stop.prevent="changeLobbyCharacter(1)">›</button>
                   <div
                     v-if="lobbyPlayers[slot - 1].id === clientId"
                     :id="`lobby-character-tip-${slot}`"
@@ -879,8 +999,10 @@ onUnmounted(() => {
                     role="tooltip"
                   >
                     <strong>{{ lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name }}</strong>
-                    <small>{{ lobbyPlayers[slot - 1].character.specialSkill.name }}</small>
-                    <p>{{ lobbyPlayers[slot - 1].character.specialSkill.description }}</p>
+                    <template v-if="lobbyPlayers[slot - 1].character.specialSkill">
+                      <small>{{ lobbyPlayers[slot - 1].character.specialSkill.name }}</small>
+                      <p>{{ lobbyPlayers[slot - 1].character.specialSkill.description }}</p>
+                    </template>
                   </div>
                   <input
                     v-if="lobbyPlayers[slot - 1].id === clientId"
@@ -906,9 +1028,9 @@ onUnmounted(() => {
 
             <div class="room-actions">
               <button class="game-button purple" @click="shareInvite">♟ Invite</button>
-              <button class="game-button ai-button" :disabled="!isLobbyHost || lobbyPlayers.length >= 6" @click="addAiPlayer">＋ Add AI</button>
+              <button class="game-button ai-button" :disabled="!isLobbyHost || lobbyPlayers.length >= lobbyMaxPlayers || !lobbyCharacterIndices.length" @click="addAiPlayer">＋ Add AI</button>
               <button class="game-button exit" @click="leaveOnlineRoom">↪ Exit room</button>
-              <button class="game-button green" :disabled="!isLobbyHost || lobbyPlayers.length < 2 || !selectedLobbyBoard" @click="requestStartGame">▶ Start game</button>
+              <button class="game-button green" :disabled="!isLobbyHost || lobbyPlayers.length < 2 || lobbyPlayers.length > lobbyMaxPlayers || !selectedLobbyBoard" @click="requestStartGame">▶ Start game</button>
             </div>
           </section>
 
@@ -957,6 +1079,20 @@ onUnmounted(() => {
 
     <template v-else-if="page === 'game' && game">
       <section class="game-screen">
+        <div
+          v-if="game.mode === 'escape_from' && dangerDistance != null && dangerDistance <= 4"
+          class="escape-danger-edge"
+          :style="{ '--danger-speed': `${0.45 + dangerDistance * 0.28}s` }"
+          aria-hidden="true"
+        ></div>
+        <div v-if="directionChoice" class="escape-direction-overlay" role="dialog" aria-modal="true">
+          <small>Rolled {{ directionChoice.roll }} · {{ directionSeconds }}s</small>
+          <strong>Choose direction</strong>
+          <div>
+            <button @click="chooseDirection('backward')">← Backward</button>
+            <button @click="chooseDirection('forward')">Forward →</button>
+          </div>
+        </div>
         <div v-if="penaltyOverlay" class="penalty-overlay" role="status">
           <strong>Penalty</strong>
           <small>{{ penaltyOverlay.message }}</small>
@@ -1056,9 +1192,9 @@ onUnmounted(() => {
           <strong>{{ whatOverlay.name }}</strong>
           <p><b>{{ whatOverlay.playerName }}</b>: {{ whatOverlay.displayDescription }}</p>
         </div>
-        <header class="game-hud">
+        <header class="game-hud" :class="{ 'escape-hud': game.mode === 'escape_from' }">
           <button class="game-exit" @click="leaveOnlineRoom">← Exit</button>
-          <div>
+          <div class="board-status">
             <small>Board</small>
             <strong>{{ game.board.name }}</strong>
           </div>
@@ -1068,6 +1204,11 @@ onUnmounted(() => {
               {{ game.players[game.currentPlayerIndex].name }}
             </strong>
           </div>
+          <div v-if="game.mode === 'escape_from'" class="escape-key-status">
+            <small>Keys</small>
+            <strong>🔑 {{ escapeCollectedKeys }}/{{ game.board.keys_count }}</strong>
+            <em>{{ game.exitUnlocked ? 'Exit unlocked' : game.exitRevealed ? 'Exit revealed' : 'Exit hidden' }}</em>
+          </div>
           <div class="turn-banner winner-banner" v-else>
             <small>Game over · {{ game.loser ? 'Loser' : game.winner ? 'Winner' : 'Finished' }}</small>
             <strong :style="{ color: (game.loser || game.winner)?.color }">
@@ -1076,7 +1217,7 @@ onUnmounted(() => {
           </div>
           <div v-if="!game.gameOver" class="turn-timer" :class="{ urgent: turnSeconds <= 5 }">
             <small>Time left</small>
-            <strong>{{ turnSeconds }}s</strong>
+              <strong>{{ diceRolling && game.mode === 'escape_from' ? rollSeconds : turnSeconds }}s</strong>
           </div>
           <div class="hud-dice-panel">
             <button
@@ -1097,8 +1238,49 @@ onUnmounted(() => {
 
         <div class="game-layout">
           <div class="game-board-wrap">
-            <div class="game-board">
+            <div class="game-board" :class="{ 'escape-board': game.mode === 'escape_from', 'encounter-active': escapeOverlay }">
               <img :src="boardPicture(game.board)" :alt="`${game.board.name} gameplay board`">
+              <svg v-if="game.mode === 'escape_from'" class="escape-darkness" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                  <filter id="escape-lamp-soften" x="-30%" y="-30%" width="160%" height="160%">
+                    <feGaussianBlur stdDeviation="1.4"/>
+                  </filter>
+                  <mask id="escape-shared-vision">
+                    <rect width="100" height="100" fill="white"/>
+                    <g filter="url(#escape-lamp-soften)">
+                      <circle
+                        v-for="player in escapeVisiblePlayers"
+                        :key="`lamp-${player.id}`"
+                        :cx="parseFloat(boardSpacePosition(visualSpace(player)).left)"
+                        :cy="parseFloat(boardSpacePosition(visualSpace(player)).top)"
+                        r="6.5"
+                        fill="black"
+                      />
+                    </g>
+                  </mask>
+                </defs>
+                <rect width="100" height="100" fill="black" mask="url(#escape-shared-vision)"/>
+              </svg>
+              <img
+                v-for="key in game.mode === 'escape_from' ? game.keys.filter(item => !item.holderId && item.space != null && escapeObjectVisible(item.space)) : []"
+                :key="key.id"
+                class="escape-board-object escape-key"
+                :src="escapeKeyGif"
+                :style="boardSpacePosition(key.space)"
+                alt="Key"
+              >
+              <img
+                v-for="entity in game.mode === 'escape_from' ? game.entities.filter(item => escapeObjectVisible(item.space)) : []"
+                :key="entity.id"
+                class="escape-board-object escape-entity"
+                :class="{ encountered: escapeEncounterSpace === entity.space }"
+                :src="escapeEntityGif"
+                :style="boardSpacePosition(entity.space)"
+                alt="Entity"
+              >
+              <div v-if="escapeOverlay" class="escape-encounter-overlay" :class="escapeOverlay.type" role="alert">
+                <img :src="escapeOverlay.src" alt="">
+              </div>
               <span
                 v-if="game.board.name !== 'Ghost Town'"
                 v-for="space in game.destroyedSpaces || []"
@@ -1180,13 +1362,17 @@ onUnmounted(() => {
               <article
                 v-for="(player, index) in game.players"
                 :key="player.id"
-                :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id }"
+                :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id, 'health-hit': healthBlinkPlayerId === player.id }"
                 :style="{ '--player-color': player.color }"
               >
                 <span class="console-pawn">{{ player.face }}</span>
                 <div>
                   <strong>{{ player.name }}</strong>
                   <small>{{ player.won ? 'Winner · Last standing' : player.eliminated ? 'Spectating · Eliminated' : player.finished && resolvingPlayerId !== player.id ? `Finished #${player.rank}` : `Space ${visualSpace(player)}` }}</small>
+                  <small v-if="game.mode === 'escape_from'" class="escape-vitals">
+                    <span aria-label="Health">{{ '♥'.repeat(shownHealth(player)) }}</span>
+                    <b>🔑 {{ player.heldKeys.length }}/2</b>
+                  </small>
                 </div>
                 <div v-if="resolvingPlayerId !== player.id" class="statuses">
                   <i v-if="player.skipTurns">⏳ {{ player.skipTurns }}</i>
@@ -1196,6 +1382,34 @@ onUnmounted(() => {
             </div>
 
             <div v-if="!game.gameOver && controlledGamePlayer" class="skill-panel">
+              <template v-if="game.mode === 'escape_from'">
+                <div class="skill-title">
+                  <span>Weapon · Press <kbd>G</kbd></span>
+                  <strong>{{ game.board.default_weapon.name }}</strong>
+                </div>
+                <p>{{ game.board.default_weapon.description }}</p>
+                <button
+                  type="button"
+                  class="skill-state"
+                  :class="{ ready: isControlledTurn && !turnBusy && controlledGamePlayer.weaponProtectFromTurn == null && controlledGamePlayer.weaponCooldownUntil <= now + serverClockOffset }"
+                  :disabled="!isControlledTurn || turnBusy || controlledGamePlayer.weaponProtectFromTurn != null || controlledGamePlayer.weaponCooldownUntil > now + serverClockOffset"
+                  @click="useSkill()"
+                >
+                  <template v-if="controlledGamePlayer.weaponProtectFromTurn != null && game.turn < controlledGamePlayer.weaponProtectFromTurn">
+                    Scheduled for turns {{ controlledGamePlayer.weaponProtectFromTurn }}–{{ controlledGamePlayer.weaponProtectThroughTurn }}
+                  </template>
+                  <template v-else-if="controlledGamePlayer.weaponProtectFromTurn != null">
+                    Active through turn {{ controlledGamePlayer.weaponProtectThroughTurn }}
+                  </template>
+                  <template v-else-if="controlledGamePlayer.weaponCooldownUntil > now + serverClockOffset">
+                    Cooldown {{ Math.ceil((controlledGamePlayer.weaponCooldownUntil - (now + serverClockOffset)) / 1000) }}s
+                  </template>
+                  <template v-else-if="!isControlledTurn">Wait for your turn</template>
+                  <template v-else>Arm weapon · Ends turn</template>
+                </button>
+                <small v-if="controlledGamePlayer.weaponPendingPenaltyMs">Next cooldown +{{ controlledGamePlayer.weaponPendingPenaltyMs / 1000 }}s</small>
+              </template>
+              <template v-else>
               <div class="skill-title">
                 <span>Skill · Press <kbd>G</kbd></span>
                 <strong>{{ controlledGamePlayer.specialSkill.name }}</strong>
@@ -1223,6 +1437,7 @@ onUnmounted(() => {
                 <template v-else>Use skill · Tap or press G</template>
               </button>
               <small v-if="skillNotice">{{ skillNotice }}</small>
+              </template>
             </div>
 
             <div class="event-log">
@@ -1274,11 +1489,11 @@ onUnmounted(() => {
               <button class="arrow" @click="move(1)" aria-label="Next character">›</button>
             </div>
             <div class="dots">
-              <button v-for="(_, i) in characters" :key="i" :class="{ selected: selected === i }" @click="selected = i" :aria-label="`Select character ${i + 1}`"></button>
+              <button v-for="characterIndex in homeCharacterIndices" :key="characterIndex" :class="{ selected: selected === characterIndex }" @click="selected = characterIndex" :aria-label="`Select character ${characterIndex + 1}`"></button>
             </div>
             <article class="character-info">
               <div><h2>{{ hero.name }}</h2><p>{{ hero.description }}</p></div>
-              <div class="skill"><h3>{{ hero.specialSkill.name }}</h3><p>{{ hero.specialSkill.description }}</p></div>
+              <div v-if="hero.specialSkill" class="skill"><h3>{{ hero.specialSkill.name }}</h3><p>{{ hero.specialSkill.description }}</p></div>
             </article>
             <button class="select-button" :class="{ confirmed: selected === playerCharacter }" @click="playerCharacter = selected">
               {{ selected === playerCharacter ? 'Selected' : 'Select' }}

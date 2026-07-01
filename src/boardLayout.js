@@ -7,6 +7,7 @@ export function getBoardSpacePosition(board, space) {
   const volcano = board?.name === 'Volcano'
   const atlantic = board?.name === 'Atlantic'
   const ghostTown = board?.name === 'Ghost Town'
+  const quietMansion = board?.name === 'Quiet Mansion'
   const runAway = board?.type === 'run_away'
   const row = Math.floor((space - 1) / 10)
   const positionInRow = (space - 1) % 10
@@ -24,6 +25,7 @@ export function getBoardSpacePosition(board, space) {
       top: `${GHOST_TOWN_ROWS[row]}%`,
     }
   }
+  if (quietMansion) return { left: `${5 + column * 10}%`, top: `${95 - row * 10}%` }
   if (runAway) return { left: `${5 + column * 10}%`, top: `${95 - row * 10}%` }
   if (space === 100) return { left: `${volcano ? 11.1 : 8.8}%`, top: `${volcano ? 9 : 8.8}%` }
   return {

@@ -1,4 +1,5 @@
 export const SKILL_COOLDOWN_MS = 120_000
+export const WEAPON_COOLDOWN_MS = 60_000
 
 function randomInteger(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min
@@ -24,7 +25,7 @@ function prepareBoard(board) {
 
 export function createGameState(board, players, startedAt = Date.now()) {
   const preparedBoard = prepareBoard(board)
-  return {
+  const state = {
     mode: preparedBoard.type || 'standard',
     board: preparedBoard,
     players: players.map((player, index) => ({
@@ -43,6 +44,12 @@ export function createGameState(board, players, startedAt = Date.now()) {
       eliminated: false,
       won: false,
       rank: null,
+      health: preparedBoard.type === 'escape_from' ? (preparedBoard.max_player_lives || 5) : null,
+      heldKeys: [],
+      weaponCooldownUntil: 0,
+      weaponPendingPenaltyMs: 0,
+      weaponProtectFromTurn: null,
+      weaponProtectThroughTurn: null,
     })),
     currentPlayerIndex: 0,
     winners: [],
@@ -63,6 +70,243 @@ export function createGameState(board, players, startedAt = Date.now()) {
     lastExplosion: null,
     lastTraversalElimination: null,
   }
+  if (state.mode === 'escape_from') initializeEscapeState(state)
+  return state
+}
+
+function randomChoice(items, rng = Math.random) {
+  return items[Math.floor(rng() * items.length)]
+}
+
+function ladderSpaces(board) {
+  return new Set((board.ladders || []).flatMap(ladder => [ladder.from, ladder.to]))
+}
+
+function shuffled(items, rng = Math.random) {
+  const result = [...items]
+  for (let index = result.length - 1; index > 0; index--) {
+    const swap = Math.floor(rng() * (index + 1))
+    ;[result[index], result[swap]] = [result[swap], result[index]]
+  }
+  return result
+}
+
+export function initializeEscapeState(state, rng = Math.random) {
+  const blocked = ladderSpaces(state.board)
+  const candidates = Array.from({ length: 99 }, (_, index) => index + 1).filter(space => !blocked.has(space))
+  const keySpaces = shuffled(candidates, rng).slice(0, state.board.keys_count || 3)
+  state.keys = keySpaces.map((space, index) => ({ id: `key-${index + 1}`, space, holderId: null }))
+  const outsideKeys = candidates.filter(space => keySpaces.every(keySpace => Math.abs(space - keySpace) > 3))
+  const playerSpaces = shuffled(outsideKeys, rng).slice(0, state.players.length)
+  state.players.forEach((player, index) => {
+    player.space = playerSpaces[index]
+  })
+  const occupied = new Set(playerSpaces)
+  const entitySpaces = []
+  for (const space of shuffled(outsideKeys, rng)) {
+    if (occupied.has(space) || entitySpaces.some(other => Math.abs(other - space) <= 5)) continue
+    entitySpaces.push(space)
+    if (entitySpaces.length === 5) break
+  }
+  state.entities = entitySpaces.map((space, index) => ({ id: `entity-${index + 1}`, space }))
+  state.exitRevealed = false
+  state.exitUnlocked = false
+  state.escapeOutcome = null
+  state.nextEntityRelocationTurn = 3
+  state.lastEscapeEncounter = null
+  state.log = ['Find every key, unlock square 100, and escape together.']
+  state.lastEvent = state.log[0]
+}
+
+export function isEscapeWeaponProtecting(player, turn) {
+  return player.weaponProtectFromTurn != null
+    && turn >= player.weaponProtectFromTurn
+    && turn <= player.weaponProtectThroughTurn
+}
+
+function beginWeaponCooldown(player, now = Date.now()) {
+  player.weaponCooldownUntil = now + WEAPON_COOLDOWN_MS + player.weaponPendingPenaltyMs
+  player.weaponPendingPenaltyMs = 0
+  player.weaponProtectFromTurn = null
+  player.weaponProtectThroughTurn = null
+}
+
+export function armEscapeWeapon(state, player = state.players[state.currentPlayerIndex], now = Date.now()) {
+  if (state.mode !== 'escape_from' || !player || player.finished || player.eliminated) return { ok: false, message: 'Weapon unavailable.' }
+  if (player.weaponProtectFromTurn != null) return { ok: false, message: 'Weapon is already scheduled or active.' }
+  if (player.weaponCooldownUntil > now) return { ok: false, message: 'Weapon is still cooling down.' }
+  player.weaponProtectFromTurn = state.turn + 1
+  player.weaponProtectThroughTurn = state.turn + 2
+  addLog(state, `${player.name} armed their ${state.board.default_weapon?.name || 'weapon'} for the next two global turns.`)
+  advanceTurn(state, now)
+  return { ok: true, player }
+}
+
+function relocateEntity(state, entity, rng = Math.random) {
+  const blocked = ladderSpaces(state.board)
+  const keySpaces = state.keys.map(key => key.space).filter(Boolean)
+  const playerSpaces = new Set(activePlayers(state).map(player => player.space))
+  const otherEntities = state.entities.filter(item => item.id !== entity.id)
+  const candidates = Array.from({ length: 99 }, (_, index) => index + 1).filter(space =>
+    !blocked.has(space)
+    && !playerSpaces.has(space)
+    && keySpaces.every(keySpace => Math.abs(space - keySpace) > 3)
+    && otherEntities.every(other => Math.abs(space - other.space) > 5))
+  if (candidates.length) entity.space = randomChoice(candidates, rng)
+}
+
+export function relocateEscapeEntities(state, rng = Math.random) {
+  for (const entity of state.entities || []) relocateEntity(state, entity, rng)
+}
+
+function refreshEscapeExit(state) {
+  const allHeld = state.keys.every(key => key.holderId)
+  if (!state.exitUnlocked) state.exitRevealed = allHeld
+  if (allHeld) {
+    const holders = [...new Set(state.keys.map(key => key.holderId))]
+    if (holders.every(id => state.players.find(player => player.id === id)?.space === 100)) {
+      state.exitUnlocked = true
+      state.exitRevealed = true
+      addLog(state, 'Square 100 has been unlocked!')
+    }
+  }
+  if (state.exitUnlocked) {
+    const living = activePlayers(state)
+    if (living.length && living.every(player => player.space === 100)) {
+      living.forEach(player => {
+        player.won = true
+        player.finished = true
+      })
+      state.winner = { name: 'The team' }
+      state.gameOver = true
+      state.escapeOutcome = 'won'
+      addLog(state, 'Every surviving player escaped the Quiet Mansion!')
+    }
+  }
+}
+
+export function visualAdjacentSpaces(space) {
+  const rowStart = Math.floor((space - 1) / 10) * 10 + 1
+  const rowEnd = Math.min(99, rowStart + 9)
+  return [space - 1, space + 1].filter(candidate => candidate >= rowStart && candidate <= rowEnd && candidate !== 100)
+}
+
+function dropEscapeKeys(state, player, rng = Math.random) {
+  const held = [...player.heldKeys]
+  held.forEach((keyId, index) => {
+    const key = state.keys.find(item => item.id === keyId)
+    if (!key) return
+    key.holderId = null
+    key.space = index === 0 ? player.space : randomChoice(visualAdjacentSpaces(player.space), rng) || player.space
+  })
+  player.heldKeys = []
+  if (!state.exitUnlocked) state.exitRevealed = false
+}
+
+function concludeEscapeIfNeeded(state) {
+  if (state.gameOver) return
+  const living = activePlayers(state)
+  if (!living.length || (living.length === 1 && !state.exitUnlocked)) {
+    state.gameOver = true
+    state.escapeOutcome = 'lost'
+    state.winner = null
+    addLog(state, living.length ? 'Only one player remains and the exit is still locked. The team loses.' : 'No players survived the mansion.')
+  }
+}
+
+function collectEscapeKeys(state, player) {
+  for (const key of state.keys.filter(item => !item.holderId && item.space === player.space)) {
+    if (player.heldKeys.length >= 2) break
+    key.holderId = player.id
+    key.space = null
+    player.heldKeys.push(key.id)
+    addLog(state, `${player.name} collected a key (${player.heldKeys.length}/2 held).`)
+  }
+}
+
+function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()) {
+  const ladder = state.board.ladders.find(item => item.from === player.space)
+  if (ladder) {
+    player.space = ladder.to
+    addLog(state, `${player.name} used a ladder from ${ladder.from} to ${ladder.to}.`)
+  }
+  collectEscapeKeys(state, player)
+  const entity = state.entities.find(item => item.space === player.space)
+  let encounter = null
+  if (entity) {
+    const prevented = isEscapeWeaponProtecting(player, state.turn)
+    encounter = {
+      entityId: entity.id,
+      playerId: player.id,
+      playerName: player.name,
+      space: player.space,
+      prevented,
+      healthBefore: player.health,
+      healthAfter: prevented ? player.health : Math.max(0, player.health - 1),
+    }
+    if (prevented) {
+      beginWeaponCooldown(player, now)
+      relocateEntity(state, entity, rng)
+      addLog(state, `${player.name}'s Crucifix prevented an entity attack.`)
+    } else {
+      player.health = Math.max(0, player.health - 1)
+      addLog(state, `${player.name} was attacked and has ${player.health} health remaining.`)
+      if (player.health === 0) {
+        dropEscapeKeys(state, player, rng)
+        player.eliminated = true
+        player.finished = true
+        addLog(state, `${player.name} was eliminated and is now spectating.`)
+      }
+    }
+  }
+  refreshEscapeExit(state)
+  concludeEscapeIfNeeded(state)
+  state.lastEscapeEncounter = encounter
+  return { ladder, encounter }
+}
+
+export function takeEscapeTurn(state, roll, direction, rng = Math.random, now = Date.now()) {
+  if (state.mode !== 'escape_from' || state.gameOver) return null
+  const player = state.players[state.currentPlayerIndex]
+  const from = player.space
+  const signedRoll = direction === 'backward' ? -Math.abs(roll) : Math.abs(roll)
+  const maximum = state.exitRevealed ? 100 : 99
+  player.space = Math.max(1, Math.min(maximum, player.space + signedRoll))
+  const rollLanding = player.space
+  state.lastRoll = roll
+  addLog(state, `${player.name} moved ${direction} ${Math.abs(roll)} space(s) to ${player.space}.`)
+  const resolution = resolveEscapeLanding(state, player, rng, now)
+  if (!state.gameOver) advanceTurn(state, now)
+  return { player, from, rollLanding, destination: player.space, signedRoll, ...resolution }
+}
+
+export function skipEscapeTurn(state, now = Date.now()) {
+  if (state.mode !== 'escape_from' || state.gameOver) return
+  const player = state.players[state.currentPlayerIndex]
+  addLog(state, `${player.name} did not complete their roll and stayed on square ${player.space}.`)
+  advanceTurn(state, now)
+}
+
+export function escapeAiTarget(state, player) {
+  if (state.keys.every(key => key.holderId)) return 100
+  if (player.heldKeys.length >= 2) return 99
+  const available = state.keys.filter(key => !key.holderId && key.space != null)
+  return available.sort((a, b) => Math.abs(a.space - player.space) - Math.abs(b.space - player.space))[0]?.space ?? 99
+}
+
+export function chooseEscapeAiDirection(state, player, roll) {
+  const target = escapeAiTarget(state, player)
+  const maximum = state.exitRevealed ? 100 : 99
+  const landing = direction => {
+    const signed = direction === 'backward' ? -roll : roll
+    let space = Math.max(1, Math.min(maximum, player.space + signed))
+    const ladder = state.board.ladders.find(item => item.from === space)
+    if (ladder) space = ladder.to
+    return space
+  }
+  const forwardDistance = Math.abs(target - landing('forward'))
+  const backwardDistance = Math.abs(target - landing('backward'))
+  return backwardDistance < forwardDistance ? 'backward' : 'forward'
 }
 
 function addLog(state, message) {
@@ -383,14 +627,27 @@ export function hiddenMineOptions(state, player = state.players[state.currentPla
     .filter(space => !blocked.has(space))
 }
 
-function advanceTurn(state) {
+function advanceTurn(state, now = Date.now()) {
   if (state.gameOver) return
+  const previousTurn = state.turn
   let nextIndex = state.currentPlayerIndex
   do {
     nextIndex = (nextIndex + 1) % state.players.length
     if (nextIndex === 0) state.turn++
   } while (state.players[nextIndex].finished || state.players[nextIndex].eliminated)
   state.currentPlayerIndex = nextIndex
+  if (state.mode === 'escape_from' && state.turn !== previousTurn) {
+    for (const player of state.players) {
+      if (player.weaponProtectThroughTurn != null && state.turn > player.weaponProtectThroughTurn) {
+        beginWeaponCooldown(player, now)
+      }
+    }
+    if (state.turn >= state.nextEntityRelocationTurn) {
+      relocateEscapeEntities(state)
+      state.nextEntityRelocationTurn = state.turn + 2
+      addLog(state, 'The entities shifted to new locations.')
+    }
+  }
   const nextPlayer = state.players[nextIndex]
   if (nextPlayer.skillRefreshPending) {
     nextPlayer.skillCooldownUntil = 0
@@ -495,6 +752,10 @@ export function penalizeTurn(state) {
   if (state.mode === 'run_away') {
     cooldownAddedMs = 30_000
     player.skillCooldownUntil = Math.max(player.skillCooldownUntil, Date.now()) + cooldownAddedMs
+  } else if (state.mode === 'escape_from') {
+    cooldownAddedMs = 30_000
+    if (player.weaponCooldownUntil > Date.now()) player.weaponCooldownUntil += cooldownAddedMs
+    else player.weaponPendingPenaltyMs += cooldownAddedMs
   } else {
     destination = Math.max(1, from - 1)
     while (destination > 1 && state.board.question_marks.includes(destination)) destination--
@@ -507,6 +768,8 @@ export function penalizeTurn(state) {
   state.lastQuestionChain = []
   const message = state.mode === 'run_away'
     ? `${player.name} ran out of time, stayed on square ${from}, and gained 30 seconds of skill cooldown.`
+    : state.mode === 'escape_from'
+      ? `${player.name} ran out of time, stayed on square ${from}, and gained 30 seconds on their next weapon cooldown.`
     : `${player.name} ran out of time and was moved back from space ${from} to normal space ${destination}.`
   addLog(state, message)
   advanceTurn(state)
