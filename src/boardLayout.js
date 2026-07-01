@@ -1,9 +1,12 @@
 const ATLANTIC_COLUMNS = [6, 16.6, 26.4, 35.9, 45.3, 54.7, 64.1, 73.5, 83.1, 93.7]
 const ATLANTIC_ROWS = [95.3, 86.8, 77.4, 67.6, 57.7, 47.5, 37.2, 26.8, 16.4, 5.9]
+const GHOST_TOWN_COLUMNS = [8.41, 19.14, 28.67, 38.12, 47.53, 56.94, 66.27, 75.56, 84.93, 93.62]
+const GHOST_TOWN_ROWS = [92.94, 83.81, 75.04, 66.07, 56.66, 47.09, 37.36, 27.51, 17.58, 7.58]
 
 export function getBoardSpacePosition(board, space) {
   const volcano = board?.name === 'Volcano'
   const atlantic = board?.name === 'Atlantic'
+  const ghostTown = board?.name === 'Ghost Town'
   const runAway = board?.type === 'run_away'
   const row = Math.floor((space - 1) / 10)
   const positionInRow = (space - 1) % 10
@@ -13,6 +16,12 @@ export function getBoardSpacePosition(board, space) {
     return {
       left: `${ATLANTIC_COLUMNS[column]}%`,
       top: `${ATLANTIC_ROWS[row]}%`,
+    }
+  }
+  if (ghostTown) {
+    return {
+      left: `${GHOST_TOWN_COLUMNS[column]}%`,
+      top: `${GHOST_TOWN_ROWS[row]}%`,
     }
   }
   if (runAway) return { left: `${5 + column * 10}%`, top: `${95 - row * 10}%` }

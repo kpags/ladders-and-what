@@ -4,6 +4,7 @@ import characters from '../data/characters.json'
 import boards from '../data/boards.json'
 import gameModes from '../data/game_modes.json'
 import explosionGif from '../assets/gifs/run_away/explosion.gif'
+import zombieGif from '../assets/gifs/run_away/zombie.gif'
 import { audioManager } from './audioManager'
 import { getBoardSpacePosition } from './boardLayout'
 
@@ -69,6 +70,7 @@ const visualSpaces = ref({})
 const whatOverlay = ref(null)
 const moveOverlay = ref(null)
 const skillOverlay = ref(null)
+const skillActivatingOverlay = ref(null)
 const skipOverlay = ref(null)
 const visibleLog = ref([])
 const now = ref(Date.now())
@@ -80,6 +82,9 @@ const destructionOverlay = ref(null)
 const destructionSpace = ref(null)
 const sighOverlay = ref(null)
 const ripOverlay = ref(null)
+const minePlacement = ref(null)
+const mineExplosionSpace = ref(null)
+const blownPlayerId = ref(null)
 let clockTimer
 let diceTimer
 let operatorTimer
@@ -151,6 +156,7 @@ function clearGamePresentation() {
   moveOverlay.value = null
   whatOverlay.value = null
   skillOverlay.value = null
+  skillActivatingOverlay.value = null
   skillTargetOptions.value = []
   skipOverlay.value = null
   penaltyOverlay.value = null
@@ -158,6 +164,9 @@ function clearGamePresentation() {
   destructionSpace.value = null
   sighOverlay.value = null
   ripOverlay.value = null
+  minePlacement.value = null
+  mineExplosionSpace.value = null
+  blownPlayerId.value = null
   movingPlayerId.value = null
   climbingPlayerId.value = null
 }
@@ -230,25 +239,57 @@ async function handleServerEvent(event) {
     moveOverlay.value = event.data
     window.setTimeout(() => { moveOverlay.value = null }, remaining)
   } else if (event.type === 'destruction_warning') {
-    audioManager.runAwayWarning()
+    if (event.data.variant === 'ghost_town') audioManager.ghostTownAlarm()
+    else audioManager.runAwayWarning()
     destructionOverlay.value = { type: 'warning', count: event.data.count, eventId: event.id }
     window.setTimeout(() => {
       if (destructionOverlay.value?.eventId === event.id) destructionOverlay.value = null
     }, remaining)
   } else if (event.type === 'destruction_square') {
     destructionOverlay.value = null
-    audioManager.runAwayExplosion()
+    if (event.data.variant === 'ghost_town') audioManager.ghostTownZombie()
+    else audioManager.runAwayExplosion()
     destructionSpace.value = event.data.space
     window.setTimeout(() => {
       if (destructionSpace.value === event.data.space) destructionSpace.value = null
     }, remaining)
   } else if (event.type === 'destruction_caught') {
     audioManager.pauseMusic()
-    audioManager.runAwayDeath()
+    if (event.data.variant === 'ghost_town') audioManager.ghostTownDevoured()
+    else audioManager.runAwayDeath()
     destructionOverlay.value = { type: 'caught', ...event.data, eventId: event.id }
     window.setTimeout(() => {
       if (destructionOverlay.value?.eventId === event.id) destructionOverlay.value = null
       audioManager.resumeMusic()
+    }, remaining)
+  } else if (event.type === 'what_missed') {
+    destructionOverlay.value = { type: 'missed', eventId: event.id }
+    window.setTimeout(() => {
+      if (destructionOverlay.value?.eventId === event.id) destructionOverlay.value = null
+    }, remaining)
+  } else if (event.type === 'ghost_gunshot') {
+    audioManager.ghostTownGunshot(event.data.weapon)
+  } else if (event.type === 'destroyed_square_removed') {
+    audioManager.ghostTownGunshot(event.data.weapon)
+  } else if (event.type === 'mine_placement') {
+    if (event.data.playerId === clientId) {
+      minePlacement.value = { options: event.data.options, eventId: event.id }
+      window.setTimeout(() => {
+        if (minePlacement.value?.eventId === event.id) minePlacement.value = null
+      }, remaining)
+    }
+  } else if (event.type === 'mine_explosion') {
+    audioManager.runAwayExplosion()
+    visualSpaces.value[event.data.playerId] = event.data.landedSpace
+    mineExplosionSpace.value = event.data.landedSpace
+    window.setTimeout(() => {
+      if (mineExplosionSpace.value === event.data.landedSpace) mineExplosionSpace.value = null
+    }, remaining)
+  } else if (event.type === 'mine_push') {
+    blownPlayerId.value = event.data.playerId
+    visualSpaces.value[event.data.playerId] = event.data.destination
+    window.setTimeout(() => {
+      if (blownPlayerId.value === event.data.playerId) blownPlayerId.value = null
     }, remaining)
   } else if (event.type === 'safe') {
     audioManager.runAwaySafe()
@@ -291,7 +332,12 @@ async function handleServerEvent(event) {
       if (whatOverlay.value?.eventId === event.id) whatOverlay.value = null
     }, remaining)
   } else if (event.type === 'skill_pending') {
-    if (event.data.playerId !== clientId) {
+    if (event.data.playerId === clientId) {
+      skillActivatingOverlay.value = { eventId: event.id }
+      window.setTimeout(() => {
+        if (skillActivatingOverlay.value?.eventId === event.id) skillActivatingOverlay.value = null
+      }, remaining)
+    } else {
       skillOverlay.value = { ...event.data, result: false }
     }
   } else if (event.type === 'skill_result') {
@@ -526,6 +572,13 @@ function boardSpacePosition(space) {
 }
 
 function destructionCellPosition(space) {
+  if (game.value?.board?.name === 'Ghost Town') {
+    return {
+      ...boardSpacePosition(space),
+      '--destroyed-cell-width': '9.25%',
+      '--destroyed-cell-height': '9.15%',
+    }
+  }
   const row = Math.floor((space - 1) / 10)
   const positionInRow = (space - 1) % 10
   const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
@@ -549,7 +602,8 @@ function bloodSplatPosition(space) {
 function tokenPosition(space, playerIndex) {
   const offsets = [[-.9, -.9], [.9, -.9], [-.9, .9], [.9, .9], [0, -1.25], [0, 1.25]]
   const volcano = game.value?.board?.name === 'Volcano'
-  const offsetScale = volcano ? 0.72 : 1
+  const ghostTown = game.value?.board?.name === 'Ghost Town'
+  const offsetScale = volcano ? 0.72 : ghostTown ? 0.55 : 1
   const [rawOffsetX, rawOffsetY] = offsets[playerIndex % offsets.length]
   const offsetX = rawOffsetX * offsetScale
   const offsetY = rawOffsetY * offsetScale
@@ -634,6 +688,12 @@ function useSkill(targetId = null) {
   }
   skillTargetOptions.value = []
   sendLobby({ type: 'use_skill', targetId })
+}
+
+function placeMine(space) {
+  if (!minePlacement.value) return
+  minePlacement.value = null
+  sendLobby({ type: 'place_mine', space })
 }
 
 function handleGameKey(event) {
@@ -909,9 +969,12 @@ onUnmounted(() => {
             <strong>Destruction</strong>
             <small>Destroying {{ destructionOverlay.count }} squares</small>
           </template>
-          <template v-else>
+          <template v-else-if="destructionOverlay.type === 'caught'">
             <strong>{{ destructionOverlay.playerName }} has been caught in the destruction</strong>
             <small>Eliminated on square {{ destructionOverlay.space }}</small>
+          </template>
+          <template v-else>
+            <strong>Missed!</strong>
           </template>
         </div>
         <div v-if="moveOverlay" class="move-overlay" role="status">
@@ -958,6 +1021,10 @@ onUnmounted(() => {
           </small>
           <strong>{{ skillOverlay.name }}</strong>
           <p>{{ skillOverlay.result ? skillOverlay.message : skillOverlay.description }}</p>
+        </div>
+        <div v-if="skillActivatingOverlay" class="skill-activating-overlay" role="status" aria-live="polite">
+          <strong>Activating Skill</strong>
+          <span class="skill-loading-spinner" aria-hidden="true"></span>
         </div>
         <div v-if="skillTargetOptions.length" class="skill-target-overlay" role="dialog" aria-modal="true" aria-label="Choose Peek-a-Boo target">
           <div class="skill-target-card">
@@ -1033,6 +1100,7 @@ onUnmounted(() => {
             <div class="game-board">
               <img :src="boardPicture(game.board)" :alt="`${game.board.name} gameplay board`">
               <span
+                v-if="game.board.name !== 'Ghost Town'"
                 v-for="space in game.destroyedSpaces || []"
                 :key="`destroyed-${space}`"
                 class="destroyed-space"
@@ -1040,16 +1108,49 @@ onUnmounted(() => {
                 :title="`Destroyed square ${space}`"
               ></span>
               <span
+                v-for="space in game.board.name === 'Ghost Town' ? (game.destroyedSpaces || []) : []"
+                :key="`destroyed-zombie-${space}`"
+                class="destroyed-zombie"
+                :style="destructionCellPosition(space)"
+                :title="`Zombie-occupied square ${space}`"
+              >
+                <img :src="zombieGif" alt="">
+              </span>
+              <span
                 v-for="space in bloodiedSpaces"
                 :key="`blood-${space}`"
                 class="blood-splat"
                 :style="bloodSplatPosition(space)"
                 aria-hidden="true"
               ></span>
+              <span
+                v-for="mine in game.hiddenMines || []"
+                :key="`mine-${mine.ownerId}`"
+                class="hidden-mine"
+                :style="boardSpacePosition(mine.space)"
+                aria-label="Your hidden mine"
+              >💣</span>
+              <button
+                v-for="space in minePlacement?.options || []"
+                :key="`mine-option-${space}`"
+                type="button"
+                class="mine-option"
+                :style="boardSpacePosition(space)"
+                :aria-label="`Place mine on square ${space}`"
+                @click="placeMine(space)"
+              ></button>
+              <img
+                v-if="mineExplosionSpace"
+                class="mine-explosion"
+                :src="explosionGif"
+                alt=""
+                :style="boardSpacePosition(mineExplosionSpace)"
+              >
               <img
                 v-if="destructionSpace"
                 class="destruction-effect"
-                :src="explosionGif"
+                :class="{ 'ghost-town-zombie': game.board.name === 'Ghost Town' }"
+                :src="game.board.name === 'Ghost Town' ? zombieGif : explosionGif"
                 alt=""
                 :style="boardSpacePosition(destructionSpace)"
               >
@@ -1061,6 +1162,7 @@ onUnmounted(() => {
                   active: index === game.currentPlayerIndex && !game.gameOver,
                   moving: movingPlayerId === player.id,
                   climbing: climbingPlayerId === player.id,
+                  blown: blownPlayerId === player.id,
                   finished: player.finished && resolvingPlayerId !== player.id,
                   eliminated: player.eliminated
                 }"

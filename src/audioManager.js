@@ -182,6 +182,22 @@ class AudioManager {
     this.random('run_away/sigh', { channel: 'run-away-sigh', volume: 0.55 })
   }
 
+  ghostTownAlarm() {
+    this.random('run_away/alarm_bell')
+  }
+
+  ghostTownZombie() {
+    this.random('run_away/zombie')
+  }
+
+  ghostTownDevoured() {
+    this.random('run_away/zombie_devoured')
+  }
+
+  ghostTownGunshot(weapon) {
+    this.play(fileFrom(soundFiles, `/run_away/gunshot/${weapon}.mp3`))
+  }
+
   pauseMusic() {
     this.music.pause()
   }

@@ -503,5 +503,119 @@
                 }]
             }
         ]
+    },
+    {
+        "name": "Ghost Town",
+        "type": "run_away",
+        "picture": "assets/boards/ghost_town/template.png",
+        "music": "ghost_town",
+        "question_marks": [
+            6, 16,33, 38, 44, 49, 57, 72, 76, 79, 83, 88, 92, 95, 97, 98
+        ],
+        "whats": [
+            {
+                "name": "Barbed Wire",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 99
+                },
+                "effects": [{
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 1,
+                    "description": "You got stuck in a barbed wire! Lose your next turn."
+                }]
+            },
+            {
+                "name": "Silenced Pistol",
+                "spawn_locations": {
+                    "start": 30,
+                    "end": 99
+                },
+                "effects": [{
+                    "type": "destroyed_square",
+                    "effect": "decrease_destroyed_square",
+                    "spaces": 2,
+                    "description": "You found a silenced pistol. Decrease destroyed squares by 2 if any."
+                }]
+            },
+            {
+                "name": "Motorcycle",
+                "spawn_locations": {
+                    "start": 1,
+                    "end": 99
+                },
+                "effects": [{
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 4,
+                    "description": "You found a motorcycle. You used it and moved 4 spaces."
+                },
+                {
+                    "type": "destroyed_square",
+                    "effect": "increase_destroyed_square",
+                    "spaces": 2,
+                    "description": "The zombies heard the motorcycle! Increase destroyed squares by 2."
+                }]
+            },
+            {
+                "name": "Military Humvee",
+                "spawn_locations": {
+                    "start": 20,
+                    "end": 80
+                },
+                "effects": [{
+                    "type": "move",
+                    "effect": "move_forward",
+                    "spaces": 8,
+                    "description": "You found a military humvee with running engine! You drive it and moved 8 spaces."
+                }]
+            },
+            {
+                "name": "1 Bullet Sniper",
+                "spawn_locations": {
+                    "start": 20,
+                    "end": 99
+                },
+                "effects": [{
+                    "type": "destroyed_square",
+                    "effect": "decrease_destroyed_square",
+                    "spaces": 1,
+                    "description": "You found a 1 bullet sniper. Has 50% chance to decrease destroyed square by 1."
+                }]
+            },
+            {
+                "name": "Mine",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 99
+                },
+                "effects": [{
+                    "type": "stop",
+                    "effect": "lose_turn",
+                    "turns": 2,
+                    "description": "A hidden mine exploded near you and you were injured. You lost 2 turns."
+                },
+                {
+                    "type": "destroyed_square",
+                    "effect": "increase_destroyed_square",
+                    "spaces": 2,
+                    "description": "The explosion lures the zombies! Increase destroyed squares by 2."
+                }]
+            },
+            {
+                "name": "Food Supplies",
+                "spawn_locations": {
+                    "start": 2,
+                    "end": 99
+                },
+                "effects": [{
+                    "type": "skill",
+                    "effect": "activate_skill",
+                    "detailed_description": "Remove the player's skill cooldown at the start of their next turn. If not on cooldown, do nothing.",
+                    "description": "You found a food supply and ate it. You feel energetic. Skill cooldown is removed on your next turn."
+                }]
+            }
+        ]
     }
 ]

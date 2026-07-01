@@ -57,6 +57,8 @@ export function createGameState(board, players, startedAt = Date.now()) {
     log: ['Game started. Reach 100—and do not be the last player left!'],
     questionHistory: {},
     destroyedSpaces: [],
+    hiddenMines: [],
+    lastMineExplosion: null,
     nextExplosionTurn: preparedBoard.type === 'run_away' ? randomInteger(3, 5) : null,
     lastExplosion: null,
     lastTraversalElimination: null,
@@ -184,10 +186,14 @@ function movePlayer(state, player, destination) {
 function triggerExplosion(state) {
   state.lastExplosion = null
   if (state.mode !== 'run_away' || state.gameOver) return
-  if (state.turn < state.nextExplosionTurn) return
+  // `state.turn` advances when the final active player finishes a round.
+  // Destruction scheduled for Turn N therefore starts only after Turn N has
+  // fully completed, when the HUD is ready to advance to Turn N + 1.
+  const completedTurn = state.turn - 1
+  if (completedTurn < state.nextExplosionTurn) return
 
   state.lastExplosion = { spaces: planRunAwayDestruction(state) }
-  state.nextExplosionTurn = state.turn + randomInteger(3, 5)
+  state.nextExplosionTurn = completedTurn + randomInteger(3, 5)
 }
 
 export function destroySpace(state, space) {
@@ -205,6 +211,30 @@ export function destroySpace(state, space) {
     advanceTurn(state)
   }
   return { space, players: caught }
+}
+
+export function applyDestroyedSquareEffect(state, effect) {
+  const count = Math.max(0, Number(effect?.spaces) || 0)
+  const result = { added: [], removed: [], players: [] }
+  if (state.mode !== 'run_away' || !count) return result
+
+  if (effect.effect === 'decrease_destroyed_square') {
+    for (let index = 0; index < count && state.destroyedSpaces.length; index += 1) {
+      result.removed.push(state.destroyedSpaces.pop())
+    }
+    return result
+  }
+
+  if (effect.effect === 'increase_destroyed_square') {
+    let nextSpace = (state.destroyedSpaces.at(-1) || 0) + 1
+    while (result.added.length < count && nextSpace <= 99) {
+      const destroyed = destroySpace(state, nextSpace)
+      if (state.destroyedSpaces.includes(nextSpace)) result.added.push(nextSpace)
+      result.players.push(...destroyed.players)
+      nextSpace += 1
+    }
+  }
+  return result
 }
 
 function chooseWhat(state, space) {
@@ -323,7 +353,34 @@ function resolveLanding(state, player) {
     player.space = ladder.to
     addLog(state, `${player.name} climbed a ladder from ${start} to ${ladder.to}!`)
   }
+  const mineIndex = state.hiddenMines.findIndex(mine => mine.space === player.space && mine.ownerId !== player.id)
+  if (mineIndex >= 0 && !player.eliminated && !player.finished) {
+    const mine = state.hiddenMines.splice(mineIndex, 1)[0]
+    const landedSpace = player.space
+    const rowStart = Math.floor((landedSpace - 1) / 10) * 10 + 1
+    const distance = randomInteger(3, 5)
+    player.space = Math.max(rowStart, landedSpace - distance)
+    state.lastMineExplosion = {
+      ownerId: mine.ownerId,
+      playerId: player.id,
+      landedSpace,
+      destination: player.space,
+      distance: landedSpace - player.space,
+    }
+    addLog(state, `${player.name} landed on a hidden mine and was blown back to space ${player.space}.`)
+  }
   if (player.space >= 100) finishPlayer(state, player)
+}
+
+export function hiddenMineOptions(state, player = state.players[state.currentPlayerIndex]) {
+  if (!player) return []
+  const blocked = new Set(state.board.question_marks)
+  for (const ladder of state.board.ladders) {
+    blocked.add(ladder.from)
+    blocked.add(ladder.to)
+  }
+  return Array.from({ length: 98 }, (_, index) => index + 2)
+    .filter(space => !blocked.has(space))
 }
 
 function advanceTurn(state) {
@@ -350,6 +407,7 @@ export function endTurnAfterSkill(state) {
 export function takeTurn(state, forcedRoll) {
   if (state.gameOver) return
   const player = state.players[state.currentPlayerIndex]
+  state.lastMineExplosion = null
   state.lastTraversalElimination = null
   if (player.skipTurns > 0) {
     player.skipTurns--
@@ -555,6 +613,17 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
     message = `${player.name} armed Rage Reroll for their next question mark.`
   } else if (skill === 'Parkour') {
     player.specialRollPending = true
+    message = `${player.name} used Parkour and is ready to roll a special die.`
+  } else if (skill === 'Hidden Mine') {
+    const options = hiddenMineOptions(state, player)
+    const space = Number(targetId)
+    if (!options.includes(space)) return { ok: false, message: 'Choose an available square within 5 spaces.' }
+    state.hiddenMines = state.hiddenMines.filter(mine => mine.ownerId !== player.id)
+    state.hiddenMines.push({ ownerId: player.id, space })
+    message = `${player.name} placed a hidden mine.`
+    player.skillCooldownUntil = now + SKILL_COOLDOWN_MS
+    addLog(state, message)
+    return { ok: true, message, movement: null, landingResolution: null, requiresRoll: false }
     message = `${player.name} used Parkour and is ready to roll a special 7–10 die.`
   } else {
     return { ok: false, message: 'This skill is not available.' }

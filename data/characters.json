@@ -75,5 +75,16 @@
       "name": "Parkour",
       "description": "Roll a special die with 7–10 movement results plus Bee Swarm and Dung icons. There is a 15% chance to trigger one of those what effects."
     }
+  },
+  {
+    "id": "bomber-jack",
+    "name": "Bomber Jack",
+    "color": "#ff4500",
+    "face": "ಠ_ಠ",
+    "description": "Explosive. Bold. Always ready to blow things up.",
+    "specialSkill": {
+      "name": "Hidden Mine",
+      "description": "Place a private mine anywhere from square 2 to 99 except question marks and ladder-connected squares. When another player lands on it, they are blown 3-5 spaces backward without crossing the row edge."
+    }
   }
 ]

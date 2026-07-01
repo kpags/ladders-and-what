@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, penalizeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateSkill, applyDestroyedSquareEffect, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 
 const PORT = Number(process.env.PORT || 8787)
@@ -59,15 +59,22 @@ function broadcastRoom(room) {
 }
 
 function broadcastGame(room, type = 'game_state') {
-  broadcast(room, {
-    type,
-    revision: revise(room),
-    room: roomView(room),
-    game: room.game,
-    turnDeadline: room.turnDeadline,
-    currentEvent: room.currentEvent,
-    serverNow: Date.now(),
-  })
+  const revision = revise(room)
+  for (const player of room.players) {
+    const socket = sockets.get(player.id)
+    if (!socket) continue
+    const game = structuredClone(room.game)
+    game.hiddenMines = game.hiddenMines.filter(mine => mine.ownerId === player.id)
+    send(socket, {
+      type,
+      revision,
+      room: roomView(room),
+      game,
+      turnDeadline: room.turnDeadline,
+      currentEvent: room.currentEvent,
+      serverNow: Date.now(),
+    })
+  }
   const allPlayersEliminated = room.game?.mode === 'run_away'
     && room.game.players.length > 0
     && room.game.players.every(player => player.eliminated)
@@ -117,6 +124,8 @@ function clearRoomTimers(room) {
   clearTimer(room.rollTimer)
   for (const timer of room.disconnectTimers.values()) clearTimer(timer)
   room.disconnectTimers.clear()
+  clearTimer(room.pendingMine?.timer)
+  room.pendingMine = null
   room.sequenceToken++
 }
 
@@ -143,11 +152,16 @@ function normalizePlayerName(value) {
     .slice(0, 20)
 }
 
+function destructionVariant(room) {
+  return room.game?.board?.name === 'Ghost Town' ? 'ghost_town' : 'default'
+}
+
 async function showCaughtPlayer(room, player, space, token) {
   emitEvent(room, 'destruction_caught', {
     playerId: player.id,
     playerName: player.name,
     space,
+    variant: destructionVariant(room),
   }, 3000)
   return wait(room, 3000, token)
 }
@@ -156,21 +170,21 @@ async function runDestructionSequence(room, token) {
   const spaces = room.game.lastExplosion?.spaces || []
   if (!spaces.length) return true
 
-  emitEvent(room, 'destruction_warning', { count: spaces.length }, 3000)
+  emitEvent(room, 'destruction_warning', { count: spaces.length, variant: destructionVariant(room) }, 3000)
   if (!await wait(room, 3000, token)) return false
 
   for (const [index, space] of spaces.entries()) {
     // Show the explosion first, then commit its darkened square. The next
     // iteration starts only after caught-player handling and the pause below.
-    emitEvent(room, 'destruction_square', { space }, 500)
-    if (!await wait(room, 500, token)) return false
+    emitEvent(room, 'destruction_square', { space, variant: destructionVariant(room) }, 750)
+    if (!await wait(room, 750, token)) return false
     const result = destroySpace(room.game, space)
     broadcastGame(room)
     for (const player of result.players) {
       if (!await showCaughtPlayer(room, player, space, token)) return false
     }
     if (room.game.gameOver) break
-    if (index < spaces.length - 1 && !await wait(room, 1000, token)) return false
+    if (index < spaces.length - 1 && !await wait(room, 750, token)) return false
   }
   if (allRunAwayPlayersEliminated(room.game)) {
     emitEvent(room, 'run_away_sigh', {}, 3000)
@@ -202,6 +216,42 @@ async function playWhatEffects(room, player, what, effects, resolvedSpace, token
     }, 3000)
     if (!await wait(room, 3000, token)) return null
 
+    if (step.definition.type === 'destroyed_square') {
+      if (what.name === '1 Bullet Sniper' && Math.random() >= 0.5) {
+        emitEvent(room, 'what_missed', {}, 1000)
+        if (!await wait(room, 1000, token)) return null
+        continue
+      }
+
+      const count = Math.max(0, Number(step.definition.spaces) || 0)
+      for (let index = 0; index < count; index += 1) {
+        if (step.definition.effect === 'decrease_destroyed_square') {
+          const space = room.game.destroyedSpaces.at(-1)
+          if (!space) break
+          const weapon = what.name === 'Silenced Pistol' ? 'silenced_pistol' : 'sniper'
+          emitEvent(room, 'destroyed_square_removed', { space, weapon }, 750)
+          if (!await wait(room, 750, token)) return null
+          applyDestroyedSquareEffect(room.game, { ...step.definition, spaces: 1 })
+          broadcastGame(room)
+          continue
+        }
+
+        const nextSpace = (room.game.destroyedSpaces.at(-1) || 0) + 1
+        if (nextSpace > 99) break
+        emitEvent(room, 'destruction_square', {
+          space: nextSpace,
+          variant: destructionVariant(room),
+        }, 750)
+        if (!await wait(room, 750, token)) return null
+        const result = applyDestroyedSquareEffect(room.game, { ...step.definition, spaces: 1 })
+        broadcastGame(room)
+        for (const caughtPlayer of result.players) {
+          if (!await showCaughtPlayer(room, caughtPlayer, nextSpace, token)) return null
+        }
+        if (room.game.gameOver) break
+      }
+    }
+
     if (step.destination !== resolvedSpace) {
       const duration = Math.abs(step.destination - resolvedSpace) * 540
       emitEvent(room, 'movement', {
@@ -213,6 +263,10 @@ async function playWhatEffects(room, player, what, effects, resolvedSpace, token
       if (!await wait(room, duration, token)) return null
     }
     resolvedSpace = step.destination
+    if (room.game.gameOver) break
+  }
+  if (room.game.lastExplosion?.spaces?.length && !room.game.gameOver) {
+    room.game.lastExplosion.spaces = planRunAwayDestruction(room.game, room.game.lastExplosion.spaces.length)
   }
   return resolvedSpace
 }
@@ -272,10 +326,20 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
   if (ladder) {
     emitEvent(room, 'ladder', { playerId: player.id, from: ladder.from, to: ladder.to }, 1600)
     if (!await wait(room, 1600, token)) return
-  } else if (resolvedSpace !== player.space) {
+  } else if (resolvedSpace !== player.space && !room.game.lastMineExplosion) {
     const duration = Math.abs(player.space - resolvedSpace) * 540
     emitEvent(room, 'movement', { playerId: player.id, from: resolvedSpace, to: player.space, kind: 'skill' }, duration)
     if (!await wait(room, duration, token)) return
+  }
+
+  const mineExplosion = room.game.lastMineExplosion
+  if (mineExplosion?.playerId === player.id) {
+    emitEvent(room, 'mine_explosion', mineExplosion, 1600)
+    if (!await wait(room, 1600, token)) return
+    emitEvent(room, 'mine_push', mineExplosion, 900)
+    if (!await wait(room, 900, token)) return
+    const settleDelay = Math.floor(Math.random() * 501)
+    if (settleDelay && !await wait(room, settleDelay, token)) return
   }
 
   if (traversal && !await showCaughtPlayer(room, player, traversal.space, token)) return
@@ -496,6 +560,10 @@ function beginTurn(room) {
         startRoll(room, current.id, true)
         return
       }
+      if (current.specialSkill?.name === 'Hidden Mine' && current.skillCooldownUntil <= Date.now() && current.skillBlockedTurns === 0) {
+        useSkill(room, current.id, null, true)
+        return
+      }
       const skill = activateSkill(structuredClone(room.game), Date.now())
       if (skill.ok) useSkill(room, current.id, null, true)
       else startRoll(room, current.id, true)
@@ -505,6 +573,55 @@ function beginTurn(room) {
     room.turnTimer = setTimeout(() => applyPenalty(room), TURN_MS)
   }
   broadcastGame(room)
+}
+
+async function finishHiddenMinePlacement(room, playerId, requestedSpace = null) {
+  const pending = room.pendingMine
+  if (!pending || pending.playerId !== playerId || !pending.ready) return
+  clearTimer(pending.timer)
+  room.pendingMine = null
+  const space = pending.options.includes(Number(requestedSpace))
+    ? Number(requestedSpace)
+    : pending.options[Math.floor(Math.random() * pending.options.length)]
+  const result = activateSkill(room.game, Date.now(), space)
+  if (!result.ok) {
+    finishSequenceAndBeginTurn(room)
+    return
+  }
+  room.currentEvent = null
+  broadcastGame(room)
+  endTurnAfterSkill(room.game)
+  if (!await runDestructionSequence(room, pending.token)) return
+  finishSequenceAndBeginTurn(room)
+}
+
+function startHiddenMinePlacement(room, current) {
+  const options = hiddenMineOptions(room.game, current)
+  if (!options.length) return reject(sockets.get(current.id), 'No valid mine square is available.')
+  clearTimer(room.turnTimer)
+  room.turnDeadline = null
+  room.busy = true
+  room.skillUsedTurnKey = `${room.game.turn}:${room.game.currentPlayerIndex}`
+  const token = ++room.sequenceToken
+  emitEvent(room, 'skill_pending', {
+    playerId: current.id,
+    playerName: current.name,
+    color: current.color,
+    name: current.specialSkill.name,
+    description: current.specialSkill.description,
+  }, 2000)
+  room.pendingMine = { playerId: current.id, options, token, timer: null, ready: false }
+  wait(room, 2000, token).then(valid => {
+    const pending = room.pendingMine
+    if (!valid || !pending || pending.playerId !== current.id) return
+    pending.ready = true
+    emitEvent(room, 'mine_placement', {
+      playerId: current.id,
+      options,
+    }, 5000)
+    pending.timer = setTimeout(() => finishHiddenMinePlacement(room, current.id), 5000)
+    if (current.isAI) setTimeout(() => finishHiddenMinePlacement(room, current.id), 600)
+  })
 }
 
 function useSkill(room, requesterId, targetId = null, automatic = false) {
@@ -517,6 +634,10 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
   if (current.skillCooldownUntil > Date.now()) return reject(sockets.get(requesterId), 'Skill is still cooling down.')
   const turnKey = `${room.game.turn}:${room.game.currentPlayerIndex}`
   if (room.skillUsedTurnKey === turnKey) return reject(sockets.get(requesterId), 'Skill can only be used once per turn.')
+  if (current.specialSkill?.name === 'Hidden Mine' && targetId == null) {
+    startHiddenMinePlacement(room, current)
+    return
+  }
   const validation = activateSkill(structuredClone(room.game), Date.now(), targetId)
   if (!validation.ok) return reject(sockets.get(requesterId), validation.message)
 
@@ -823,6 +944,7 @@ wss.on('connection', socket => {
     else if (message.type === 'start_roll') startRoll(room, clientId)
     else if (message.type === 'stop_roll') stopRoll(room, clientId)
     else if (message.type === 'use_skill') useSkill(room, clientId, message.targetId)
+    else if (message.type === 'place_mine') finishHiddenMinePlacement(room, clientId, message.space)
   })
 
   socket.on('close', () => {

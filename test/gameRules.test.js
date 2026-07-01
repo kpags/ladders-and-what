@@ -1,12 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  applyDestroyedSquareEffect,
   applyWhatEffects,
   activateSkill,
   createGameState,
   describeRunAwayRoll,
   destroySpace,
   endTurnAfterSkill,
+  hiddenMineOptions,
   planRunAwayDestruction,
   takeTurn,
 } from '../src/gameRules.js'
@@ -33,6 +35,27 @@ function createState(spaces = [1, 1, 1]) {
   })
   return state
 }
+
+test('Ghost Town destroyed-square effects use the last destroyed square without rescheduling destruction', () => {
+  const state = createState([30, 50])
+  state.destroyedSpaces = [1, 2, 3, 4, 5]
+  state.nextExplosionTurn = 9
+
+  const removed = applyDestroyedSquareEffect(state, {
+    effect: 'decrease_destroyed_square',
+    spaces: 2,
+  })
+  assert.deepEqual(removed.removed, [5, 4])
+  assert.deepEqual(state.destroyedSpaces, [1, 2, 3])
+
+  const added = applyDestroyedSquareEffect(state, {
+    effect: 'increase_destroyed_square',
+    spaces: 2,
+  })
+  assert.deepEqual(added.added, [4, 5])
+  assert.deepEqual(state.destroyedSpaces, [1, 2, 3, 4, 5])
+  assert.equal(state.nextExplosionTurn, 9)
+})
 
 test('uses the normal wave below the 15-space catch-up threshold', () => {
   const state = createState([24, 40])
@@ -67,9 +90,57 @@ test('takeTurn schedules the catch-up count in lastExplosion', () => {
   state.nextExplosionTurn = 1
 
   takeTurn(state, 0)
+  assert.equal(state.lastExplosion, null)
+  takeTurn(state, 0)
 
   assert.equal(state.lastExplosion.spaces.length, 10)
   assert.equal(state.lastExplosion.spaces.at(-1), 20)
+})
+
+test('Run Away destruction starts only after every player completes the scheduled global turn', () => {
+  const state = createState([10, 20, 30])
+  state.nextExplosionTurn = 3
+
+  for (let action = 0; action < 8; action += 1) {
+    takeTurn(state, 0)
+    assert.equal(state.lastExplosion, null)
+  }
+
+  assert.equal(state.turn, 3)
+  takeTurn(state, 0)
+  assert.equal(state.turn, 4)
+  assert.ok(state.lastExplosion?.spaces.length)
+})
+
+test('Hidden Mine allows the whole board except endpoints, question marks, and ladder-connected squares', () => {
+  const state = createState([20, 25])
+  state.board.question_marks = [18]
+  state.board.ladders = [{ from: 22, to: 40 }]
+
+  const options = hiddenMineOptions(state)
+  assert.equal(options[0], 2)
+  assert.equal(options.at(-1), 99)
+  assert.equal(options.includes(18), false)
+  assert.equal(options.includes(22), false)
+  assert.equal(options.includes(40), false)
+  assert.equal(options.includes(20), true)
+})
+
+test('Hidden Mine pushes another player back without crossing the row edge', () => {
+  const state = createState([15, 10])
+  state.players[0].specialSkill = { name: 'Hidden Mine' }
+  state.players[0].skillCooldownUntil = 0
+  const placed = activateSkill(state, 1, 11)
+  assert.equal(placed.ok, true)
+
+  state.currentPlayerIndex = 1
+  state.nextExplosionTurn = 99
+  takeTurn(state, 1)
+
+  assert.equal(state.players[1].space, 11)
+  assert.equal(state.lastMineExplosion.landedSpace, 11)
+  assert.equal(state.lastMineExplosion.destination, 11)
+  assert.deepEqual(state.hiddenMines, [])
 })
 
 test('finished, eliminated, and forfeited players do not control destruction', () => {
@@ -151,7 +222,7 @@ test('destruction is planned from positions after a skill resolves', () => {
   const state = createState([25, 15])
   state.currentPlayerIndex = 1
   state.turn = 1
-  state.nextExplosionTurn = 2
+  state.nextExplosionTurn = 1
   state.players[1].specialSkill = { name: 'Intersect' }
   state.players[1].skillCooldownUntil = 0
 

@@ -40,7 +40,30 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Increased each destruction wave from 3-6 squares to 4-7.
 - Added a three-second post-game R.I.P memorial listing eliminated players; no memorial is emitted when nobody was caught.
 - Browser QA verified rolling, locked dice/operator spin, final equation/direction messaging, auto-stop timing, and memorial layout.
+- Added Ghost Town as a Run Away board using the existing global-turn, dual-dice, destruction, traversal, elimination, and winning rules.
+- Added deferred Ghost Town destroyed-square WHAT effects: weapon text completes before restoration, sniper misses display for one second, and increase/decrease effects use the current last destroyed square without changing `nextExplosionTurn`.
+- Added Ghost Town alarm, zombie, devoured, and filename-specific gunshot audio routing plus the centered zombie destruction animation.
+- Added focused destroyed-square effect coverage; all 24 rule tests pass and an isolated production build succeeds.
+- Measured Ghost Town's non-generic grid artwork and added board-specific row/column centers for player tokens and destruction visuals.
+- Replaced Ghost Town's charcoal destroyed cells with persistent, square-clipped zombie GIF occupants; the active zombie effect is also constrained to one cell. Other Run Away boards retain charcoal cells.
+- Reduced same-square Ghost Town player offsets so groups remain distinguishable while staying close to the measured center.
+- All 25 tests and an isolated production build pass after the Ghost Town UI changes.
+- Converted all 8 zombie GIF frames from a black matte to real alpha transparency while preserving the 300 ms frame timing and loop.
+- Changed Run Away scheduling so `nextExplosionTurn = N` fires only after every active player completes global Turn N, immediately before Turn N + 1 begins.
+- Added a three-player end-of-global-turn regression test; all 26 tests and an isolated production build pass.
+- Ensured skill effects fully resolve before a scheduled Run Away destruction and reduced both the destruction GIF phase and inter-square pause to 0.75 seconds.
+- Implemented Bomber Jack's owner-private Hidden Mine: highlighted valid squares, five-second selection with random fallback, question/ladder endpoint filtering, and one active mine per owner.
+- Added mine landing resolution with random 3-5 backward force bounded by the current row, transparent explosion animation/audio, direct blown-away movement, stumble animation, and a random 0-0.5 second settle pause.
+- Converted all 20 explosion GIF frames to real alpha transparency while preserving their 80 ms timing.
+- Added Hidden Mine rule coverage; all 28 tests and an isolated production build pass.
+- Expanded Bomber Jack mine placement to every valid square from 2-99 and updated the character description; squares 1/100, question marks, and both ladder endpoints remain blocked.
+- Serialized Ghost Town destroyed-square WHAT effects into individual 0.75-second mutations: one gunshot per restored square and one zombie animation/sound per added square.
+- Added-square WHAT effects now use normal destruction elimination/caught handling, and any pending scheduled wave is replanned only after all WHAT effects finish.
+- Renamed the Silenced Pistol audio asset to the requested `silenced_pistol.mp3`; all 28 tests and an isolated production build pass.
+- Added an owner-only centered `Activating Skill` overlay with an animated loading spinner while other players continue seeing the normal named skill activation card.
+- Extended the paired activation presentation to Bomber Jack's Hidden Mine flow before placement continues; all 28 tests and an isolated production build pass.
+- Split Bomber Jack activation and placement into server-enforced phases: the two-second activation overlay completes first, then the full five-second placement/random-fallback timer starts. Early placement messages are ignored.
 
 ## TODO
 
-- None for the requested scope.
+- The bundled smoke runner reaches the lobby but its isolated browser reports `ERR_NETWORK_ACCESS_DENIED`; a full live Ghost Town destruction screenshot remains useful when browser networking is available.
