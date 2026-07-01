@@ -617,5 +617,27 @@
                 }]
             }
         ]
+    },
+    {
+        "name": "Quiet Mansion",
+        "type": "escape_from",
+        "picture": "assets/boards/quiet_mansion/template.png",
+        "music": "quiet_mansion",
+        "ladders": [
+            { "from": 6, "to": 27, "direction": "up" },
+            { "from": 38, "to": 43, "direction": "up" },
+            { "from": 46, "to": 74, "direction": "up" },
+            { "from": 69, "to": 89, "direction": "up" },
+            { "from": 61, "to": 81, "direction": "up" },
+            { "from": 27, "to": 6, "direction": "down" },
+            { "from": 43, "to": 38, "direction": "down" },
+            { "from": 74, "to": 46, "direction": "down" },
+            { "from": 89, "to": 69, "direction": "down" },
+            { "from": 81, "to": 61, "direction": "down" }
+        ],
+        "default_weapon": "crucifix",
+        "keys_count": 3,
+        "max_player_lives": 5,
+        "max_players": 4
     }
 ]

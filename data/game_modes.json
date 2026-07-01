@@ -1,17 +1,22 @@
 [
-    {
-        "name": "Ladders & WHAT?!",
-        "key": "standard",
-        "description": "A standard board with ladders and whats."
-    },
-    {
-        "name": "Run Away from WHAT?!",
-        "key": "run_away",
-        "description": "Run away from the destructive objects or you die!"
-    },
-    {
-        "name": "Guess WHAT?!",
-        "key": "guess_what",
-        "description": "Carefully move across the board or else, a consequence awaits."
-    }
+  {
+    "name": "Ladders & WHAT?!",
+    "key": "standard",
+    "description": "A standard board with ladders and whats."
+  },
+  {
+    "name": "Run Away from WHAT?!",
+    "key": "run_away",
+    "description": "Run away from the destructive objects or you die!"
+  },
+  {
+    "name": "Guess WHAT?!",
+    "key": "guess_what",
+    "description": "Carefully move across the board or else, a consequence awaits."
+  },
+  {
+    "name": "Let's escape from WHAT?!",
+    "key": "escape_from",
+    "description": "Team up with other players to find the keys to the exit and escape! While dealing with different entities."
+  }
 ]
