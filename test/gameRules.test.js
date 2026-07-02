@@ -162,6 +162,57 @@ test('Exact Move for S100 bounces excess movement backward', () => {
 
   assert.equal(state.players[0].space, 98)
   assert.equal(state.players[0].finished, false)
+  assert.deepEqual(state.lastExactBounce, {
+    playerId: 'player-1',
+    from: 96,
+    destination: 98,
+    extra: 2,
+  })
+})
+
+test('Exact Move records the bounce before resolving a WHAT at its destination', () => {
+  const exactBoard = {
+    ...board,
+    question_marks: [98],
+    whats: [{
+      name: 'Bounce Surprise',
+      spawn_locations: { start: 1, end: 99 },
+      effects: [{ effect: 'lose_turn', turns: 1, description: 'Lose a turn.' }],
+    }],
+  }
+  const state = createGameState(exactBoard, [
+    { id: 'player-1', name: 'Player 1' },
+    { id: 'player-2', name: 'Player 2' },
+  ], 0, { exactMoveFor100: true })
+  state.players[0].space = 96
+  state.nextExplosionTurn = 99
+
+  takeTurn(state, 6)
+
+  assert.equal(state.lastExactBounce.destination, 98)
+  assert.equal(state.lastQuestionChain[0].space, 98)
+  assert.equal(state.players[0].skipTurns, 1)
+})
+
+test('Exact Move also bounces movement caused by a WHAT effect', () => {
+  const state = createState([98, 20])
+  state.exactMoveFor100 = true
+  state.nextExplosionTurn = 99
+  const player = state.players[0]
+
+  const steps = applyWhatEffects(state, player, {
+    name: 'Launch',
+    effects: [{ effect: 'move_forward', spaces: 5 }],
+  })
+
+  assert.equal(player.space, 97)
+  assert.equal(state.lastExactBounce, null)
+  assert.deepEqual(steps[0].exactBounce, {
+    playerId: 'player-1',
+    from: 98,
+    destination: 97,
+    extra: 3,
+  })
 })
 
 test('default movement still finishes when a roll exceeds Square 100', () => {

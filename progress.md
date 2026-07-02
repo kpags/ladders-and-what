@@ -67,6 +67,9 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Added the synchronized host-only `Exact Move for S100` lobby checkbox for Standard and Run Away. Exact over-rolls animate to 100 then bounce by the excess; unchecked rooms retain normal finishing behavior.
 - Added exact-move bounce and Run Away return-path hazard tests; all 41 tests and an isolated production build pass.
 - Made Bomber Jack's backward blast edge mapping explicit for serpentine rows: it clamps to the visual left edge on one row orientation and the visual right edge on the next. Added alternating-row regression coverage; all 42 tests pass.
+- Added an exact-move bounce phase: pause on Square 100, show `Oops going N spaces backwards` for three seconds, then animate the excess movement backward before revealing/applying any destination WHAT.
+- Scoped exact-move bouncing to die movement only and added bounce/WHAT ordering coverage; all 44 tests and an isolated production build pass.
+- Extended Exact Move for S100 to WHAT-driven forward movement. Each WHAT effect carries its own reach-100/pause/bounce playback metadata so chained effects and roll bounces remain ordered; all 44 tests and an isolated production build pass.
 
 ## TODO
 

@@ -333,7 +333,28 @@ async function playWhatEffects(room, player, what, effects, resolvedSpace, token
       }
     }
 
-    if (step.destination !== resolvedSpace) {
+    if (step.exactBounce) {
+      const outwardDuration = Math.abs(100 - resolvedSpace) * 540
+      if (outwardDuration > 0) {
+        emitEvent(room, 'movement', {
+          playerId: player.id,
+          from: resolvedSpace,
+          to: 100,
+          kind: 'effect',
+        }, outwardDuration)
+        if (!await wait(room, outwardDuration, token)) return null
+      }
+      emitEvent(room, 'exact_bounce', step.exactBounce, 3000)
+      if (!await wait(room, 3000, token)) return null
+      const backwardDuration = step.exactBounce.extra * 540
+      emitEvent(room, 'movement', {
+        playerId: player.id,
+        from: 100,
+        to: step.exactBounce.destination,
+        kind: 'exact-bounce',
+      }, backwardDuration)
+      if (!await wait(room, backwardDuration, token)) return null
+    } else if (step.destination !== resolvedSpace) {
       const duration = Math.abs(step.destination - resolvedSpace) * 540
       emitEvent(room, 'movement', {
         playerId: player.id,
@@ -378,6 +399,21 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
 
   const questionChain = room.game.lastQuestionChain || []
   let resolvedSpace = rollLanding
+  const exactBounce = room.game.lastExactBounce
+  if (exactBounce?.playerId === player.id && !player.eliminated) {
+    emitEvent(room, 'exact_bounce', exactBounce, 3000)
+    if (!await wait(room, 3000, token)) return
+    const duration = exactBounce.extra * 540
+    emitEvent(room, 'movement', {
+      playerId: player.id,
+      from: 100,
+      to: exactBounce.destination,
+      kind: 'exact-bounce',
+    }, duration)
+    if (!await wait(room, duration, token)) return
+    resolvedSpace = exactBounce.destination
+  }
+
   for (const resolution of questionChain) {
     if (resolution.kind === 'reroll_pending') {
       resolvedSpace = resolution.destination

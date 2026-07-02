@@ -67,6 +67,7 @@ export function createGameState(board, players, startedAt = Date.now(), options 
     destroyedSpaces: [],
     hiddenMines: [],
     lastMineExplosion: null,
+    lastExactBounce: null,
     nextExplosionTurn: preparedBoard.type === 'run_away' ? randomInteger(3, 5) : null,
     lastExplosion: null,
     lastTraversalElimination: null,
@@ -419,9 +420,10 @@ function eliminatePlayer(state, player, message) {
   return true
 }
 
-function movePlayer(state, player, destination) {
+function movePlayer(state, player, destination, allowExactBounce = false) {
   const from = player.space
-  const exactBounce = state.exactMoveFor100
+  const exactBounce = allowExactBounce
+    && state.exactMoveFor100
     && ['standard', 'run_away'].includes(state.mode)
     && destination > 100
   const intended = exactBounce
@@ -447,6 +449,14 @@ function movePlayer(state, player, destination) {
     }
   }
   player.space = intended
+  if (exactBounce) {
+    state.lastExactBounce = {
+      playerId: player.id,
+      from,
+      destination: intended,
+      extra: destination - 100,
+    }
+  }
   return intended
 }
 
@@ -537,8 +547,15 @@ export function applyWhatEffects(state, player, what, now = Date.now()) {
   const steps = []
   for (const effect of what.effects || []) {
     const from = player.space
+    const previousExactBounce = state.lastExactBounce
+    let exactBounce = null
     if (effect.effect === 'move_back') movePlayer(state, player, player.space - (effect.spaces || 0))
-    else if (effect.effect === 'move_forward') movePlayer(state, player, player.space + (effect.spaces || 0))
+    else if (effect.effect === 'move_forward') {
+      state.lastExactBounce = null
+      movePlayer(state, player, player.space + (effect.spaces || 0), true)
+      exactBounce = state.lastExactBounce
+      state.lastExactBounce = previousExactBounce
+    }
     else if (effect.effect === 'lose_turn') {
       player.skipTurns += effect.turns || 1
       player.skipReason = what.name
@@ -550,6 +567,7 @@ export function applyWhatEffects(state, player, what, now = Date.now()) {
       definition: { ...effect },
       from,
       destination: player.space,
+      exactBounce,
     })
     if (player.eliminated) break
   }
@@ -689,6 +707,7 @@ export function takeTurn(state, forcedRoll) {
   if (state.gameOver) return
   const player = state.players[state.currentPlayerIndex]
   state.lastMineExplosion = null
+  state.lastExactBounce = null
   state.lastTraversalElimination = null
   if (player.skipTurns > 0) {
     player.skipTurns--
@@ -710,7 +729,7 @@ export function takeTurn(state, forcedRoll) {
   state.lastWhat = null
   state.lastQuestionChain = []
   const startSpace = player.space
-  movePlayer(state, player, player.space + roll)
+  movePlayer(state, player, player.space + roll, true)
   if (state.mode === 'run_away' && roll < 0 && startSpace === 1 && player.space === 1) {
     addLog(state, `${player.name} rolled ${roll} and stays on Square 1.`)
   } else {

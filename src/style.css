@@ -259,6 +259,8 @@ input[type=range] { height:30px; }
 .move-overlay,.skill-overlay { position:fixed; z-index:48; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; background:radial-gradient(circle,#071a31bd,transparent 50%); animation:center-card 2s ease both; }
 .move-overlay small,.skill-overlay small { color:#c9d7e8; text-transform:uppercase; font:1.2rem 'Luckiest Guy'; }
 .move-overlay strong { color:#ffc21e; text-align:center; text-transform:uppercase; font:clamp(3.5rem,8vw,7rem)/1 'Luckiest Guy'; -webkit-text-stroke:4px #16110a; paint-order:stroke fill; filter:drop-shadow(0 8px 0 #080b10); }
+.exact-bounce-overlay { position:fixed; z-index:49; inset:0; display:grid; place-items:center; pointer-events:none; background:radial-gradient(circle,#401407d4,transparent 52%); animation:center-card 3s ease both; }
+.exact-bounce-overlay strong { max-width:1000px; margin:1.5rem; color:#ffbf24; text-align:center; text-transform:uppercase; font:clamp(3rem,8vw,7rem)/1 'Luckiest Guy'; -webkit-text-stroke:5px #241006; paint-order:stroke fill; filter:drop-shadow(0 8px 0 #090402); }
 .skill-overlay { background:radial-gradient(circle,#251035cf,transparent 52%); }
 .skill-overlay small b { -webkit-text-stroke:1px #050608; paint-order:stroke fill; }
 .skill-overlay strong { color:#f4e6bf; text-align:center; text-transform:uppercase; font:clamp(3.5rem,9vw,7.5rem)/1 'Luckiest Guy'; -webkit-text-stroke:5px #4f2472; paint-order:stroke fill; filter:drop-shadow(0 8px 0 #100519); }

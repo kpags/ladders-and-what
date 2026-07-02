@@ -80,6 +80,7 @@ const resolvingPlayerId = ref(null)
 const visualSpaces = ref({})
 const whatOverlay = ref(null)
 const moveOverlay = ref(null)
+const exactBounceOverlay = ref(null)
 const skillOverlay = ref(null)
 const skillActivatingOverlay = ref(null)
 const skipOverlay = ref(null)
@@ -194,6 +195,7 @@ function clearGamePresentation() {
   operatorSpinning.value = false
   diceResultLabel.value = ''
   moveOverlay.value = null
+  exactBounceOverlay.value = null
   whatOverlay.value = null
   skillOverlay.value = null
   skillActivatingOverlay.value = null
@@ -286,6 +288,11 @@ async function handleServerEvent(event) {
   } else if (event.type === 'move_announcement') {
     moveOverlay.value = event.data
     window.setTimeout(() => { moveOverlay.value = null }, remaining)
+  } else if (event.type === 'exact_bounce') {
+    exactBounceOverlay.value = { ...event.data, eventId: event.id }
+    window.setTimeout(() => {
+      if (exactBounceOverlay.value?.eventId === event.id) exactBounceOverlay.value = null
+    }, remaining)
   } else if (event.type === 'destruction_warning') {
     if (event.data.variant === 'ghost_town') audioManager.ghostTownAlarm()
     else audioManager.runAwayWarning()
@@ -1142,6 +1149,9 @@ onUnmounted(() => {
             Move {{ moveOverlay.spaces }} {{ moveOverlay.spaces === 1 ? 'space' : 'spaces' }} backward
           </strong>
           <strong v-else>Stay on this square</strong>
+        </div>
+        <div v-if="exactBounceOverlay" class="exact-bounce-overlay" role="status">
+          <strong>Oops going {{ exactBounceOverlay.extra }} {{ exactBounceOverlay.extra === 1 ? 'space' : 'spaces' }} backwards</strong>
         </div>
         <div v-if="ripOverlay" class="rip-overlay" role="status">
           <strong>R.I.P</strong>
