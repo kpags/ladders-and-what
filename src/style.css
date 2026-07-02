@@ -203,6 +203,19 @@ input[type=range] { height:30px; }
 
 .page-game::before { background:radial-gradient(circle at 45% 40%,#183953cc,#040914f5),url('../assets/boards/nature/template.png') center/cover; }
 .game-screen { min-height:100vh; padding:1rem 1.5rem 1.5rem; color:#f9f1df; }
+.escape-briefing-overlay { position:fixed; z-index:130; inset:0; display:grid; place-items:center; padding:1rem; background:rgba(1,5,12,.88); backdrop-filter:blur(7px); }
+.escape-briefing-card { position:relative; width:min(720px,94vw); max-height:calc(100vh - 2rem); overflow:auto; padding:2.3rem clamp(1.25rem,4vw,3rem) 1.8rem; border:3px solid #a47a2b; border-radius:20px; background:radial-gradient(circle at 50% 0,#252016 0,#11151d 48%,#080b10 100%); box-shadow:0 24px 80px #000, inset 0 0 45px #0009; color:#eee4cf; }
+.escape-briefing-card > small { display:block; color:#d6a83c; text-align:center; text-transform:uppercase; letter-spacing:.18em; font-weight:900; }
+.escape-briefing-card h2 { margin:.25rem 2.5rem 1.25rem; color:#fff4d2; text-align:center; text-transform:uppercase; font:clamp(1.8rem,5vw,3rem) 'Luckiest Guy'; text-shadow:0 3px 0 #4a2c0b; }
+.escape-briefing-card ol { display:grid; gap:.85rem; margin:0; padding-left:1.5rem; line-height:1.5; }
+.escape-briefing-card li::marker { color:#e3ad38; font-weight:900; }
+.escape-briefing-card b { color:#ffd15c; }
+.escape-briefing-card kbd { padding:.08rem .4rem; border:1px solid #d7bd80; border-radius:5px; background:#29261f; box-shadow:0 2px 0 #000; color:#fff4d2; font:inherit; font-weight:900; }
+.escape-briefing-card footer { margin-top:1.35rem; color:#f3c34e; text-align:center; text-transform:uppercase; font:1.25rem 'Luckiest Guy'; letter-spacing:.05em; }
+.escape-briefing-count { position:absolute; top:.8rem; left:1rem; color:#d7c8ac; font-size:.82rem; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
+.escape-briefing-close { position:absolute; top:.65rem; right:.75rem; display:grid; place-items:center; width:38px; height:38px; padding:0; border:2px solid #d6a83c; border-radius:50%; background:#24170c; color:#fff1ce; font:1.75rem/1 Arial,sans-serif; cursor:pointer; }
+.escape-briefing-close:hover:not(:disabled) { background:#6d271d; transform:scale(1.06); }
+.escape-briefing-close.voted { border-color:#5ca76b; background:#17351e; color:#9be2a8; cursor:wait; }
 .game-hud { min-height:86px; display:grid; grid-template-columns:110px minmax(100px,.6fr) minmax(160px,.9fr) 90px minmax(240px,1fr); align-items:center; gap:.8rem; max-width:1500px; margin:auto; padding:.45rem .8rem; border:3px solid #26354a; border-radius:16px; background:#080f1ddd; box-shadow:0 7px 0 #02050a; }
 .game-hud.escape-hud { grid-template-columns:96px minmax(145px,1fr) minmax(150px,.9fr) 108px 96px minmax(150px,210px); grid-template-areas:"exit board turn keys timer roll"; gap:.65rem; }
 .escape-hud .game-exit { grid-area:exit; }
@@ -257,6 +270,9 @@ input[type=range] { height:30px; }
   100% { opacity:0; transform:scale(1.08); }
 }
 .move-overlay,.skill-overlay { position:fixed; z-index:48; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; background:radial-gradient(circle,#071a31bd,transparent 50%); animation:center-card 2s ease both; }
+.weapon-equipped-overlay { position:fixed; z-index:49; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:1rem; pointer-events:none; background:radial-gradient(circle,#241906b8,transparent 48%); text-align:center; animation:center-card 3s ease both; }
+.weapon-equipped-overlay small { color:#e9d4a4; text-transform:uppercase; letter-spacing:.16em; font:1rem 'Luckiest Guy'; }
+.weapon-equipped-overlay strong { max-width:900px; color:#ffd15c; text-transform:uppercase; font:clamp(2.2rem,7vw,5.5rem)/1 'Luckiest Guy'; -webkit-text-stroke:4px #241506; paint-order:stroke fill; filter:drop-shadow(0 7px 0 #080503); }
 .move-overlay small,.skill-overlay small { color:#c9d7e8; text-transform:uppercase; font:1.2rem 'Luckiest Guy'; }
 .move-overlay strong { color:#ffc21e; text-align:center; text-transform:uppercase; font:clamp(3.5rem,8vw,7rem)/1 'Luckiest Guy'; -webkit-text-stroke:4px #16110a; paint-order:stroke fill; filter:drop-shadow(0 8px 0 #080b10); }
 .exact-bounce-overlay { position:fixed; z-index:49; inset:0; display:grid; place-items:center; pointer-events:none; background:radial-gradient(circle,#401407d4,transparent 52%); animation:center-card 3s ease both; }
@@ -346,9 +362,12 @@ input[type=range] { height:30px; }
 .escape-board.encounter-active .board-token { visibility:hidden; }
 .escape-direction-overlay { position:fixed; z-index:95; inset:0; display:grid; place-content:center; gap:.75rem; padding:1rem; background:#02050de8; text-align:center; }
 .escape-direction-overlay small { color:#d5c7ae; text-transform:uppercase; font:1.2rem 'Luckiest Guy'; }
+.escape-roll-result { color:#f7ead1; text-transform:uppercase; font:clamp(2rem,5vw,4rem)/1 'Luckiest Guy'; }
+.escape-roll-result b { display:inline-block; color:#ffc928; font-size:1.35em; -webkit-text-stroke:3px #17110a; paint-order:stroke fill; filter:drop-shadow(0 5px 0 #080b10); }
 .escape-direction-overlay strong { color:#ffc928; text-transform:uppercase; font:clamp(2.8rem,7vw,5.5rem) 'Luckiest Guy'; }
-.escape-direction-overlay > div { display:flex; justify-content:center; gap:1rem; }
+.escape-direction-actions { display:flex; justify-content:center; gap:1rem; }
 .escape-direction-overlay button { min-width:170px; padding:.8rem 1.2rem; border:4px solid #17110a; border-radius:12px; background:#e5d2a7; box-shadow:0 7px 0 #17110a; color:#17110a; font:1.25rem 'Luckiest Guy'; }
+.escape-direction-overlay button:disabled { opacity:.42; filter:grayscale(.8); cursor:not-allowed; transform:none; }
 .escape-vitals { display:flex !important; justify-content:space-between; gap:.4rem; margin-top:.15rem; }
 .escape-vitals span { color:#ed3d49; letter-spacing:-.08em; text-shadow:0 1px #420208; }
 .escape-vitals b { color:#ffd34e; font-weight:700; }
@@ -501,6 +520,11 @@ input[type=range] { height:30px; }
 }
 
 @media (max-width: 650px) {
+  .escape-briefing-overlay { align-items:start; padding:.5rem; overflow:auto; }
+  .escape-briefing-card { width:100%; max-height:none; min-height:calc(100dvh - 1rem); padding:3rem 1rem 1.2rem; border-radius:15px; }
+  .escape-briefing-card h2 { margin:.2rem 2rem 1rem; font-size:1.8rem; }
+  .escape-briefing-card ol { gap:.7rem; padding-left:1.25rem; font-size:.9rem; line-height:1.4; }
+  .escape-briefing-card footer { margin-top:1rem; font-size:1.05rem; }
   .lobby-screen { padding:1rem; }
   .lobby-topbar { min-height:80px; gap:.7rem; }
   .lobby-back { width:50px; height:50px; font-size:2rem; }
@@ -537,7 +561,7 @@ input[type=range] { height:30px; }
   .game-hud strong { font-size:1.05rem; }
   .game-hud small { font-size:.75rem; }
   .game-exit { font-size:.8rem; }
-  .escape-direction-overlay > div { flex-direction:column; }
+  .escape-direction-actions { flex-direction:column; }
   .escape-direction-overlay button { min-width:min(260px,82vw); }
   .game-layout { margin-top:.7rem; }
   .game-console { display:grid; grid-template-columns:1fr; }

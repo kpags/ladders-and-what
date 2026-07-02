@@ -61,3 +61,18 @@ export function getBoardSpacePosition(board, space) {
     top: `${volcano ? 86 - row * 8.56 : 90.5 - row * 9.15}%`,
   }
 }
+
+export function getBoardSpaceBounds(board, space) {
+  if (board?.name !== 'Quiet Mansion') return null
+  const row = Math.floor((space - 1) / 10)
+  const positionInRow = (space - 1) % 10
+  const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
+  const xBounds = QUIET_MANSION_X_BOUNDS[row]
+  const yBounds = QUIET_MANSION_Y_BOUNDS[row]
+  return {
+    x: quietMansionPercent(xBounds[column]),
+    y: quietMansionPercent(yBounds[0]),
+    width: quietMansionPercent(xBounds[column + 1] - xBounds[column]),
+    height: quietMansionPercent(yBounds[1] - yBounds[0]),
+  }
+}

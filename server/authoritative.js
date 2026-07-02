@@ -4,6 +4,12 @@ import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, chooseEscap
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 import { createDestructionSkipState, updateDestructionSkipVote } from './destructionSkip.js'
+import {
+  createEscapeBriefingState,
+  escapeBriefingView,
+  syncEscapeBriefingPlayers,
+  voteToCloseEscapeBriefing,
+} from './escapeBriefing.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const RECONNECT_GRACE_MS = 10_000
@@ -96,6 +102,7 @@ function broadcastGame(room, type = 'game_state') {
       game,
       turnDeadline: room.turnDeadline,
       currentEvent: room.currentEvent,
+      escapeBriefing: escapeBriefingView(room.escapeBriefing),
       serverNow: Date.now(),
     })
   }
@@ -763,9 +770,9 @@ function beginTurn(room) {
         playerName: current.name,
         protectFromTurn: current.weaponProtectFromTurn,
         protectThroughTurn: current.weaponProtectThroughTurn,
-      }, 1000)
+      }, 3000)
       const token = ++room.sequenceToken
-      wait(room, 1000, token).then(valid => {
+      wait(room, 3000, token).then(valid => {
         if (!valid) return
         broadcastGame(room)
         finishSequenceAndBeginTurn(room)
@@ -930,6 +937,14 @@ function voteToSkipDestruction(room, playerId, checked) {
   const state = room.destructionSkip
   if (!updateDestructionSkipVote(state, playerId, checked)) return
   broadcastDestructionSkip(room, true)
+}
+
+function closeEscapeBriefing(room, playerId) {
+  if (room.game?.mode !== 'escape_from' || !voteToCloseEscapeBriefing(room.escapeBriefing, playerId)) return
+  const completed = !room.escapeBriefing.active
+  if (completed) room.busy = false
+  broadcastGame(room)
+  if (completed) beginTurn(room)
 }
 
 function sendPlayerEmote(room, playerId, emoji) {
@@ -1103,10 +1118,13 @@ function startGame(room, requesterId) {
     exactMoveFor100: room.exactMoveFor100,
   })
   room.phase = 'playing'
-  room.busy = false
+  room.escapeBriefing = room.game.mode === 'escape_from'
+    ? createEscapeBriefingState(room.players)
+    : null
+  room.busy = Boolean(room.escapeBriefing?.active)
   room.currentEvent = null
   broadcastGame(room, 'game_started')
-  beginTurn(room)
+  if (!room.busy) beginTurn(room)
 }
 
 function forfeitDisconnected(room, clientId) {
@@ -1133,6 +1151,7 @@ function forfeitDisconnected(room, clientId) {
     }
     const forfeited = forfeitPlayer(room.game, clientId)
     room.players = room.players.filter(player => player.id !== clientId)
+    if (syncEscapeBriefingPlayers(room.escapeBriefing, room.players)) room.busy = false
     broadcast(room, { type: 'player_forfeited', revision: revise(room), playerId: clientId, playerName: forfeited?.name })
     broadcastGame(room)
     if (interruptsTurn || !room.busy) beginTurn(room)
@@ -1330,6 +1349,7 @@ wss.on('connection', socket => {
     else if (message.type === 'use_skill') useSkill(room, clientId, message.targetId)
     else if (message.type === 'place_mine') finishHiddenMinePlacement(room, clientId, message.space)
     else if (message.type === 'destruction_skip') voteToSkipDestruction(room, clientId, Boolean(message.checked))
+    else if (message.type === 'close_escape_briefing') closeEscapeBriefing(room, clientId)
     else if (message.type === 'choose_direction') chooseEscapeDirection(room, clientId, message.direction)
     else if (message.type === 'arm_weapon') {
       if (room.game?.mode !== 'escape_from' || room.phase !== 'playing') reject(socket, 'Weapon unavailable.')
@@ -1345,8 +1365,8 @@ wss.on('connection', socket => {
             playerName: result.player.name,
             protectFromTurn: result.player.weaponProtectFromTurn,
             protectThroughTurn: result.player.weaponProtectThroughTurn,
-          }, 1000)
-          wait(room, 1000, token).then(valid => {
+          }, 3000)
+          wait(room, 3000, token).then(valid => {
             if (!valid) return
             broadcastGame(room)
             finishSequenceAndBeginTurn(room)

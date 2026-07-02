@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
+import { getBoardSpaceBounds } from '../src/boardLayout.js'
 
 const root = resolve(import.meta.dirname, '..')
 const characters = JSON.parse(readFileSync(resolve(root, 'data/characters.json'), 'utf8'))
@@ -26,4 +27,14 @@ test('Quiet Mansion is available for Escape From', () => {
   const quietMansion = boards.find(board => board.name === 'Quiet Mansion')
   assert.equal(boardIsAvailable(quietMansion), true)
   assert.deepEqual(boardIndicesForMode(boards, 'escape_from'), [boards.indexOf(quietMansion)])
+})
+
+test('Quiet Mansion exposes the exact Square 100 bounds for its darkness reveal', () => {
+  const quietMansion = boards.find(board => board.name === 'Quiet Mansion')
+  assert.deepEqual(getBoardSpaceBounds(quietMansion, 100), {
+    x: '0.718%',
+    y: '0.558%',
+    width: '13.397%',
+    height: '12.041%',
+  })
 })

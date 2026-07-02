@@ -16,7 +16,7 @@ import oldWomanLastGif from '../assets/gifs/escape_from/quiet_mansion/transparen
 import redEyesLastGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/red_eyes/last_frame.gif'
 import whiteFaceLastGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/white_face/last_frame.gif'
 import { audioManager } from './audioManager'
-import { getBoardSpacePosition } from './boardLayout'
+import { getBoardSpaceBounds, getBoardSpacePosition } from './boardLayout'
 import { boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
 
 const boardImages = import.meta.glob('../assets/boards/**/template.{png,jpg,jpeg,webp}', {
@@ -98,6 +98,7 @@ const penaltyOverlay = ref(null)
 const destructionOverlay = ref(null)
 const destructionSpace = ref(null)
 const destructionSkipState = ref(null)
+const escapeBriefing = ref(null)
 const sighOverlay = ref(null)
 const ripOverlay = ref(null)
 const minePlacement = ref(null)
@@ -106,6 +107,7 @@ const blownPlayerId = ref(null)
 const directionChoice = ref(null)
 const rollDeadline = ref(null)
 const escapeOverlay = ref(null)
+const weaponEquippedOverlay = ref(null)
 const healthBlinkPlayerId = ref(null)
 const displayedHealth = ref({})
 const escapeEncounterSpace = ref(null)
@@ -217,6 +219,7 @@ function clearGamePresentation() {
   destructionOverlay.value = null
   destructionSpace.value = null
   destructionSkipState.value = null
+  escapeBriefing.value = null
   sighOverlay.value = null
   ripOverlay.value = null
   minePlacement.value = null
@@ -225,6 +228,7 @@ function clearGamePresentation() {
   directionChoice.value = null
   rollDeadline.value = null
   escapeOverlay.value = null
+  weaponEquippedOverlay.value = null
   healthBlinkPlayerId.value = null
   escapeEncounterSpace.value = null
   movingPlayerId.value = null
@@ -465,6 +469,11 @@ async function handleServerEvent(event) {
     window.setTimeout(() => {
       if (directionChoice.value?.eventId === event.id) directionChoice.value = null
     }, remaining)
+  } else if (event.type === 'escape_weapon_armed') {
+    weaponEquippedOverlay.value = { ...event.data, eventId: event.id }
+    window.setTimeout(() => {
+      if (weaponEquippedOverlay.value?.eventId === event.id) weaponEquippedOverlay.value = null
+    }, remaining)
   } else if (event.type === 'escape_entity_revealed') {
     escapeEncounterSpace.value = event.data.space
     window.setTimeout(() => {
@@ -521,13 +530,14 @@ function applyGameSnapshot(message) {
     audioManager.playOutcome('loser', false)
   }
   turnDeadline.value = message.turnDeadline
+  escapeBriefing.value = message.escapeBriefing
   visibleLog.value = [...(message.game?.log || [])]
   for (const player of message.game?.players || []) {
     if (visualSpaces.value[player.id] == null || !message.currentEvent) visualSpaces.value[player.id] = player.space
     if (healthBlinkPlayerId.value !== player.id && player.health != null) displayedHealth.value[player.id] = player.health
   }
   page.value = 'game'
-  turnBusy.value = Boolean(message.currentEvent)
+  turnBusy.value = Boolean(message.currentEvent || message.escapeBriefing?.active)
   if (message.currentEvent) handleServerEvent(message.currentEvent)
 }
 
@@ -712,6 +722,12 @@ function toggleDestructionSkip(event) {
   sendLobby({ type: 'destruction_skip', checked: event.target.checked })
 }
 
+function closeEscapeBriefing() {
+  if (!escapeBriefing.value?.voterIds.includes(clientId)) {
+    sendLobby({ type: 'close_escape_briefing' })
+  }
+}
+
 async function shareInvite() {
   const url = `${location.origin}${location.pathname}?room=${roomCode.value}`
   const text = `Join my Ladders... And What?! room: ${roomCode.value}`
@@ -733,6 +749,10 @@ function leaveOnlineRoom() {
 
 function boardSpacePosition(space) {
   return getBoardSpacePosition(game.value?.board, space)
+}
+
+function boardSpaceBounds(space) {
+  return getBoardSpaceBounds(game.value?.board, space)
 }
 
 function destructionCellPosition(space) {
@@ -915,7 +935,7 @@ function move(direction) {
 }
 
 function chooseDirection(direction) {
-  if (!directionChoice.value) return
+  if (!directionChoice.value || directionChoice.value.playerId !== clientId) return
   directionChoice.value = null
   sendLobby({ type: 'choose_direction', direction })
 }
@@ -1192,6 +1212,30 @@ onUnmounted(() => {
 
     <template v-else-if="page === 'game' && game">
       <section class="game-screen">
+        <div v-if="escapeBriefing?.active" class="escape-briefing-overlay" role="dialog" aria-modal="true" aria-labelledby="escape-briefing-title">
+          <article class="escape-briefing-card">
+            <div class="escape-briefing-count">
+              Ready {{ escapeBriefing.voterIds.length }} / {{ escapeBriefing.total }}
+            </div>
+            <button
+              type="button"
+              class="escape-briefing-close"
+              :class="{ voted: escapeBriefing.voterIds.includes(clientId) }"
+              :disabled="escapeBriefing.voterIds.includes(clientId)"
+              :aria-label="escapeBriefing.voterIds.includes(clientId) ? 'Waiting for other players' : 'Close instructions'"
+              @click="closeEscapeBriefing"
+            >{{ escapeBriefing.voterIds.includes(clientId) ? '✓' : '×' }}</button>
+            <small>Quiet Mansion</small>
+            <h2 id="escape-briefing-title">Escape Instructions</h2>
+            <ol>
+              <li>Work together to collect all <b>3 keys</b> scattered on the board. Each player can collect two keys. If killed, all keys will be dropped.</li>
+              <li>Once all keys are collected, head to <b>Square 100</b> to unlock and escape the place. It can only be unlocked if all key holders are on Square 100, and everyone can only escape if all living players are there.</li>
+              <li>Entities are scattered on the board, ready to pounce and attack. Prepare your weapon with the <b>Arm Weapon</b> button or <kbd>G</kbd>. It protects you for the next two turns, so use it wisely!</li>
+              <li>Every failed prevention costs <b>1 health point</b>. If all health points are gone, you die. If everyone dies or only one survivor remains, you lose the game.</li>
+            </ol>
+            <footer>Good luck and survive!</footer>
+          </article>
+        </div>
         <label v-if="destructionSkipState" class="destruction-skip-vote">
           <input
             type="checkbox"
@@ -1208,12 +1252,14 @@ onUnmounted(() => {
           aria-hidden="true"
         ></div>
         <div v-if="directionChoice" class="escape-direction-overlay" role="dialog" aria-modal="true">
-          <small>Rolled {{ directionChoice.roll }} · {{ directionSeconds }}s</small>
+          <div class="escape-roll-result">Rolled <b>{{ directionChoice.roll }}</b></div>
+          <small>{{ directionSeconds }}s remaining</small>
           <strong>Choose direction</strong>
-          <div>
-            <button @click="chooseDirection('backward')">← Backward</button>
-            <button @click="chooseDirection('forward')">Forward →</button>
+          <div class="escape-direction-actions">
+            <button :disabled="directionChoice.playerId !== clientId" @click="chooseDirection('backward')">← Backward</button>
+            <button :disabled="directionChoice.playerId !== clientId" @click="chooseDirection('forward')">Forward →</button>
           </div>
+          <small v-if="directionChoice.playerId !== clientId">Waiting for the current player</small>
         </div>
         <div v-if="penaltyOverlay" class="penalty-overlay" role="status">
           <strong>Penalty</strong>
@@ -1245,6 +1291,10 @@ onUnmounted(() => {
             Move {{ moveOverlay.spaces }} {{ moveOverlay.spaces === 1 ? 'space' : 'spaces' }} backward
           </strong>
           <strong v-else>Stay on this square</strong>
+        </div>
+        <div v-if="weaponEquippedOverlay" class="weapon-equipped-overlay" role="status" aria-live="assertive">
+          <small>Weapon ready</small>
+          <strong>{{ weaponEquippedOverlay.playerName }} equipped their weapon</strong>
         </div>
         <div v-if="exactBounceOverlay" class="exact-bounce-overlay" role="status">
           <strong>Oops going {{ exactBounceOverlay.extra }} {{ exactBounceOverlay.extra === 1 ? 'space' : 'spaces' }} backwards</strong>
@@ -1383,6 +1433,11 @@ onUnmounted(() => {
                         fill="black"
                       />
                     </g>
+                    <rect
+                      v-if="game.exitRevealed"
+                      v-bind="boardSpaceBounds(100)"
+                      fill="black"
+                    />
                   </mask>
                 </defs>
                 <rect width="100" height="100" fill="black" mask="url(#escape-shared-vision)"/>
