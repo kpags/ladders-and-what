@@ -445,7 +445,7 @@ async function handleServerEvent(event) {
     }, Math.min(animationMs, remaining))
     window.setTimeout(() => {
       if (escapeOverlay.value?.eventId === event.id) escapeOverlay.value = null
-    }, remaining)
+    }, remaining + 1000)
   } else if (event.type === 'escape_exorcised' || event.type === 'escape_attacked') {
     const type = event.type === 'escape_exorcised' ? 'exorcised' : 'attacked'
     audioManager.escapeOutcome(type)

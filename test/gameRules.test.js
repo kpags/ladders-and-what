@@ -538,3 +538,41 @@ test('question resolution preserves ordered WHAT effect steps', () => {
   )
   assert.match(state.log[0], /Forward four\. Back two\./)
 })
+
+test('a multi-effect WHAT completes before resolving a chained WHAT landing', () => {
+  const chainedBoard = {
+    ...board,
+    question_marks: [73, 98],
+    whats: [
+      {
+        name: 'Kraken',
+        spawn_locations: { start: 98, end: 98 },
+        effects: [
+          { type: 'move', effect: 'move_back', spaces: 25, description: 'Back twenty-five.' },
+          { type: 'stop', effect: 'lose_turn', turns: 2, description: 'Lose two turns.' },
+        ],
+      },
+      {
+        name: 'Chained WHAT',
+        spawn_locations: { start: 73, end: 73 },
+        effects: [
+          { type: 'skill', effect: 'lose_skill', turns: 1, description: 'Skill blocked.' },
+        ],
+      },
+    ],
+  }
+  const state = createGameState(chainedBoard, [
+    { id: 'player-1', name: 'Player 1' },
+    { id: 'player-2', name: 'Player 2' },
+  ], 0)
+  state.players[0].space = 97
+
+  takeTurn(state, 1)
+
+  assert.deepEqual(state.lastQuestionChain.map(item => item.what.name), ['Kraken', 'Chained WHAT'])
+  assert.deepEqual(state.lastQuestionChain[0].effects.map(step => step.definition.effect), ['move_back', 'lose_turn'])
+  assert.equal(state.lastQuestionChain[0].destination, 73)
+  assert.equal(state.lastQuestionChain[1].space, 73)
+  assert.equal(state.lastQuestionChain[1].effects[0].definition.effect, 'lose_skill')
+  assert.equal(state.players[0].skipTurns, 2)
+})

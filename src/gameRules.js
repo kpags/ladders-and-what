@@ -235,8 +235,8 @@ function collectEscapeKeys(state, player) {
   }
 }
 
-function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()) {
-  const ladder = state.board.ladders.find(item => item.from === player.space)
+function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now(), { skipLadder = false } = {}) {
+  const ladder = skipLadder ? null : state.board.ladders.find(item => item.from === player.space)
   if (ladder) {
     player.space = ladder.to
     addLog(state, `${player.name} used a ladder from ${ladder.from} to ${ladder.to}.`)
@@ -282,13 +282,25 @@ export function takeEscapeTurn(state, roll, direction, rng = Math.random, now = 
   const from = player.space
   const signedRoll = direction === 'backward' ? -Math.abs(roll) : Math.abs(roll)
   const maximum = state.exitRevealed ? 100 : 99
-  player.space = Math.max(1, Math.min(maximum, player.space + signedRoll))
-  const rollLanding = player.space
+  const intendedLanding = Math.max(1, Math.min(maximum, player.space + signedRoll))
+  const step = Math.sign(intendedLanding - from)
+  let rollLanding = intendedLanding
+  let interruptedByEntity = false
+  for (let space = from + step; step && (step > 0 ? space <= intendedLanding : space >= intendedLanding); space += step) {
+    if (!state.entities.some(entity => entity.space === space)) continue
+    rollLanding = space
+    interruptedByEntity = true
+    break
+  }
+  player.space = rollLanding
   state.lastRoll = roll
-  addLog(state, `${player.name} moved ${direction} ${Math.abs(roll)} space(s) to ${player.space}.`)
-  const resolution = resolveEscapeLanding(state, player, rng, now)
+  const movedSpaces = Math.abs(rollLanding - from)
+  addLog(state, interruptedByEntity
+    ? `${player.name} encountered an entity while moving and stopped on space ${rollLanding}.`
+    : `${player.name} moved ${direction} ${movedSpaces} space(s) to ${player.space}.`)
+  const resolution = resolveEscapeLanding(state, player, rng, now, { skipLadder: interruptedByEntity })
   if (!state.gameOver) advanceTurn(state, now)
-  return { player, from, rollLanding, destination: player.space, signedRoll, ...resolution }
+  return { player, from, intendedLanding, rollLanding, destination: player.space, signedRoll, interruptedByEntity, ...resolution }
 }
 
 export function skipEscapeTurn(state, now = Date.now()) {

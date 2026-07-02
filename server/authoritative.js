@@ -358,7 +358,9 @@ async function playWhatEffects(room, player, what, effects, resolvedSpace, token
       effectCount: effects.length,
     }, 3000)
     if (!await wait(room, 3000, token)) return null
+  }
 
+  for (const step of effects) {
     if (step.definition.type === 'destroyed_square') {
       if (what.name === '1 Bullet Sniper' && Math.random() >= 0.5) {
         emitEvent(room, 'what_missed', {}, 1000)

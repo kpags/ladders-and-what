@@ -111,3 +111,37 @@ test('Escape movement separates rolled traversal from ladder travel', () => {
   assert.equal(result.destination, 27)
   assert.deepEqual(result.ladder, { from: 6, to: 27, direction: 'up' })
 })
+
+test('Escape movement stops on the first entity crossed before the roll completes', () => {
+  const state = createGameState(board, players)
+  const player = state.players[0]
+  player.space = 20
+  state.entities = [
+    { id: 'near', space: 23 },
+    { id: 'far', space: 26 },
+  ]
+  state.keys.forEach((key, index) => { key.space = 80 + index })
+
+  const result = takeEscapeTurn(state, 8, 'forward', () => 0)
+
+  assert.equal(result.intendedLanding, 28)
+  assert.equal(result.rollLanding, 23)
+  assert.equal(result.destination, 23)
+  assert.equal(result.interruptedByEntity, true)
+  assert.equal(result.encounter.entityId, 'near')
+  assert.equal(result.ladder, null)
+})
+
+test('Escape movement also detects entities while moving backward', () => {
+  const state = createGameState(board, players)
+  state.players[0].space = 40
+  state.entities = [{ id: 'backward-ghost', space: 37 }]
+  state.keys.forEach((key, index) => { key.space = 80 + index })
+
+  const result = takeEscapeTurn(state, 6, 'backward', () => 0)
+
+  assert.equal(result.intendedLanding, 34)
+  assert.equal(result.rollLanding, 37)
+  assert.equal(result.destination, 37)
+  assert.equal(result.encounter.entityId, 'backward-ghost')
+})
