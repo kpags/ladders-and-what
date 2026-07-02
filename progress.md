@@ -73,6 +73,10 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Added a synchronized destruction skip vote showing checked/total non-AI players. A unanimous human vote fast-forwards remaining destruction, commits resulting eliminations/blood splats, then shows caught notices at the end; normal completion hides the control.
 - Added non-AI unanimity and vote-toggle regression tests; all 46 tests pass and production build succeeds via an isolated temp output.
 - Added a synchronized human-only Run Away destruction skip vote with live checked/total counts. A unanimous vote resolves remaining squares immediately, hides the vote, updates blood splats, and then shows queued caught-player notices; normal completion also hides the vote.
+- Fixed the HUD so its game-over banner is rendered only when `game.gameOver` is true.
+- Added ordered WHAT resolution after Bomber Jack mine pushback, Yellow Sarcasm swaps, Black Devil intersections, and Blue Sass pulls; two-player skill landings resolve the skill user first where applicable.
+- Bomber Jack mine placement now excludes active player squares and retains at most two mines per owner, replacing the oldest on a third placement.
+- Added focused rule coverage for mine-triggered WHATs, occupied-square filtering, two-mine FIFO replacement, and ordered movement-skill WHAT resolution.
 
 ## TODO
 

@@ -654,6 +654,12 @@ function resolveLanding(state, player) {
       edge: push.edge,
     }
     addLog(state, `${player.name} landed on a hidden mine and was blown back to space ${player.space}.`)
+    if (state.board.question_marks.includes(player.space)) {
+      const precedingChain = [...state.lastQuestionChain]
+      const mineResolution = { kind: 'mine', ...state.lastMineExplosion, destination: player.space }
+      resolveLanding(state, player)
+      state.lastQuestionChain = [...precedingChain, mineResolution, ...state.lastQuestionChain]
+    }
   }
   if (player.space >= 100) finishPlayer(state, player)
 }
@@ -661,6 +667,9 @@ function resolveLanding(state, player) {
 export function hiddenMineOptions(state, player = state.players[state.currentPlayerIndex]) {
   if (!player) return []
   const blocked = new Set(state.board.question_marks)
+  for (const occupant of state.players) {
+    if (!occupant.finished && !occupant.eliminated) blocked.add(occupant.space)
+  }
   for (const ladder of state.board.ladders) {
     blocked.add(ladder.from)
     blocked.add(ladder.to)
@@ -868,16 +877,36 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
   let message
   let movement = null
   let landingResolution = null
+  const landingResolutions = []
+  const resolveSkillLanding = (landingPlayer, landingSpace) => {
+    if (!state.board.question_marks.includes(landingPlayer.space)) return
+    resolveLanding(state, landingPlayer)
+    const afterQuestions = state.lastQuestionChain.at(-1)?.destination ?? landingSpace
+    const connectedLadder = state.board.ladders.find(item => item.from === afterQuestions)
+    landingResolutions.push({
+      playerId: landingPlayer.id,
+      playerName: landingPlayer.name,
+      landingSpace,
+      questionChain: state.lastQuestionChain.map(item => ({
+        ...item,
+        what: item.what ? { ...item.what } : undefined,
+      })),
+      ladder: connectedLadder ? { ...connectedLadder } : null,
+    })
+  }
 
   if (skill === 'Magnet') {
     if (!target) return { ok: false, message: 'No player is within 10 spaces.' }
     target.space = player.space
+    resolveSkillLanding(target, target.space)
     message = `${player.name} used Magnet and pulled ${target.name} to space ${player.space}.`
   } else if (skill === 'Switcheroo') {
     if (!target) return { ok: false, message: 'No player is within 10 spaces.' }
     const targetSpace = target.space
     target.space = player.space
     player.space = targetSpace
+    resolveSkillLanding(player, player.space)
+    resolveSkillLanding(target, target.space)
     message = `${player.name} used Switcheroo and swapped spaces with ${target.name}.`
   } else if (skill === 'Intersect') {
     if (!target) return { ok: false, message: 'No player is within 10 spaces.' }
@@ -887,6 +916,8 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
     const middle = Math.round((player.space + target.space) / 2)
     player.space = middle
     target.space = middle
+    resolveSkillLanding(player, middle)
+    resolveSkillLanding(target, middle)
     message = `${player.name} used Intersect and pulled themselves and ${target.name} to space ${middle}.`
   } else if (skill === 'Peek-a-Boo') {
     const peekPlayer = peekTarget(state, player, targetId)
@@ -924,12 +955,16 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
     const options = hiddenMineOptions(state, player)
     const space = Number(targetId)
     if (!options.includes(space)) return { ok: false, message: 'Choose an available square within 5 spaces.' }
-    state.hiddenMines = state.hiddenMines.filter(mine => mine.ownerId !== player.id)
+    const ownerMines = state.hiddenMines.filter(mine => mine.ownerId === player.id)
+    if (ownerMines.length >= 2) {
+      const oldestMine = ownerMines[0]
+      state.hiddenMines.splice(state.hiddenMines.indexOf(oldestMine), 1)
+    }
     state.hiddenMines.push({ ownerId: player.id, space })
     message = `${player.name} placed a hidden mine.`
     player.skillCooldownUntil = now + SKILL_COOLDOWN_MS
     addLog(state, message)
-    return { ok: true, message, movement: null, landingResolution: null, requiresRoll: false }
+    return { ok: true, message, movement: null, landingResolution: null, landingResolutions: [], requiresRoll: false }
     message = `${player.name} used Parkour and is ready to roll a special 7–10 die.`
   } else {
     return { ok: false, message: 'This skill is not available.' }
@@ -942,6 +977,7 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
     message,
     movement,
     landingResolution,
+    landingResolutions,
     requiresRoll: skill === 'Parkour',
   }
 }

@@ -477,6 +477,16 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
   }
 
   for (const resolution of questionChain) {
+    if (resolution.kind === 'mine') {
+      emitEvent(room, 'mine_explosion', resolution, 1600)
+      if (!await wait(room, 1600, token)) return
+      emitEvent(room, 'mine_push', resolution, 900)
+      if (!await wait(room, 900, token)) return
+      const settleDelay = Math.floor(Math.random() * 501)
+      if (settleDelay && !await wait(room, settleDelay, token)) return
+      resolvedSpace = resolution.destination
+      continue
+    }
     if (resolution.kind === 'reroll_pending') {
       resolvedSpace = resolution.destination
       continue
@@ -512,7 +522,7 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
   }
 
   const mineExplosion = room.game.lastMineExplosion
-  if (mineExplosion?.playerId === player.id) {
+  if (mineExplosion?.playerId === player.id && !questionChain.some(item => item.kind === 'mine')) {
     emitEvent(room, 'mine_explosion', mineExplosion, 1600)
     if (!await wait(room, 1600, token)) return
     emitEvent(room, 'mine_push', mineExplosion, 900)
@@ -887,12 +897,11 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
   wait(room, 2000, token).then(valid => {
     if (!valid) return
     const result = activateSkill(room.game, Date.now(), targetId)
-    const playLandingResolution = async () => {
-      if (!result.landingResolution) return true
-      let resolvedSpace = result.movement.to
-      for (const resolution of result.landingResolution.questionChain) {
+    const playOneLandingResolution = async landingResolution => {
+      let resolvedSpace = landingResolution.landingSpace ?? result.movement?.to
+      for (const resolution of landingResolution.questionChain) {
         if (resolution.kind === 'what') {
-          const landingPlayer = room.game.players.find(item => item.id === result.landingResolution.playerId)
+          const landingPlayer = room.game.players.find(item => item.id === landingResolution.playerId)
           const nextSpace = await playWhatEffects(
             room,
             landingPlayer,
@@ -908,7 +917,7 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
         if (resolution.destination === resolvedSpace) continue
         const duration = Math.abs(resolution.destination - resolvedSpace) * 540
         emitEvent(room, 'movement', {
-          playerId: result.landingResolution.playerId,
+          playerId: landingResolution.playerId,
           from: resolvedSpace,
           to: resolution.destination,
           kind: 'reroll',
@@ -917,14 +926,23 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
         resolvedSpace = resolution.destination
       }
 
-      const ladder = result.landingResolution.ladder
+      const ladder = landingResolution.ladder
       if (ladder) {
         emitEvent(room, 'ladder', {
-          playerId: result.landingResolution.playerId,
+          playerId: landingResolution.playerId,
           from: ladder.from,
           to: ladder.to,
         }, 1600)
         if (!await wait(room, 1600, token)) return false
+      }
+      return true
+    }
+    const playLandingResolutions = async () => {
+      const resolutions = result.landingResolutions?.length
+        ? result.landingResolutions
+        : result.landingResolution ? [result.landingResolution] : []
+      for (const resolution of resolutions) {
+        if (!await playOneLandingResolution(resolution)) return false
       }
       return true
     }
@@ -954,10 +972,12 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
       const duration = Math.abs(result.movement.to - result.movement.from) * 540
       emitEvent(room, 'movement', { ...result.movement, kind: 'skill' }, duration)
       wait(room, duration, token).then(async moved => {
-        if (moved && await playLandingResolution()) showResult()
+        if (moved && await playLandingResolutions()) showResult()
       })
     } else {
-      showResult()
+      playLandingResolutions().then(resolved => {
+        if (resolved) showResult()
+      })
     }
   })
 }

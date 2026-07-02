@@ -146,6 +146,77 @@ test('Hidden Mine pushes another player back without crossing the row edge', () 
   assert.deepEqual(state.hiddenMines, [])
 })
 
+test('Hidden Mine applies a WHAT after blowing a player onto a question square', () => {
+  const state = createState([15, 11])
+  state.board.question_marks = [11]
+  state.board.whats = [{
+    name: 'Mine Surprise',
+    spawn_locations: { start: 1, end: 99 },
+    effects: [{ effect: 'lose_turn', turns: 1, description: 'Lose a turn.' }],
+  }]
+  state.hiddenMines = [{ ownerId: 'player-1', space: 12 }]
+  state.currentPlayerIndex = 1
+  state.nextExplosionTurn = 99
+
+  takeTurn(state, 1)
+
+  assert.equal(state.players[1].space, 11)
+  assert.equal(state.players[1].skipTurns, 1)
+  assert.equal(state.lastQuestionChain[0].kind, 'mine')
+  assert.equal(state.lastQuestionChain[1].what.name, 'Mine Surprise')
+})
+
+test('Hidden Mine placement excludes occupied squares and keeps the newest two mines', () => {
+  const state = createState([15, 24, 35])
+  state.players[0].specialSkill = { name: 'Hidden Mine' }
+  state.players[0].skillCooldownUntil = 0
+
+  assert.equal(hiddenMineOptions(state).includes(24), false)
+  assert.equal(hiddenMineOptions(state).includes(35), false)
+
+  activateSkill(state, 1, 22)
+  state.players[0].skillCooldownUntil = 0
+  activateSkill(state, 2, 23)
+  state.players[0].skillCooldownUntil = 0
+  activateSkill(state, 3, 25)
+
+  assert.deepEqual(state.hiddenMines, [
+    { ownerId: 'player-1', space: 23 },
+    { ownerId: 'player-1', space: 25 },
+  ])
+})
+
+test('movement skills resolve question squares in skill-user-first order', () => {
+  const state = createState([12, 18])
+  state.board.question_marks = [12, 15, 18]
+  state.board.whats = [{
+    name: 'Ordered Surprise',
+    spawn_locations: { start: 1, end: 99 },
+    effects: [{ effect: 'lose_turn', turns: 1, description: 'Lose a turn.' }],
+  }]
+  state.players[0].skillCooldownUntil = 0
+  state.players[0].specialSkill = { name: 'Switcheroo' }
+
+  const switchResult = activateSkill(state, 1)
+  assert.deepEqual(switchResult.landingResolutions.map(item => item.playerId), ['player-1', 'player-2'])
+  assert.equal(state.players[0].skipTurns, 1)
+  assert.equal(state.players[1].skipTurns, 1)
+
+  state.players[0].skillCooldownUntil = 0
+  state.players[0].specialSkill = { name: 'Intersect' }
+  state.players[0].space = 12
+  state.players[1].space = 18
+  const intersectResult = activateSkill(state, 2)
+  assert.deepEqual(intersectResult.landingResolutions.map(item => item.playerId), ['player-1', 'player-2'])
+
+  state.players[0].skillCooldownUntil = 0
+  state.players[0].specialSkill = { name: 'Magnet' }
+  state.players[0].space = 12
+  state.players[1].space = 18
+  const magnetResult = activateSkill(state, 3)
+  assert.deepEqual(magnetResult.landingResolutions.map(item => item.playerId), ['player-2'])
+})
+
 test('Hidden Mine clamps to the correct visual edge on alternating rows', () => {
   assert.deepEqual(minePushDestination(3, 4), { destination: 1, edge: 'left' })
   assert.deepEqual(minePushDestination(13, 4), { destination: 11, edge: 'right' })

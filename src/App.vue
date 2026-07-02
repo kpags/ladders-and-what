@@ -1263,7 +1263,7 @@ onUnmounted(() => {
             <strong>🔑 {{ escapeCollectedKeys }}/{{ game.board.keys_count }}</strong>
             <em>{{ game.exitUnlocked ? 'Exit unlocked' : game.exitRevealed ? 'Exit revealed' : 'Exit hidden' }}</em>
           </div>
-          <div class="turn-banner winner-banner" v-else>
+          <div class="turn-banner winner-banner" v-if="game.gameOver">
             <small>Game over · {{ game.loser ? 'Loser' : game.winner ? 'Winner' : 'Finished' }}</small>
             <strong :style="{ color: (game.loser || game.winner)?.color }">
               {{ game.loser?.name || game.winner?.name || 'Everyone' }}
@@ -1361,7 +1361,7 @@ onUnmounted(() => {
               ></span>
               <span
                 v-for="mine in game.hiddenMines || []"
-                :key="`mine-${mine.ownerId}`"
+                :key="`mine-${mine.ownerId}-${mine.space}`"
                 class="hidden-mine"
                 :style="boardSpacePosition(mine.space)"
                 aria-label="Your hidden mine"
