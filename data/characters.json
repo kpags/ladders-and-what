@@ -92,7 +92,7 @@
     "description": "Explosive. Bold. Always ready to blow things up.",
     "specialSkill": {
       "name": "Hidden Mine",
-      "description": "Place a private mine anywhere from square 2 to 99 except question marks and ladder-connected squares. When another player lands on it, they are blown 3-5 spaces backward without crossing the row edge."
+      "description": "Place a private mine anywhere from square 2 to 99 except question marks, ladder-connected squares, or edge squares. When another player lands on it, they are blown 1-4 spaces backward without crossing the row edge."
     }
   },
   {

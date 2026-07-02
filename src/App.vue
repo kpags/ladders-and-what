@@ -641,6 +641,11 @@ function changeGameMode(event) {
   sendLobby({ type: 'mode', modeKey: event.target.value })
 }
 
+function changeExactMoveFor100(event) {
+  if (!isLobbyHost.value) return
+  sendLobby({ type: 'exact_move_for_100', enabled: event.target.checked })
+}
+
 async function shareInvite() {
   const url = `${location.origin}${location.pathname}?room=${roomCode.value}`
   const text = `Join my Ladders... And What?! room: ${roomCode.value}`
@@ -849,6 +854,7 @@ onMounted(() => {
       mode: selectedMode.value,
       board: selectedLobbyBoard.value?.name || null,
       availableBoards: availableBoards.value.map(board => board.name),
+      exactMoveFor100: Boolean(onlineRoom.value.exactMoveFor100),
       players: lobbyPlayers.value.length,
       canStart: isLobbyHost.value && lobbyPlayers.value.length >= 2 && Boolean(selectedLobbyBoard.value),
     } : null,
@@ -857,6 +863,7 @@ onMounted(() => {
       board: game.value.board.name,
       turn: game.value.turn,
       nextDestructionTurn: game.value.nextExplosionTurn,
+      exactMoveFor100: Boolean(game.value.exactMoveFor100),
       currentPlayer: game.value.players[game.value.currentPlayerIndex]?.name,
       players: game.value.players.map(player => ({
         name: player.name,
@@ -1040,6 +1047,18 @@ onUnmounted(() => {
               <select :value="selectedMode" :disabled="!isLobbyHost" @change="changeGameMode">
                 <option v-for="mode in gameModes" :key="mode.key" :value="mode.key">{{ mode.name }}</option>
               </select>
+            </label>
+            <label
+              v-if="selectedMode === 'standard' || selectedMode === 'run_away'"
+              class="exact-move-setting"
+            >
+              <input
+                type="checkbox"
+                :checked="Boolean(onlineRoom?.exactMoveFor100)"
+                :disabled="!isLobbyHost"
+                @change="changeExactMoveFor100"
+              >
+              <span>Exact Move for S100</span>
             </label>
             <div v-if="selectedLobbyBoard" class="board-carousel">
               <button

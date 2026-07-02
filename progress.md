@@ -63,6 +63,10 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Added an owner-only centered `Activating Skill` overlay with an animated loading spinner while other players continue seeing the normal named skill activation card.
 - Extended the paired activation presentation to Bomber Jack's Hidden Mine flow before placement continues; all 28 tests and an isolated production build pass.
 - Split Bomber Jack activation and placement into server-enforced phases: the two-second activation overlay completes first, then the full five-second placement/random-fallback timer starts. Early placement messages are ignored.
+- Excluded every row's left/right edge from Bomber Jack mine placement and changed blast distance to 1-4 squares with row-edge clamping.
+- Added the synchronized host-only `Exact Move for S100` lobby checkbox for Standard and Run Away. Exact over-rolls animate to 100 then bounce by the excess; unchecked rooms retain normal finishing behavior.
+- Added exact-move bounce and Run Away return-path hazard tests; all 41 tests and an isolated production build pass.
+- Made Bomber Jack's backward blast edge mapping explicit for serpentine rows: it clamps to the visual left edge on one row orientation and the visual right edge on the next. Added alternating-row regression coverage; all 42 tests pass.
 
 ## TODO
 

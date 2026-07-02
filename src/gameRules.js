@@ -23,7 +23,7 @@ function prepareBoard(board) {
   return prepared
 }
 
-export function createGameState(board, players, startedAt = Date.now()) {
+export function createGameState(board, players, startedAt = Date.now(), options = {}) {
   const preparedBoard = prepareBoard(board)
   const state = {
     mode: preparedBoard.type || 'standard',
@@ -56,6 +56,7 @@ export function createGameState(board, players, startedAt = Date.now()) {
     winner: null,
     loser: null,
     gameOver: false,
+    exactMoveFor100: Boolean(options.exactMoveFor100) && ['standard', 'run_away'].includes(preparedBoard.type),
     turn: 1,
     lastRoll: null,
     lastWhat: null,
@@ -189,6 +190,15 @@ export function visualAdjacentSpaces(space) {
   const rowStart = Math.floor((space - 1) / 10) * 10 + 1
   const rowEnd = Math.min(99, rowStart + 9)
   return [space - 1, space + 1].filter(candidate => candidate >= rowStart && candidate <= rowEnd && candidate !== 100)
+}
+
+export function minePushDestination(landedSpace, distance) {
+  const rowIndex = Math.floor((landedSpace - 1) / 10)
+  const rowStart = rowIndex * 10 + 1
+  return {
+    destination: Math.max(rowStart, landedSpace - Math.max(0, distance)),
+    edge: rowIndex % 2 === 0 ? 'left' : 'right',
+  }
 }
 
 function dropEscapeKeys(state, player, rng = Math.random) {
@@ -411,10 +421,23 @@ function eliminatePlayer(state, player, message) {
 
 function movePlayer(state, player, destination) {
   const from = player.space
-  const intended = Math.max(1, Math.min(100, destination))
+  const exactBounce = state.exactMoveFor100
+    && ['standard', 'run_away'].includes(state.mode)
+    && destination > 100
+  const intended = exactBounce
+    ? Math.max(1, 100 - (destination - 100))
+    : Math.max(1, Math.min(100, destination))
   if (state.mode === 'run_away' && intended !== from) {
-    const direction = intended > from ? 1 : -1
-    for (let square = from + direction; direction > 0 ? square <= intended : square >= intended; square += direction) {
+    const path = exactBounce
+      ? [
+          ...Array.from({ length: 100 - from }, (_, index) => from + index + 1),
+          ...Array.from({ length: 100 - intended }, (_, index) => 99 - index),
+        ]
+      : Array.from(
+          { length: Math.abs(intended - from) },
+          (_, index) => from + Math.sign(intended - from) * (index + 1),
+        )
+    for (const square of path) {
       if (state.destroyedSpaces.includes(square)) {
         player.space = square
         eliminatePlayer(state, player, `${player.name} traversed destroyed square ${square} and is now spectating.`)
@@ -601,15 +624,16 @@ function resolveLanding(state, player) {
   if (mineIndex >= 0 && !player.eliminated && !player.finished) {
     const mine = state.hiddenMines.splice(mineIndex, 1)[0]
     const landedSpace = player.space
-    const rowStart = Math.floor((landedSpace - 1) / 10) * 10 + 1
-    const distance = randomInteger(3, 5)
-    player.space = Math.max(rowStart, landedSpace - distance)
+    const distance = randomInteger(1, 4)
+    const push = minePushDestination(landedSpace, distance)
+    player.space = push.destination
     state.lastMineExplosion = {
       ownerId: mine.ownerId,
       playerId: player.id,
       landedSpace,
       destination: player.space,
       distance: landedSpace - player.space,
+      edge: push.edge,
     }
     addLog(state, `${player.name} landed on a hidden mine and was blown back to space ${player.space}.`)
   }
@@ -624,7 +648,7 @@ export function hiddenMineOptions(state, player = state.players[state.currentPla
     blocked.add(ladder.to)
   }
   return Array.from({ length: 98 }, (_, index) => index + 2)
-    .filter(space => !blocked.has(space))
+    .filter(space => space % 10 !== 0 && space % 10 !== 1 && !blocked.has(space))
 }
 
 function advanceTurn(state, now = Date.now()) {

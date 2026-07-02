@@ -9,6 +9,7 @@ import {
   destroySpace,
   endTurnAfterSkill,
   hiddenMineOptions,
+  minePushDestination,
   planRunAwayDestruction,
   takeTurn,
 } from '../src/gameRules.js'
@@ -123,14 +124,16 @@ test('Hidden Mine allows the whole board except endpoints, question marks, and l
   assert.equal(options.includes(18), false)
   assert.equal(options.includes(22), false)
   assert.equal(options.includes(40), false)
-  assert.equal(options.includes(20), true)
+  assert.equal(options.includes(11), false)
+  assert.equal(options.includes(20), false)
+  assert.equal(options.includes(23), true)
 })
 
 test('Hidden Mine pushes another player back without crossing the row edge', () => {
-  const state = createState([15, 10])
+  const state = createState([15, 11])
   state.players[0].specialSkill = { name: 'Hidden Mine' }
   state.players[0].skillCooldownUntil = 0
-  const placed = activateSkill(state, 1, 11)
+  const placed = activateSkill(state, 1, 12)
   assert.equal(placed.ok, true)
 
   state.currentPlayerIndex = 1
@@ -138,9 +141,49 @@ test('Hidden Mine pushes another player back without crossing the row edge', () 
   takeTurn(state, 1)
 
   assert.equal(state.players[1].space, 11)
-  assert.equal(state.lastMineExplosion.landedSpace, 11)
+  assert.equal(state.lastMineExplosion.landedSpace, 12)
   assert.equal(state.lastMineExplosion.destination, 11)
   assert.deepEqual(state.hiddenMines, [])
+})
+
+test('Hidden Mine clamps to the correct visual edge on alternating rows', () => {
+  assert.deepEqual(minePushDestination(3, 4), { destination: 1, edge: 'left' })
+  assert.deepEqual(minePushDestination(13, 4), { destination: 11, edge: 'right' })
+  assert.deepEqual(minePushDestination(26, 2), { destination: 24, edge: 'left' })
+  assert.deepEqual(minePushDestination(36, 2), { destination: 34, edge: 'right' })
+})
+
+test('Exact Move for S100 bounces excess movement backward', () => {
+  const state = createState([96, 20])
+  state.exactMoveFor100 = true
+  state.nextExplosionTurn = 99
+
+  takeTurn(state, 6)
+
+  assert.equal(state.players[0].space, 98)
+  assert.equal(state.players[0].finished, false)
+})
+
+test('default movement still finishes when a roll exceeds Square 100', () => {
+  const state = createState([96, 20])
+  state.nextExplosionTurn = 99
+
+  takeTurn(state, 6)
+
+  assert.equal(state.players[0].space, 100)
+  assert.equal(state.players[0].finished, true)
+})
+
+test('Run Away exact-move bounce traverses the return path', () => {
+  const state = createState([96, 20])
+  state.exactMoveFor100 = true
+  state.destroyedSpaces = [99]
+  state.nextExplosionTurn = 99
+
+  takeTurn(state, 6)
+
+  assert.equal(state.players[0].space, 99)
+  assert.equal(state.players[0].eliminated, true)
 })
 
 test('finished, eliminated, and forfeited players do not control destruction', () => {

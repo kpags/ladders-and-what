@@ -59,6 +59,7 @@ function roomView(room) {
     hostId: room.hostId,
     modeKey: room.modeKey,
     boardIndex: room.boardIndex,
+    exactMoveFor100: Boolean(room.exactMoveFor100),
     players: room.players,
   }
 }
@@ -875,7 +876,9 @@ function startGame(room, requesterId) {
       isAI: player.isAI,
     }
   })
-  room.game = createGameState(board, definitions)
+  room.game = createGameState(board, definitions, Date.now(), {
+    exactMoveFor100: room.exactMoveFor100,
+  })
   room.phase = 'playing'
   room.busy = false
   room.currentEvent = null
@@ -964,6 +967,7 @@ wss.on('connection', socket => {
         hostId: clientId,
         modeKey: gameModes[0]?.key || 'standard',
         boardIndex: firstBoardIndex(gameModes[0]?.key || 'standard'),
+        exactMoveFor100: false,
         players: [],
         revision: 0,
         eventId: 0,
@@ -1036,6 +1040,12 @@ wss.on('connection', socket => {
         room.modeKey = message.modeKey
         room.boardIndex = firstBoardIndex(room.modeKey)
         remapRoomCharacters(room)
+        broadcastRoom(room)
+      }
+    } else if (message.type === 'exact_move_for_100') {
+      if (room.hostId !== clientId) reject(socket, 'Only the host can change game settings.')
+      else if (room.phase === 'lobby') {
+        room.exactMoveFor100 = Boolean(message.enabled)
         broadcastRoom(room)
       }
     } else if (message.type === 'board') {
