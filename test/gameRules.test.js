@@ -576,3 +576,32 @@ test('a multi-effect WHAT completes before resolving a chained WHAT landing', ()
   assert.equal(state.lastQuestionChain[1].effects[0].definition.effect, 'lose_skill')
   assert.equal(state.players[0].skipTurns, 2)
 })
+
+test('Ragebait moves any selected player back, applies its consequence, and resolves a WHAT landing', () => {
+  const rageBoard = {
+    ...board,
+    question_marks: [25],
+    whats: [{
+      name: 'Ragebait Landing',
+      spawn_locations: { start: 25, end: 25 },
+      effects: [{ type: 'stop', effect: 'lose_turn', turns: 1, description: 'Lose one turn.' }],
+    }],
+  }
+  const state = createGameState(rageBoard, [
+    { id: 'karen', name: 'Crab Karen', specialSkill: { name: 'Ragebait' } },
+    { id: 'target', name: 'Target' },
+    { id: 'other', name: 'Other' },
+  ], 0)
+  state.players[0].skillCooldownUntil = 0
+  state.players[1].space = 40
+
+  const result = activateSkill(state, 1, 'target')
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.movement, { playerId: 'target', from: 40, to: 25 })
+  assert.equal(state.players[0].skipTurns, 2)
+  assert.equal(state.players[0].skipReason, 'Ragebait consequence')
+  assert.equal(result.landingResolutions[0].landingSpace, 25)
+  assert.equal(result.landingResolutions[0].questionChain[0].what.name, 'Ragebait Landing')
+  assert.equal(state.players[1].skipTurns, 1)
+})

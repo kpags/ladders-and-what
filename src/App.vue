@@ -88,6 +88,10 @@ const visibleLog = ref([])
 const now = ref(Date.now())
 const skillNotice = ref('')
 const skillTargetOptions = ref([])
+const skillTargetMode = ref(null)
+const skillTargetDeadline = ref(null)
+const emojiPickerPlayerId = ref(null)
+const activeEmojis = ref({})
 const turnDeadline = ref(null)
 const penaltyOverlay = ref(null)
 const destructionOverlay = ref(null)
@@ -135,6 +139,7 @@ const lobbySlotCount = computed(() => selectedMode.value === 'escape_from' ? 4 :
 const lobbyMaxPlayers = computed(() => lobbySlotCount.value)
 const rollSeconds = computed(() => rollDeadline.value ? Math.max(0, Math.ceil((rollDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
 const directionSeconds = computed(() => directionChoice.value ? Math.max(0, Math.ceil((directionChoice.value.expiresAt - (now.value + serverClockOffset)) / 1000)) : 0)
+const skillTargetSeconds = computed(() => skillTargetDeadline.value ? Math.max(0, Math.ceil((skillTargetDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
 const escapeVisiblePlayers = computed(() => game.value?.mode === 'escape_from'
   ? game.value.players.filter(player => !player.eliminated && !player.finished)
   : [])
@@ -201,6 +206,10 @@ function clearGamePresentation() {
   skillOverlay.value = null
   skillActivatingOverlay.value = null
   skillTargetOptions.value = []
+  skillTargetMode.value = null
+  skillTargetDeadline.value = null
+  emojiPickerPlayerId.value = null
+  activeEmojis.value = {}
   skipOverlay.value = null
   penaltyOverlay.value = null
   destructionOverlay.value = null
@@ -388,6 +397,19 @@ async function handleServerEvent(event) {
     window.setTimeout(() => {
       if (whatOverlay.value?.eventId === event.id) whatOverlay.value = null
     }, remaining)
+  } else if (event.type === 'skill_target_selection') {
+    if (event.data.playerId === clientId) {
+      skillTargetOptions.value = event.data.targets || []
+      skillTargetMode.value = event.data.skillName
+      skillTargetDeadline.value = event.data.expiresAt
+      window.setTimeout(() => {
+        if (skillTargetDeadline.value === event.data.expiresAt) {
+          skillTargetOptions.value = []
+          skillTargetMode.value = null
+          skillTargetDeadline.value = null
+        }
+      }, remaining)
+    }
   } else if (event.type === 'skill_pending') {
     if (event.data.playerId === clientId) {
       skillActivatingOverlay.value = { eventId: event.id }
@@ -541,6 +563,12 @@ function handleSocketMessage(event) {
       total: message.total,
       voterIds: message.voterIds || [],
     } : null
+  } else if (message.type === 'player_emote') {
+    activeEmojis.value[message.playerId] = { emoji: message.emoji, startedAt: message.startedAt }
+    const expiresIn = Math.max(0, message.duration - ((Date.now() + serverClockOffset) - message.startedAt))
+    window.setTimeout(() => {
+      if (activeEmojis.value[message.playerId]?.startedAt === message.startedAt) delete activeEmojis.value[message.playerId]
+    }, expiresIn)
   } else if (message.type === 'room_closed') {
     resetOnlineRoom(message.reason)
   } else if (message.type === 'player_forfeited') {
@@ -809,6 +837,25 @@ function useSkill(targetId = null) {
   }
   skillTargetOptions.value = []
   sendLobby({ type: 'use_skill', targetId })
+}
+
+function selectSkillTarget(targetId) {
+  skillTargetOptions.value = []
+  skillTargetMode.value = null
+  skillTargetDeadline.value = null
+  sendLobby({ type: 'use_skill', targetId })
+}
+
+function toggleEmojiPicker(player) {
+  if (player.id !== clientId || player.eliminated || player.finished) return
+  if (turnBusy.value || skillTargetOptions.value.length || skillOverlay.value || skillActivatingOverlay.value) return
+  emojiPickerPlayerId.value = emojiPickerPlayerId.value === player.id ? null : player.id
+}
+
+function sendPlayerEmoji(playerId, emoji) {
+  if (playerId !== clientId) return
+  emojiPickerPlayerId.value = null
+  sendLobby({ type: 'player_emote', emoji })
 }
 
 function placeMine(space) {
@@ -1216,24 +1263,25 @@ onUnmounted(() => {
           <strong>Activating Skill</strong>
           <span class="skill-loading-spinner" aria-hidden="true"></span>
         </div>
-        <div v-if="skillTargetOptions.length" class="skill-target-overlay" role="dialog" aria-modal="true" aria-label="Choose Peek-a-Boo target">
+        <div v-if="skillTargetOptions.length" class="skill-target-overlay" role="dialog" aria-modal="true" :aria-label="`Choose ${skillTargetMode || 'skill'} target`">
           <div class="skill-target-card">
-            <small>Peek-a-Boo</small>
+            <small>{{ skillTargetMode || 'Peek-a-Boo' }}</small>
             <strong>Choose a player</strong>
-            <p>These closest players share space {{ skillTargetOptions[0].space }}.</p>
+            <p v-if="skillTargetMode === 'Ragebait'">Choose within {{ skillTargetSeconds }}s or the skill expires.</p>
+            <p v-else>These closest players share space {{ skillTargetOptions[0].space }}.</p>
             <div>
               <button
                 v-for="target in skillTargetOptions"
                 :key="target.id"
                 type="button"
                 :style="{ '--target-color': target.color }"
-                @click="useSkill(target.id)"
+                @click="selectSkillTarget(target.id)"
               >
                 <span>{{ target.face }}</span>
                 {{ target.name }}
               </button>
             </div>
-            <button type="button" class="skill-target-cancel" @click="skillTargetOptions = []">Cancel</button>
+            <button v-if="skillTargetMode !== 'Ragebait'" type="button" class="skill-target-cancel" @click="skillTargetOptions = []">Cancel</button>
           </div>
         </div>
         <div v-if="whatOverlay" class="what-overlay" role="status">
@@ -1396,6 +1444,7 @@ onUnmounted(() => {
                 class="board-token"
                 :class="{
                   active: index === game.currentPlayerIndex && !game.gameOver,
+                  owned: player.id === clientId,
                   moving: movingPlayerId === player.id,
                   climbing: climbingPlayerId === player.id,
                   blown: blownPlayerId === player.id,
@@ -1404,7 +1453,12 @@ onUnmounted(() => {
                 }"
                 :style="tokenPosition(visualSpace(player), index)"
                 :title="`${player.name}: space ${player.space}`"
+                @click.stop="toggleEmojiPicker(player)"
               >
+                <div v-if="emojiPickerPlayerId === player.id" class="emoji-picker" @click.stop>
+                  <button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button>
+                </div>
+                <span v-if="activeEmojis[player.id]" class="player-emote">{{ activeEmojis[player.id].emoji }}</span>
                 <span>{{ player.face }}</span>
                 <small>{{ index + 1 }}</small>
               </div>
@@ -1416,8 +1470,9 @@ onUnmounted(() => {
               <article
                 v-for="(player, index) in game.players"
                 :key="player.id"
-                :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id, 'health-hit': healthBlinkPlayerId === player.id }"
+                :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id, 'health-hit': healthBlinkPlayerId === player.id, 'mode-eliminated': player.eliminated && ['escape_from','run_away'].includes(game.mode), owned: player.id === clientId }"
                 :style="{ '--player-color': player.color }"
+                @click="toggleEmojiPicker(player)"
               >
                 <span class="console-pawn">{{ player.face }}</span>
                 <div>

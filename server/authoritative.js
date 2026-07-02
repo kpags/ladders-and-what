@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, chooseEscapeAiDirection, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, skipEscapeTurn, takeEscapeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, chooseEscapeAiDirection, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, SKILL_COOLDOWN_MS, skipEscapeTurn, takeEscapeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 import { createDestructionSkipState, updateDestructionSkipVote } from './destructionSkip.js'
@@ -152,6 +152,8 @@ function clearRoomTimers(room) {
   room.disconnectTimers.clear()
   clearTimer(room.pendingMine?.timer)
   room.pendingMine = null
+  clearTimer(room.pendingSkillTarget?.timer)
+  room.pendingSkillTarget = null
   room.destructionSkip = null
   room.sequenceToken++
 }
@@ -801,6 +803,13 @@ function beginTurn(room) {
         useSkill(room, current.id, null, true)
         return
       }
+      if (current.specialSkill?.name === 'Ragebait' && current.skillCooldownUntil <= Date.now() && current.skillBlockedTurns === 0) {
+        const targets = room.game.players.filter(player => player.id !== current.id && !player.finished && !player.eliminated)
+        if (targets.length) {
+          useSkill(room, current.id, targets[Math.floor(Math.random() * targets.length)].id, true)
+          return
+        }
+      }
       const skill = activateSkill(structuredClone(room.game), Date.now())
       if (skill.ok) useSkill(room, current.id, null, true)
       else startRoll(room, current.id, true)
@@ -861,13 +870,88 @@ function startHiddenMinePlacement(room, current) {
   })
 }
 
+function finishRagebaitSelection(room, playerId, targetId = null) {
+  const pending = room.pendingSkillTarget
+  if (!pending || pending.playerId !== playerId) return
+  clearTimer(pending.timer)
+  room.pendingSkillTarget = null
+  room.currentEvent = null
+  const activeTarget = room.game.players.some(player =>
+    player.id === targetId && player.id !== playerId && !player.finished && !player.eliminated)
+  if (targetId && pending.targetIds.includes(targetId) && activeTarget) {
+    room.busy = false
+    room.skillUsedTurnKey = null
+    useSkill(room, playerId, targetId)
+    return
+  }
+
+  const player = room.game.players.find(item => item.id === playerId)
+  if (player) player.skillCooldownUntil = Date.now() + SKILL_COOLDOWN_MS
+  endTurnAfterSkill(room.game)
+  broadcastGame(room)
+  runDestructionSequence(room, pending.token).then(valid => {
+    if (valid) finishSequenceAndBeginTurn(room)
+  })
+}
+
+function startRagebaitSelection(room, current) {
+  const targets = room.game.players
+    .filter(player => player.id !== current.id && !player.finished && !player.eliminated)
+    .map(player => ({
+      id: player.id,
+      name: player.name,
+      color: player.color,
+      face: player.face,
+      space: player.space,
+    }))
+  if (!targets.length) return reject(sockets.get(current.id), 'No active player can be targeted.')
+
+  clearTimer(room.turnTimer)
+  room.turnDeadline = null
+  room.busy = true
+  room.skillUsedTurnKey = `${room.game.turn}:${room.game.currentPlayerIndex}`
+  const token = ++room.sequenceToken
+  emitEvent(room, 'skill_target_selection', {
+    playerId: current.id,
+    playerName: current.name,
+    skillName: 'Ragebait',
+    targets,
+    expiresAt: Date.now() + 10_000,
+  }, 10_000)
+  room.pendingSkillTarget = {
+    playerId: current.id,
+    targetIds: targets.map(target => target.id),
+    token,
+    timer: setTimeout(() => finishRagebaitSelection(room, current.id), 10_000),
+  }
+}
+
 function voteToSkipDestruction(room, playerId, checked) {
   const state = room.destructionSkip
   if (!updateDestructionSkipVote(state, playerId, checked)) return
   broadcastDestructionSkip(room, true)
 }
 
+function sendPlayerEmote(room, playerId, emoji) {
+  const allowed = new Set(['😭', '😂', '😐', '😛', '😎'])
+  const player = room.game?.players.find(item => item.id === playerId && !item.eliminated && !item.finished)
+  if (!player || !allowed.has(emoji) || room.busy) return
+  broadcast(room, {
+    type: 'player_emote',
+    revision: revise(room),
+    playerId,
+    emoji,
+    duration: 2000,
+    startedAt: Date.now(),
+    serverNow: Date.now(),
+  })
+}
+
 function useSkill(room, requesterId, targetId = null, automatic = false) {
+  if (room.pendingSkillTarget?.playerId === requesterId) {
+    finishRagebaitSelection(room, requesterId, targetId)
+    return
+  }
   if (room.phase !== 'playing' || room.busy || room.game.gameOver) return
   const current = room.game.players[room.game.currentPlayerIndex]
   if (current.id !== requesterId) return reject(sockets.get(requesterId), 'Skill can only be used during your turn.')
@@ -879,6 +963,10 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
   if (room.skillUsedTurnKey === turnKey) return reject(sockets.get(requesterId), 'Skill can only be used once per turn.')
   if (current.specialSkill?.name === 'Hidden Mine' && targetId == null) {
     startHiddenMinePlacement(room, current)
+    return
+  }
+  if (current.specialSkill?.name === 'Ragebait' && targetId == null) {
+    startRagebaitSelection(room, current)
     return
   }
   const validation = activateSkill(structuredClone(room.game), Date.now(), targetId)
@@ -1257,6 +1345,7 @@ wss.on('connection', socket => {
         }
       }
     }
+    else if (message.type === 'player_emote') sendPlayerEmote(room, clientId, message.emoji)
   })
 
   socket.on('close', () => {

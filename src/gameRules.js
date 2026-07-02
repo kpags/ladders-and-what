@@ -954,6 +954,17 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
       ladder: ladder ? { ...ladder } : null,
     }
     message = `${player.name} used Peek-a-Boo on ${peekPlayer.name}, moving them to question space ${question}.`
+  } else if (skill === 'Ragebait') {
+    const rageTarget = activePlayers(state).find(other => other.id === targetId && other.id !== player.id)
+    if (!rageTarget) return { ok: false, message: 'Choose another active player anywhere on the board.' }
+    const from = rageTarget.space
+    movePlayer(state, rageTarget, rageTarget.space - 15)
+    const landingSpace = rageTarget.space
+    movement = { playerId: rageTarget.id, from, to: landingSpace }
+    resolveSkillLanding(rageTarget, landingSpace)
+    player.skipTurns += 2
+    player.skipReason = 'Ragebait consequence'
+    message = `${player.name} used Ragebait on ${rageTarget.name}, moving them 15 spaces backward, but cannot move for the next 2 turns.`
   } else if (skill === 'Nope') {
     player.skillArmed = 'ignore-question'
     message = `${player.name} activated Nope. Their next question mark will be ignored.`

@@ -96,6 +96,18 @@
     }
   },
   {
+    "id": "crab-karen",
+    "name": "Crab Karen",
+    "color": "#FFF7D6",
+    "modes": ["standard", "run_away"],
+    "face": "¬‿¬",
+    "description": "Crab Mentality. Demanding. Always ready to complain.",
+    "specialSkill": {
+      "name": "Ragebait",
+      "description": "Select a player anywhere on the board then move them 15 spaces backwards. After the move, the skill user cannot move for next 2 turns as a consequence."
+    }
+  },
+  {
     "id": "brave-bob",
     "name": "Brave Bob",
     "color": "#E8E8E8",

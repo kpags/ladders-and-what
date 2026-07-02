@@ -372,11 +372,21 @@ input[type=range] { height:30px; }
   to { opacity:1; transform:translate(-50%,-50%) rotate(var(--splat-rotation)) scale(1); }
 }
 @media (prefers-reduced-motion:reduce) {
-  .blood-splat,.escape-danger-edge { animation:none; }
+  .blood-splat,.escape-danger-edge,.player-emote { animation:none; }
 }
 .board-token.eliminated { display:none; }
 .board-token { position:absolute; z-index:5; width:clamp(22px,2.7vw,40px); aspect-ratio:1; display:grid; place-items:center; border:3px solid #080b13; border-radius:50% 50% 28% 28%; background:var(--token-color); box-shadow:inset -5px -6px 7px #00142a66,inset 3px 3px 5px #ffffff66,0 4px 5px #000a; transform:translate(-50%,-50%); transition:left .44s ease,top .44s ease; }
+.board-token.owned { cursor:pointer; }
 .board-token span { font:bold clamp(.42rem,.8vw,.7rem)/1 sans-serif; }
+.emoji-picker { position:absolute; z-index:20; bottom:calc(100% + 9px); left:50%; display:flex; gap:3px; padding:4px; border:2px solid #293448; border-radius:999px; background:#07101eef; box-shadow:0 4px 10px #000b; transform:translateX(-50%); }
+.emoji-picker::after { content:""; position:absolute; top:100%; left:50%; border:5px solid transparent; border-top-color:#293448; transform:translateX(-50%); }
+.emoji-picker button { width:27px; height:27px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:#f6e7c7; cursor:pointer; font-size:17px; line-height:1; }
+.board-token span.player-emote { position:absolute; z-index:18; bottom:calc(100% + 5px); left:50%; pointer-events:none; font:clamp(1rem,2vw,1.5rem)/1 sans-serif; filter:drop-shadow(0 2px 2px #000); animation:player-emote-float 2s ease-out both; }
+@keyframes player-emote-float {
+  0% { opacity:0; transform:translate(-50%,5px) scale(.65); }
+  15%,75% { opacity:1; transform:translate(-50%,-5px) scale(1); }
+  100% { opacity:0; transform:translate(-50%,-20px) scale(.9); }
+}
 .board-token small { position:absolute; right:-7px; bottom:-7px; width:17px; height:17px; display:grid; place-items:center; border:2px solid #101018; border-radius:50%; background:#fff4d9; color:#121219; font:bold .65rem sans-serif; }
 .board-token.active { z-index:7; animation:active-token 1s ease-in-out infinite alternate; }
 @keyframes active-token { to { filter:drop-shadow(0 0 7px #fff); transform:translate(-50%,-58%) scale(1.14); } }
@@ -394,10 +404,13 @@ input[type=range] { height:30px; }
 .game-console { display:grid; gap:1rem; max-height:calc(100vh - 110px); overflow:auto; padding:.1rem .4rem 1rem; }
 .player-order { display:grid; grid-template-columns:1fr 1fr; gap:.55rem; }
 .player-order article { min-height:54px; display:grid; grid-template-columns:38px 1fr; align-items:center; gap:.45rem; padding:.35rem; border:3px solid #252d3b; border-radius:10px; background:#0c1320e8; opacity:.75; }
+.player-order article.owned { cursor:pointer; }
 .player-order article.current { border-color:var(--player-color); opacity:1; box-shadow:0 0 14px color-mix(in srgb,var(--player-color) 55%,transparent); }
 .player-order article.finished { border-color:#e9b624; opacity:1; background:#28200eeb; }
 .player-order article.loser { border-color:#d43a3a; opacity:1; background:#351113eb; }
 .player-order article.health-hit { position:relative; z-index:2; animation:health-hit .2s ease-in-out 6 alternate; }
+.player-order article.mode-eliminated { position:relative; overflow:hidden; }
+.player-order article.mode-eliminated::after { content:"×"; position:absolute; z-index:5; inset:0; display:grid; place-items:center; background:#29000070; color:#f32626; text-shadow:0 3px 0 #4b0000,0 0 12px #ff2222; font:clamp(3.2rem,6vw,5rem)/1 'Luckiest Guy'; }
 @keyframes health-hit {
   from { border-color:#ff2222; background:#5a0909; box-shadow:0 0 8px #ff2525; }
   to { border-color:#fff; background:#b71919; box-shadow:0 0 24px #ff1e1e; }
