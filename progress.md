@@ -70,6 +70,9 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Added an exact-move bounce phase: pause on Square 100, show `Oops going N spaces backwards` for three seconds, then animate the excess movement backward before revealing/applying any destination WHAT.
 - Scoped exact-move bouncing to die movement only and added bounce/WHAT ordering coverage; all 44 tests and an isolated production build pass.
 - Extended Exact Move for S100 to WHAT-driven forward movement. Each WHAT effect carries its own reach-100/pause/bounce playback metadata so chained effects and roll bounces remain ordered; all 44 tests and an isolated production build pass.
+- Added a synchronized destruction skip vote showing checked/total non-AI players. A unanimous human vote fast-forwards remaining destruction, commits resulting eliminations/blood splats, then shows caught notices at the end; normal completion hides the control.
+- Added non-AI unanimity and vote-toggle regression tests; all 46 tests pass and production build succeeds via an isolated temp output.
+- Added a synchronized human-only Run Away destruction skip vote with live checked/total counts. A unanimous vote resolves remaining squares immediately, hides the vote, updates blood splats, and then shows queued caught-player notices; normal completion also hides the vote.
 
 ## TODO
 

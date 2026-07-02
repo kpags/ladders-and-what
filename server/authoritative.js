@@ -3,6 +3,7 @@ import { WebSocket, WebSocketServer } from 'ws'
 import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, chooseEscapeAiDirection, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, skipEscapeTurn, takeEscapeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
+import { createDestructionSkipState, updateDestructionSkipVote } from './destructionSkip.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const RECONNECT_GRACE_MS = 10_000
@@ -151,6 +152,7 @@ function clearRoomTimers(room) {
   room.disconnectTimers.clear()
   clearTimer(room.pendingMine?.timer)
   room.pendingMine = null
+  room.destructionSkip = null
   room.sequenceToken++
 }
 
@@ -191,25 +193,85 @@ async function showCaughtPlayer(room, player, space, token) {
   return wait(room, 3000, token)
 }
 
+function broadcastDestructionSkip(room, active) {
+  const state = room.destructionSkip
+  broadcast(room, {
+    type: 'destruction_skip_state',
+    revision: revise(room),
+    active,
+    voterIds: state ? [...state.voters] : [],
+    total: state?.humanIds.length || 0,
+  })
+}
+
+async function waitDestructionStep(room, milliseconds, token) {
+  const deadline = Date.now() + milliseconds
+  while (Date.now() < deadline) {
+    if (!rooms.has(room.code) || room.sequenceToken !== token) return 'invalid'
+    if (room.destructionSkip?.requested) return 'skip'
+    const remaining = deadline - Date.now()
+    if (!await wait(room, Math.min(75, remaining), token)) return 'invalid'
+  }
+  return room.destructionSkip?.requested ? 'skip' : 'complete'
+}
+
+async function finishSkippedDestruction(room, spaces, token) {
+  const caught = []
+  for (const space of spaces) {
+    const result = destroySpace(room.game, space)
+    caught.push(...result.players.map(player => ({ player, space })))
+  }
+  broadcastGame(room)
+  broadcastDestructionSkip(room, false)
+  room.destructionSkip = null
+  for (const record of caught) {
+    if (!await showCaughtPlayer(room, record.player, record.space, token)) return false
+  }
+  return true
+}
+
 async function runDestructionSequence(room, token) {
   const spaces = room.game.lastExplosion?.spaces || []
   if (!spaces.length) return true
 
+  room.destructionSkip = createDestructionSkipState(room.players, token)
+  broadcastDestructionSkip(room, true)
   emitEvent(room, 'destruction_warning', { count: spaces.length, variant: destructionVariant(room) }, 3000)
-  if (!await wait(room, 3000, token)) return false
-
-  for (const [index, space] of spaces.entries()) {
-    // Show the explosion first, then commit its darkened square. The next
-    // iteration starts only after caught-player handling and the pause below.
-    emitEvent(room, 'destruction_square', { space, variant: destructionVariant(room) }, 750)
-    if (!await wait(room, 750, token)) return false
-    const result = destroySpace(room.game, space)
-    broadcastGame(room)
-    for (const player of result.players) {
-      if (!await showCaughtPlayer(room, player, space, token)) return false
+  const warningWait = await waitDestructionStep(room, 3000, token)
+  if (warningWait === 'invalid') return false
+  if (warningWait === 'skip') {
+    if (!await finishSkippedDestruction(room, spaces, token)) return false
+  } else {
+    for (const [index, space] of spaces.entries()) {
+      // Show the explosion first, then commit its darkened square. The next
+      // iteration starts only after caught-player handling and the pause below.
+      emitEvent(room, 'destruction_square', { space, variant: destructionVariant(room) }, 750)
+      const squareWait = await waitDestructionStep(room, 750, token)
+      if (squareWait === 'invalid') return false
+      if (squareWait === 'skip') {
+        if (!await finishSkippedDestruction(room, spaces.slice(index), token)) return false
+        break
+      }
+      const result = destroySpace(room.game, space)
+      broadcastGame(room)
+      for (const player of result.players) {
+        if (!await showCaughtPlayer(room, player, space, token)) return false
+      }
+      if (room.game.gameOver) break
+      if (index < spaces.length - 1) {
+        const pauseWait = await waitDestructionStep(room, 750, token)
+        if (pauseWait === 'invalid') return false
+        if (pauseWait === 'skip') {
+          if (!await finishSkippedDestruction(room, spaces.slice(index + 1), token)) return false
+          break
+        }
+      }
     }
-    if (room.game.gameOver) break
-    if (index < spaces.length - 1 && !await wait(room, 750, token)) return false
+  }
+
+  if (room.destructionSkip) {
+    broadcastDestructionSkip(room, false)
+    room.destructionSkip = null
   }
   if (allRunAwayPlayersEliminated(room.game)) {
     emitEvent(room, 'run_away_sigh', {}, 3000)
@@ -787,6 +849,12 @@ function startHiddenMinePlacement(room, current) {
   })
 }
 
+function voteToSkipDestruction(room, playerId, checked) {
+  const state = room.destructionSkip
+  if (!updateDestructionSkipVote(state, playerId, checked)) return
+  broadcastDestructionSkip(room, true)
+}
+
 function useSkill(room, requesterId, targetId = null, automatic = false) {
   if (room.phase !== 'playing' || room.busy || room.game.gameOver) return
   const current = room.game.players[room.game.currentPlayerIndex]
@@ -972,7 +1040,10 @@ function reconnect(room, clientId, socket) {
   player.connected = true
   sockets.set(clientId, socket)
   broadcastRoom(room)
-  if (room.phase === 'playing') broadcastGame(room, 'game_started')
+  if (room.phase === 'playing') {
+    broadcastGame(room, 'game_started')
+    if (room.destructionSkip) broadcastDestructionSkip(room, true)
+  }
 }
 
 const wss = new WebSocketServer({ port: PORT, host: '0.0.0.0' })
@@ -1139,6 +1210,7 @@ wss.on('connection', socket => {
     else if (message.type === 'stop_roll') stopRoll(room, clientId)
     else if (message.type === 'use_skill') useSkill(room, clientId, message.targetId)
     else if (message.type === 'place_mine') finishHiddenMinePlacement(room, clientId, message.space)
+    else if (message.type === 'destruction_skip') voteToSkipDestruction(room, clientId, Boolean(message.checked))
     else if (message.type === 'choose_direction') chooseEscapeDirection(room, clientId, message.direction)
     else if (message.type === 'arm_weapon') {
       if (room.game?.mode !== 'escape_from' || room.phase !== 'playing') reject(socket, 'Weapon unavailable.')

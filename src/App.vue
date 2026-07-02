@@ -92,6 +92,7 @@ const turnDeadline = ref(null)
 const penaltyOverlay = ref(null)
 const destructionOverlay = ref(null)
 const destructionSpace = ref(null)
+const destructionSkipState = ref(null)
 const sighOverlay = ref(null)
 const ripOverlay = ref(null)
 const minePlacement = ref(null)
@@ -204,6 +205,7 @@ function clearGamePresentation() {
   penaltyOverlay.value = null
   destructionOverlay.value = null
   destructionSpace.value = null
+  destructionSkipState.value = null
   sighOverlay.value = null
   ripOverlay.value = null
   minePlacement.value = null
@@ -534,6 +536,11 @@ function handleSocketMessage(event) {
     applyGameSnapshot(message)
   } else if (message.type === 'game_event') {
     handleServerEvent(message.event)
+  } else if (message.type === 'destruction_skip_state') {
+    destructionSkipState.value = message.active ? {
+      total: message.total,
+      voterIds: message.voterIds || [],
+    } : null
   } else if (message.type === 'room_closed') {
     resetOnlineRoom(message.reason)
   } else if (message.type === 'player_forfeited') {
@@ -651,6 +658,10 @@ function changeGameMode(event) {
 function changeExactMoveFor100(event) {
   if (!isLobbyHost.value) return
   sendLobby({ type: 'exact_move_for_100', enabled: event.target.checked })
+}
+
+function toggleDestructionSkip(event) {
+  sendLobby({ type: 'destruction_skip', checked: event.target.checked })
 }
 
 async function shareInvite() {
@@ -871,6 +882,11 @@ onMounted(() => {
       turn: game.value.turn,
       nextDestructionTurn: game.value.nextExplosionTurn,
       exactMoveFor100: Boolean(game.value.exactMoveFor100),
+      destructionSkip: destructionSkipState.value ? {
+        votes: destructionSkipState.value.voterIds.length,
+        total: destructionSkipState.value.total,
+        checked: destructionSkipState.value.voterIds.includes(clientId),
+      } : null,
       currentPlayer: game.value.players[game.value.currentPlayerIndex]?.name,
       players: game.value.players.map(player => ({
         name: player.name,
@@ -1105,6 +1121,15 @@ onUnmounted(() => {
 
     <template v-else-if="page === 'game' && game">
       <section class="game-screen">
+        <label v-if="destructionSkipState" class="destruction-skip-vote">
+          <input
+            type="checkbox"
+            :checked="destructionSkipState.voterIds.includes(clientId)"
+            @change="toggleDestructionSkip"
+          >
+          <span>Skip?</span>
+          <small>{{ destructionSkipState.voterIds.length }} / {{ destructionSkipState.total }}</small>
+        </label>
         <div
           v-if="game.mode === 'escape_from' && dangerDistance != null && dangerDistance <= 4"
           class="escape-danger-edge"

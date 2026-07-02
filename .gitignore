@@ -4,3 +4,4 @@ dist/
 .env.local
 .edge-runaway-qa/
 runaway-smoke.cjs
+.tmp/
