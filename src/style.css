@@ -405,6 +405,8 @@ input[type=range] { height:30px; }
 .player-order { display:grid; grid-template-columns:1fr 1fr; gap:.55rem; }
 .player-order article { min-height:54px; display:grid; grid-template-columns:38px 1fr; align-items:center; gap:.45rem; padding:.35rem; border:3px solid #252d3b; border-radius:10px; background:#0c1320e8; opacity:.75; }
 .player-order article.owned { cursor:pointer; }
+.player-order article.owned { position:relative; overflow:visible; }
+.console-emoji-picker { bottom:calc(100% + 5px); }
 .player-order article.current { border-color:var(--player-color); opacity:1; box-shadow:0 0 14px color-mix(in srgb,var(--player-color) 55%,transparent); }
 .player-order article.finished { border-color:#e9b624; opacity:1; background:#28200eeb; }
 .player-order article.loser { border-color:#d43a3a; opacity:1; background:#351113eb; }

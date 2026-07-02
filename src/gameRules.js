@@ -610,6 +610,7 @@ function resolveLanding(state, player) {
 
   while (state.board.question_marks.includes(player.space) && chainCount < 10) {
     const questionSpace = player.space
+    let returnedByExactBounce = false
     if (player.skillArmed === 'ignore-question') {
       player.skillArmed = null
       addLog(state, `${player.name}'s Nope skill cancelled the question mark on space ${questionSpace}.`)
@@ -628,6 +629,7 @@ function resolveLanding(state, player) {
       if (what) {
         state.lastWhat = { ...what, space: questionSpace }
         const effects = applyWhatEffects(state, player, what)
+        returnedByExactBounce = effects.some(step => step.exactBounce && step.destination === questionSpace)
         state.lastQuestionChain.push({
           kind: 'what',
           space: questionSpace,
@@ -641,7 +643,7 @@ function resolveLanding(state, player) {
     }
     chainCount++
     if (player.eliminated) break
-    if (player.space === questionSpace) break
+    if (player.space === questionSpace && !returnedByExactBounce) break
   }
 
   const ladder = !player.eliminated && !player.rerollPending && state.board.ladders.find(item => item.from === player.space)

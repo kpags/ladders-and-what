@@ -286,6 +286,47 @@ test('Exact Move also bounces movement caused by a WHAT effect', () => {
   })
 })
 
+test('Exact Move retriggers a random WHAT after an effect bounces back to the same question square', () => {
+  const exactBoard = {
+    ...board,
+    question_marks: [98],
+    whats: [
+      {
+        name: 'Over the Finish',
+        spawn_locations: { start: 98, end: 98 },
+        effects: [{ effect: 'move_forward', spaces: 4, description: 'Move forward four.' }],
+      },
+      {
+        name: 'Bounce Follow-up',
+        spawn_locations: { start: 98, end: 98 },
+        effects: [{ effect: 'lose_turn', turns: 1, description: 'Lose a turn.' }],
+      },
+    ],
+  }
+  const state = createGameState(exactBoard, [
+    { id: 'player-1', name: 'Player 1' },
+    { id: 'player-2', name: 'Player 2' },
+  ], 0, { exactMoveFor100: true })
+  state.players[0].space = 97
+  state.nextExplosionTurn = 99
+
+  const originalRandom = Math.random
+  Math.random = () => 0
+  try {
+    takeTurn(state, 1)
+  } finally {
+    Math.random = originalRandom
+  }
+
+  assert.equal(state.players[0].space, 98)
+  assert.equal(state.players[0].skipTurns, 1)
+  assert.deepEqual(
+    state.lastQuestionChain.map(item => item.what.name),
+    ['Over the Finish', 'Bounce Follow-up'],
+  )
+  assert.equal(state.lastQuestionChain[0].effects[0].exactBounce.destination, 98)
+})
+
 test('default movement still finishes when a roll exceeds Square 100', () => {
   const state = createState([96, 20])
   state.nextExplosionTurn = 99

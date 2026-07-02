@@ -935,10 +935,9 @@ function voteToSkipDestruction(room, playerId, checked) {
 function sendPlayerEmote(room, playerId, emoji) {
   const allowed = new Set(['😭', '😂', '😐', '😛', '😎'])
   const player = room.game?.players.find(item => item.id === playerId && !item.eliminated && !item.finished)
-  if (!player || !allowed.has(emoji) || room.busy) return
+  if (!player || !allowed.has(emoji)) return
   broadcast(room, {
     type: 'player_emote',
-    revision: revise(room),
     playerId,
     emoji,
     duration: 2000,
@@ -1062,7 +1061,17 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
       const duration = Math.abs(result.movement.to - result.movement.from) * 540
       emitEvent(room, 'movement', { ...result.movement, kind: 'skill' }, duration)
       wait(room, duration, token).then(async moved => {
-        if (moved && await playLandingResolutions()) showResult()
+        if (!moved) return
+        if (current.specialSkill?.name === 'Ragebait') {
+          emitEvent(room, 'ragebait_consequence', {
+            playerId: current.id,
+            playerName: current.name,
+            color: current.color,
+            message: `${current.name} cannot move for the next 2 turns.`,
+          }, 3000)
+          if (!await wait(room, 3000, token)) return
+        }
+        if (await playLandingResolutions()) showResult()
       })
     } else {
       playLandingResolutions().then(resolved => {

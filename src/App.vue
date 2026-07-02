@@ -91,6 +91,7 @@ const skillTargetOptions = ref([])
 const skillTargetMode = ref(null)
 const skillTargetDeadline = ref(null)
 const emojiPickerPlayerId = ref(null)
+const emojiPickerPlacement = ref('board')
 const activeEmojis = ref({})
 const turnDeadline = ref(null)
 const penaltyOverlay = ref(null)
@@ -209,6 +210,7 @@ function clearGamePresentation() {
   skillTargetMode.value = null
   skillTargetDeadline.value = null
   emojiPickerPlayerId.value = null
+  emojiPickerPlacement.value = 'board'
   activeEmojis.value = {}
   skipOverlay.value = null
   penaltyOverlay.value = null
@@ -419,6 +421,17 @@ async function handleServerEvent(event) {
     } else {
       skillOverlay.value = { ...event.data, result: false }
     }
+  } else if (event.type === 'ragebait_consequence') {
+    skillOverlay.value = {
+      ...event.data,
+      name: 'Ragebait Consequence',
+      description: event.data.message,
+      consequence: true,
+      result: false,
+    }
+    window.setTimeout(() => {
+      if (skillOverlay.value?.consequence && skillOverlay.value.playerId === event.data.playerId) skillOverlay.value = null
+    }, remaining)
   } else if (event.type === 'skill_result') {
     if (event.data.playerId !== clientId) {
       skillOverlay.value = { ...event.data, result: true }
@@ -536,6 +549,19 @@ function resetOnlineRoom(reason = '') {
 function handleSocketMessage(event) {
   const message = JSON.parse(event.data)
   if (message.serverNow) serverClockOffset = message.serverNow - Date.now()
+
+  // Emotes are short-lived social events, not authoritative game state. Handle
+  // them independently so an intervening snapshot cannot make another client
+  // discard the emote as stale.
+  if (message.type === 'player_emote') {
+    activeEmojis.value[message.playerId] = { emoji: message.emoji, startedAt: message.startedAt }
+    const expiresIn = Math.max(0, message.duration - ((Date.now() + serverClockOffset) - message.startedAt))
+    window.setTimeout(() => {
+      if (activeEmojis.value[message.playerId]?.startedAt === message.startedAt) delete activeEmojis.value[message.playerId]
+    }, expiresIn)
+    return
+  }
+
   if (message.revision && message.revision < lastRevision) return
   if (message.revision) lastRevision = message.revision
 
@@ -563,12 +589,6 @@ function handleSocketMessage(event) {
       total: message.total,
       voterIds: message.voterIds || [],
     } : null
-  } else if (message.type === 'player_emote') {
-    activeEmojis.value[message.playerId] = { emoji: message.emoji, startedAt: message.startedAt }
-    const expiresIn = Math.max(0, message.duration - ((Date.now() + serverClockOffset) - message.startedAt))
-    window.setTimeout(() => {
-      if (activeEmojis.value[message.playerId]?.startedAt === message.startedAt) delete activeEmojis.value[message.playerId]
-    }, expiresIn)
   } else if (message.type === 'room_closed') {
     resetOnlineRoom(message.reason)
   } else if (message.type === 'player_forfeited') {
@@ -846,10 +866,14 @@ function selectSkillTarget(targetId) {
   sendLobby({ type: 'use_skill', targetId })
 }
 
-function toggleEmojiPicker(player) {
+function toggleEmojiPicker(player, placement = 'board') {
   if (player.id !== clientId || player.eliminated || player.finished) return
-  if (turnBusy.value || skillTargetOptions.value.length || skillOverlay.value || skillActivatingOverlay.value) return
-  emojiPickerPlayerId.value = emojiPickerPlayerId.value === player.id ? null : player.id
+  if (emojiPickerPlayerId.value === player.id && emojiPickerPlacement.value === placement) {
+    emojiPickerPlayerId.value = null
+    return
+  }
+  emojiPickerPlayerId.value = player.id
+  emojiPickerPlacement.value = placement
 }
 
 function sendPlayerEmoji(playerId, emoji) {
@@ -1254,7 +1278,7 @@ onUnmounted(() => {
         <div v-if="skillOverlay" class="skill-overlay" role="status">
           <small>
             <b :style="{ color: skillOverlay.color }">{{ skillOverlay.playerName }}</b>
-            {{ skillOverlay.result ? ' skill result' : ' is using' }}
+            {{ skillOverlay.consequence ? ' consequence' : skillOverlay.result ? ' skill result' : ' is using' }}
           </small>
           <strong>{{ skillOverlay.name }}</strong>
           <p>{{ skillOverlay.result ? skillOverlay.message : skillOverlay.description }}</p>
@@ -1453,9 +1477,9 @@ onUnmounted(() => {
                 }"
                 :style="tokenPosition(visualSpace(player), index)"
                 :title="`${player.name}: space ${player.space}`"
-                @click.stop="toggleEmojiPicker(player)"
+                @click.stop="toggleEmojiPicker(player, 'board')"
               >
-                <div v-if="emojiPickerPlayerId === player.id" class="emoji-picker" @click.stop>
+                <div v-if="emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board'" class="emoji-picker" @click.stop>
                   <button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button>
                 </div>
                 <span v-if="activeEmojis[player.id]" class="player-emote">{{ activeEmojis[player.id].emoji }}</span>
@@ -1472,8 +1496,11 @@ onUnmounted(() => {
                 :key="player.id"
                 :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id, 'health-hit': healthBlinkPlayerId === player.id, 'mode-eliminated': player.eliminated && ['escape_from','run_away'].includes(game.mode), owned: player.id === clientId }"
                 :style="{ '--player-color': player.color }"
-                @click="toggleEmojiPicker(player)"
+                @click="toggleEmojiPicker(player, 'console')"
               >
+                <div v-if="emojiPickerPlayerId === player.id && emojiPickerPlacement === 'console'" class="emoji-picker console-emoji-picker" @click.stop>
+                  <button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button>
+                </div>
                 <span class="console-pawn">{{ player.face }}</span>
                 <div>
                   <strong>{{ player.name }}</strong>
