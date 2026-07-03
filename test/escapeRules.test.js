@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import {
   armEscapeWeapon,
   chooseEscapeAiDirection,
+  completeEscape,
   createGameState,
   isEscapeWeaponProtecting,
   skipEscapeTurn,
@@ -130,6 +131,7 @@ test('Escape movement stops on the first entity crossed before the roll complete
   assert.equal(result.interruptedByEntity, true)
   assert.equal(result.encounter.entityId, 'near')
   assert.equal(result.ladder, null)
+  assert.notEqual(state.entities.find(entity => entity.id === 'near').space, 23)
 })
 
 test('Escape movement also detects entities while moving backward', () => {
@@ -144,4 +146,30 @@ test('Escape movement also detects entities while moving backward', () => {
   assert.equal(result.rollLanding, 37)
   assert.equal(result.destination, 37)
   assert.equal(result.encounter.entityId, 'backward-ghost')
+})
+
+test('Quiet Mansion defers victory until the synchronized exit sequence completes', () => {
+  const state = createGameState(board, players)
+  state.entities = []
+  state.keys.forEach((key, index) => {
+    key.holderId = index < 2 ? 'p1' : 'p2'
+    key.space = null
+  })
+  state.players[0].heldKeys = [state.keys[0].id, state.keys[1].id]
+  state.players[1].heldKeys = [state.keys[2].id]
+  state.players[0].space = 100
+  state.players[1].space = 99
+  state.currentPlayerIndex = 1
+  state.exitRevealed = true
+
+  takeEscapeTurn(state, 1, 'forward')
+
+  assert.equal(state.exitUnlocked, true)
+  assert.equal(state.exitUnlockPending, true)
+  assert.equal(state.exitSequencePending, true)
+  assert.equal(state.gameOver, false)
+  assert.equal(completeEscape(state), true)
+  assert.equal(state.gameOver, true)
+  assert.equal(state.escapeOutcome, 'won')
+  assert.equal(state.players.every(player => player.won), true)
 })

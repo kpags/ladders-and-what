@@ -205,11 +205,19 @@ class AudioManager {
   }
 
   escapeVoice(ghost) {
-    this.random(`quiet_mansion/ghosts/${ghost}`)
+    this.random(`quiet_mansion/entities/${ghost}`)
   }
 
   escapeOutcome(type) {
     this.random(`quiet_mansion/${type}`)
+  }
+
+  escapeUnlock() {
+    this.play(fileFrom(soundFiles, '/escape_from/quiet_mansion/unlocking_exit.mp3'))
+  }
+
+  characterReaction(type) {
+    this.random(`characters/${type}`)
   }
 
   escapeDanger(distance) {

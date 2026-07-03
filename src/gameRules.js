@@ -113,6 +113,8 @@ export function initializeEscapeState(state, rng = Math.random) {
   state.entities = entitySpaces.map((space, index) => ({ id: `entity-${index + 1}`, space }))
   state.exitRevealed = false
   state.exitUnlocked = false
+  state.exitUnlockPending = false
+  state.exitSequencePending = false
   state.escapeOutcome = null
   state.nextEntityRelocationTurn = 3
   state.lastEscapeEncounter = null
@@ -166,25 +168,34 @@ function refreshEscapeExit(state) {
   if (!state.exitUnlocked) state.exitRevealed = allHeld
   if (allHeld) {
     const holders = [...new Set(state.keys.map(key => key.holderId))]
-    if (holders.every(id => state.players.find(player => player.id === id)?.space === 100)) {
+    if (!state.exitUnlocked && holders.every(id => state.players.find(player => player.id === id)?.space === 100)) {
       state.exitUnlocked = true
       state.exitRevealed = true
+      state.exitUnlockPending = true
       addLog(state, 'Square 100 has been unlocked!')
     }
   }
   if (state.exitUnlocked) {
     const living = activePlayers(state)
     if (living.length && living.every(player => player.space === 100)) {
-      living.forEach(player => {
-        player.won = true
-        player.finished = true
-      })
-      state.winner = { name: 'The team' }
-      state.gameOver = true
-      state.escapeOutcome = 'won'
-      addLog(state, 'Every surviving player escaped the Quiet Mansion!')
+      state.exitSequencePending = true
     }
   }
+}
+
+export function completeEscape(state) {
+  if (state.mode !== 'escape_from' || state.gameOver || !state.exitSequencePending) return false
+  const living = activePlayers(state)
+  living.forEach(player => {
+    player.won = true
+    player.finished = true
+  })
+  state.winner = { name: 'The team' }
+  state.gameOver = true
+  state.escapeOutcome = 'won'
+  state.exitSequencePending = false
+  addLog(state, 'Every surviving player escaped the Quiet Mansion!')
+  return true
 }
 
 export function visualAdjacentSpaces(space) {
@@ -268,6 +279,7 @@ function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()
         player.finished = true
         addLog(state, `${player.name} was eliminated and is now spectating.`)
       }
+      relocateEntity(state, entity, rng)
     }
   }
   refreshEscapeExit(state)

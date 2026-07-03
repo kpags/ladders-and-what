@@ -8,13 +8,15 @@ import zombieGif from '../assets/gifs/run_away/zombie.gif'
 import escapeKeyGif from '../assets/gifs/escape_from/quiet_mansion/transparent/keys.gif'
 import escapeEntityGif from '../assets/gifs/escape_from/quiet_mansion/transparent/entity_board_model.gif'
 import escapeAttackedGif from '../assets/gifs/escape_from/quiet_mansion/transparent/attacked/gif.gif'
-import escapeExorcisedGif from '../assets/gifs/escape_from/quiet_mansion/transparent/exorcised/gif.gif'
-import oldWomanGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/old_woman/gif.gif'
-import redEyesGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/red_eyes/gif.gif'
-import whiteFaceGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/white_face/gif.gif'
-import oldWomanLastGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/old_woman/last_frame.gif'
-import redEyesLastGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/red_eyes/last_frame.gif'
-import whiteFaceLastGif from '../assets/gifs/escape_from/quiet_mansion/transparent/ghosts/white_face/last_frame.gif'
+import escapeDefendedGif from '../assets/gifs/escape_from/quiet_mansion/defended/gif.gif'
+import escapeExitGif from '../assets/gifs/escape_from/quiet_mansion/exit.gif'
+import escapeExitLastFrame from '../assets/gifs/escape_from/quiet_mansion/exit_last_frame.png'
+import oldWomanGif from '../assets/gifs/escape_from/quiet_mansion/entities/old_woman/gif.gif'
+import redEyesGif from '../assets/gifs/escape_from/quiet_mansion/entities/red_eyes/gif.gif'
+import whiteFaceGif from '../assets/gifs/escape_from/quiet_mansion/entities/white_face/gif.gif'
+import oldWomanLastGif from '../assets/gifs/escape_from/quiet_mansion/entities/old_woman/last_frame.png'
+import redEyesLastGif from '../assets/gifs/escape_from/quiet_mansion/entities/red_eyes/last_frame.png'
+import whiteFaceLastGif from '../assets/gifs/escape_from/quiet_mansion/entities/white_face/last_frame.png'
 import { audioManager } from './audioManager'
 import { getBoardSpaceBounds, getBoardSpacePosition } from './boardLayout'
 import { boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
@@ -93,6 +95,7 @@ const skillTargetDeadline = ref(null)
 const emojiPickerPlayerId = ref(null)
 const emojiPickerPlacement = ref('board')
 const activeEmojis = ref({})
+const activeReactions = ref({})
 const turnDeadline = ref(null)
 const penaltyOverlay = ref(null)
 const destructionOverlay = ref(null)
@@ -105,6 +108,7 @@ const minePlacement = ref(null)
 const mineExplosionSpace = ref(null)
 const blownPlayerId = ref(null)
 const directionChoice = ref(null)
+const escapeMoveChoice = ref(null)
 const rollDeadline = ref(null)
 const escapeOverlay = ref(null)
 const weaponEquippedOverlay = ref(null)
@@ -142,6 +146,7 @@ const lobbySlotCount = computed(() => selectedMode.value === 'escape_from' ? 4 :
 const lobbyMaxPlayers = computed(() => lobbySlotCount.value)
 const rollSeconds = computed(() => rollDeadline.value ? Math.max(0, Math.ceil((rollDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
 const directionSeconds = computed(() => directionChoice.value ? Math.max(0, Math.ceil((directionChoice.value.expiresAt - (now.value + serverClockOffset)) / 1000)) : 0)
+const escapeMoveSeconds = computed(() => escapeMoveChoice.value ? Math.max(0, Math.ceil((escapeMoveChoice.value.expiresAt - (now.value + serverClockOffset)) / 1000)) : 0)
 const skillTargetSeconds = computed(() => skillTargetDeadline.value ? Math.max(0, Math.ceil((skillTargetDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
 const escapeVisiblePlayers = computed(() => game.value?.mode === 'escape_from'
   ? game.value.players.filter(player => !player.eliminated && !player.finished)
@@ -214,6 +219,7 @@ function clearGamePresentation() {
   emojiPickerPlayerId.value = null
   emojiPickerPlacement.value = 'board'
   activeEmojis.value = {}
+  activeReactions.value = {}
   skipOverlay.value = null
   penaltyOverlay.value = null
   destructionOverlay.value = null
@@ -226,6 +232,7 @@ function clearGamePresentation() {
   mineExplosionSpace.value = null
   blownPlayerId.value = null
   directionChoice.value = null
+  escapeMoveChoice.value = null
   rollDeadline.value = null
   escapeOverlay.value = null
   weaponEquippedOverlay.value = null
@@ -460,7 +467,13 @@ async function handleServerEvent(event) {
     }
     visualSpaces.value[event.data.playerId] = event.data.to
     window.setTimeout(() => { penaltyOverlay.value = null }, remaining)
+  } else if (event.type === 'escape_move_choice') {
+    escapeMoveChoice.value = { ...event.data, eventId: event.id }
+    window.setTimeout(() => {
+      if (escapeMoveChoice.value?.eventId === event.id) escapeMoveChoice.value = null
+    }, remaining)
   } else if (event.type === 'escape_direction_choice') {
+    escapeMoveChoice.value = null
     window.clearInterval(diceTimer)
     diceRolling.value = false
     rollDeadline.value = null
@@ -490,10 +503,10 @@ async function handleServerEvent(event) {
     window.setTimeout(() => {
       if (escapeOverlay.value?.eventId === event.id) escapeOverlay.value = null
     }, remaining + 1000)
-  } else if (event.type === 'escape_exorcised' || event.type === 'escape_attacked') {
-    const type = event.type === 'escape_exorcised' ? 'exorcised' : 'attacked'
+  } else if (event.type === 'escape_defended' || event.type === 'escape_attacked') {
+    const type = event.type === 'escape_defended' ? 'defended' : 'attacked'
     audioManager.escapeOutcome(type)
-    escapeOverlay.value = { type, src: type === 'exorcised' ? escapeExorcisedGif : escapeAttackedGif, eventId: event.id }
+    escapeOverlay.value = { type, src: type === 'defended' ? escapeDefendedGif : escapeAttackedGif, eventId: event.id }
     if (type === 'attacked') {
       displayedHealth.value[event.data.playerId] = event.data.healthBefore
       healthBlinkPlayerId.value = event.data.playerId
@@ -505,6 +518,13 @@ async function handleServerEvent(event) {
     window.setTimeout(() => {
       if (escapeOverlay.value?.eventId === event.id) escapeOverlay.value = null
     }, remaining)
+  } else if (event.type === 'escape_exit_unlocked') {
+    audioManager.escapeUnlock()
+  } else if (event.type === 'escape_exit_opening') {
+    escapeOverlay.value = { type: 'exit', src: escapeExitGif, eventId: event.id }
+    window.setTimeout(() => {
+      if (escapeOverlay.value?.eventId === event.id) escapeOverlay.value.src = escapeExitLastFrame
+    }, Math.min(1750, remaining))
   }
 }
 
@@ -568,6 +588,15 @@ function handleSocketMessage(event) {
     const expiresIn = Math.max(0, message.duration - ((Date.now() + serverClockOffset) - message.startedAt))
     window.setTimeout(() => {
       if (activeEmojis.value[message.playerId]?.startedAt === message.startedAt) delete activeEmojis.value[message.playerId]
+    }, expiresIn)
+    return
+  }
+  if (message.type === 'player_reaction') {
+    audioManager.characterReaction(message.reaction)
+    activeReactions.value[message.playerId] = { text: message.text, startedAt: message.startedAt }
+    const expiresIn = Math.max(0, message.duration - ((Date.now() + serverClockOffset) - message.startedAt))
+    window.setTimeout(() => {
+      if (activeReactions.value[message.playerId]?.startedAt === message.startedAt) delete activeReactions.value[message.playerId]
     }, expiresIn)
     return
   }
@@ -887,6 +916,7 @@ function selectSkillTarget(targetId) {
 }
 
 function toggleEmojiPicker(player, placement = 'board') {
+  if (game.value?.mode === 'escape_from') return
   if (player.id !== clientId || player.eliminated || player.finished) return
   if (emojiPickerPlayerId.value === player.id && emojiPickerPlacement.value === placement) {
     emojiPickerPlayerId.value = null
@@ -900,6 +930,12 @@ function sendPlayerEmoji(playerId, emoji) {
   if (playerId !== clientId) return
   emojiPickerPlayerId.value = null
   sendLobby({ type: 'player_emote', emoji })
+}
+
+function sendPlayerReaction(playerId, reaction) {
+  if (playerId !== clientId) return
+  emojiPickerPlayerId.value = null
+  sendLobby({ type: 'player_reaction', reaction })
 }
 
 function placeMine(space) {
@@ -938,6 +974,12 @@ function chooseDirection(direction) {
   if (!directionChoice.value || directionChoice.value.playerId !== clientId) return
   directionChoice.value = null
   sendLobby({ type: 'choose_direction', direction })
+}
+
+function chooseEscapeMove(roll) {
+  if (escapeMoveChoice.value?.playerId !== clientId) return
+  escapeMoveChoice.value = null
+  sendLobby({ type: 'choose_escape_move', roll })
 }
 
 function escapeObjectVisible(space) {
@@ -1231,6 +1273,7 @@ onUnmounted(() => {
               <li>Work together to collect all <b>3 keys</b> scattered on the board. Each player can collect two keys. If killed, all keys will be dropped.</li>
               <li>Once all keys are collected, head to <b>Square 100</b> to unlock and escape the place. It can only be unlocked if all key holders are on Square 100, and everyone can only escape if all living players are there.</li>
               <li>Entities are scattered on the board, ready to pounce and attack. Prepare your weapon with the <b>Arm Weapon</b> button or <kbd>G</kbd>. It protects you for the next two turns, so use it wisely!</li>
+              <li>A blinking red at the edges of the screen indicates an entity is nearby to any of the players.</li>
               <li>Every failed prevention costs <b>1 health point</b>. If all health points are gone, you die. If everyone dies or only one survivor remains, you lose the game.</li>
             </ol>
             <footer>Good luck and survive!</footer>
@@ -1251,8 +1294,22 @@ onUnmounted(() => {
           :style="{ '--danger-speed': `${0.45 + dangerDistance * 0.28}s` }"
           aria-hidden="true"
         ></div>
+        <div v-if="escapeMoveChoice" class="escape-move-choice-overlay" role="dialog" aria-modal="true">
+          <small>{{ escapeMoveSeconds }}s remaining</small>
+          <strong>Pick Moves</strong>
+          <div class="escape-move-options">
+            <button
+              v-for="roll in escapeMoveChoice.options"
+              :key="roll"
+              class="large-dice"
+              :disabled="escapeMoveChoice.playerId !== clientId"
+              @click="chooseEscapeMove(roll)"
+            >{{ roll }}</button>
+          </div>
+          <small v-if="escapeMoveChoice.playerId !== clientId">Waiting for the current player</small>
+        </div>
         <div v-if="directionChoice" class="escape-direction-overlay" role="dialog" aria-modal="true">
-          <div class="escape-roll-result">Rolled <b>{{ directionChoice.roll }}</b></div>
+          <div class="escape-roll-result">Picked <b>{{ directionChoice.roll }}</b></div>
           <small>{{ directionSeconds }}s remaining</small>
           <strong>Choose direction</strong>
           <div class="escape-direction-actions">
@@ -1393,7 +1450,7 @@ onUnmounted(() => {
           </div>
           <div v-if="!game.gameOver" class="turn-timer" :class="{ urgent: turnSeconds <= 5 }">
             <small>Time left</small>
-              <strong>{{ diceRolling && game.mode === 'escape_from' ? rollSeconds : turnSeconds }}s</strong>
+              <strong>{{ game.mode === 'escape_from' && escapeMoveChoice ? escapeMoveSeconds : game.mode === 'escape_from' && directionChoice ? directionSeconds : turnSeconds }}s</strong>
           </div>
           <div class="hud-dice-panel">
             <button
@@ -1404,7 +1461,7 @@ onUnmounted(() => {
             >
               {{
                 isControlledTurn
-                  ? (controlledGamePlayer?.specialRollPending ? 'Parkour Roll' : controlledGamePlayer?.rerollPending ? 'Reroll' : 'Roll dice')
+                  ? (game.mode === 'escape_from' ? 'Pick Moves' : controlledGamePlayer?.specialRollPending ? 'Parkour Roll' : controlledGamePlayer?.rerollPending ? 'Reroll' : 'Roll dice')
                   : `${game.players[game.currentPlayerIndex].name}'s turn`
               }}
             </button>
@@ -1414,7 +1471,7 @@ onUnmounted(() => {
 
         <div class="game-layout">
           <div class="game-board-wrap">
-            <div class="game-board" :class="{ 'escape-board': game.mode === 'escape_from', 'encounter-active': escapeOverlay }">
+            <div class="game-board" :class="{ 'escape-board': game.mode === 'escape_from', 'encounter-active': escapeOverlay && escapeOverlay.type !== 'exit' }">
               <img :src="boardPicture(game.board)" :alt="`${game.board.name} gameplay board`">
               <svg v-if="game.mode === 'escape_from'" class="escape-darkness" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                 <defs>
@@ -1534,10 +1591,12 @@ onUnmounted(() => {
                 :title="`${player.name}: space ${player.space}`"
                 @click.stop="toggleEmojiPicker(player, 'board')"
               >
-                <div v-if="emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board'" class="emoji-picker" @click.stop>
-                  <button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button>
+                <div v-if="game.mode !== 'escape_from' && emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board'" class="emoji-picker" @click.stop>
+                  <div class="emoji-row"><button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button></div>
+                  <div class="reaction-row"><button v-for="reaction in [{ key:'aww', label:'Aww' },{ key:'boo', label:'Boo' },{ key:'laugh', label:'Laugh' }]" :key="reaction.key" type="button" @click="sendPlayerReaction(player.id, reaction.key)">{{ reaction.label }}</button></div>
                 </div>
                 <span v-if="activeEmojis[player.id]" class="player-emote">{{ activeEmojis[player.id].emoji }}</span>
+                <span v-if="activeReactions[player.id]" class="player-reaction">{{ activeReactions[player.id].text }}</span>
                 <span>{{ player.face }}</span>
                 <small>{{ index + 1 }}</small>
               </div>
@@ -1553,8 +1612,9 @@ onUnmounted(() => {
                 :style="{ '--player-color': player.color }"
                 @click="toggleEmojiPicker(player, 'console')"
               >
-                <div v-if="emojiPickerPlayerId === player.id && emojiPickerPlacement === 'console'" class="emoji-picker console-emoji-picker" @click.stop>
-                  <button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button>
+                <div v-if="game.mode !== 'escape_from' && emojiPickerPlayerId === player.id && emojiPickerPlacement === 'console'" class="emoji-picker console-emoji-picker" @click.stop>
+                  <div class="emoji-row"><button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button></div>
+                  <div class="reaction-row"><button v-for="reaction in [{ key:'aww', label:'Aww' },{ key:'boo', label:'Boo' },{ key:'laugh', label:'Laugh' }]" :key="reaction.key" type="button" @click="sendPlayerReaction(player.id, reaction.key)">{{ reaction.label }}</button></div>
                 </div>
                 <span class="console-pawn">{{ player.face }}</span>
                 <div>

@@ -77,6 +77,13 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Added ordered WHAT resolution after Bomber Jack mine pushback, Yellow Sarcasm swaps, Black Devil intersections, and Blue Sass pulls; two-player skill landings resolve the skill user first where applicable.
 - Bomber Jack mine placement now excludes active player squares and retains at most two mines per owner, replacing the oldest on a third placement.
 - Added focused rule coverage for mine-triggered WHATs, occupied-square filtering, two-mine FIFO replacement, and ordered movement-skill WHAT resolution.
+- Added Quiet Mansion's synchronized exit finale: unlock audio, 1.5-second pause, full-board two-second exit GIF, frozen final frame, then authoritative game completion.
+- Added owner-triggered Aww/Boo/Laugh reactions to both character pickers, synchronized their random character sounds to every client, and displayed short speech text above the board token.
+- Updated Quiet Mansion encounter mappings from `ghosts`/`exorcised` to `entities`/`defended`, including generated static final frames under the renamed entity folders.
+- Replaced Escape From dice rolling with a synchronized choice of three unique die-style values from 1-6, followed by the existing separately timed direction choice.
+- Successful Quiet Mansion attacks now relocate the attacking entity after its GIF sequence, and Escape mode no longer exposes character emoji/sound reaction controls.
+- Added the nearby-entity red-edge explanation to the Escape instructions.
+- Changed the Quiet Mansion exit animation to a centered, uncropped `contain` layout while preserving the board darkness and player vision around its unused area.
 
 ## TODO
 
