@@ -135,15 +135,24 @@ function beginWeaponCooldown(player, now = Date.now()) {
   player.weaponProtectThroughTurn = null
 }
 
-export function armEscapeWeapon(state, player = state.players[state.currentPlayerIndex], now = Date.now()) {
+export function armEscapeWeapon(state, player = state.players[state.currentPlayerIndex], now = Date.now(), rng = Math.random) {
   if (state.mode !== 'escape_from' || !player || player.finished || player.eliminated) return { ok: false, message: 'Weapon unavailable.' }
   if (player.weaponProtectFromTurn != null) return { ok: false, message: 'Weapon is already scheduled or active.' }
   if (player.weaponCooldownUntil > now) return { ok: false, message: 'Weapon is still cooling down.' }
+  const fighterSpirit = player.passiveSkill?.name === 'Fighter Spirit' && rng() < 0.3
   player.weaponProtectFromTurn = state.turn + 1
-  player.weaponProtectThroughTurn = state.turn + 2
-  addLog(state, `${player.name} armed their ${state.board.default_weapon?.name || 'weapon'} for the next two global turns.`)
+  player.weaponProtectThroughTurn = state.turn + (fighterSpirit ? 4 : 2)
+  addLog(state, `${player.name} armed their ${state.board.default_weapon?.name || 'weapon'} for the next ${fighterSpirit ? 'four' : 'two'} global turns.`)
   advanceTurn(state, now)
-  return { ok: true, player }
+  return {
+    ok: true,
+    player,
+    passiveTrigger: fighterSpirit ? {
+      name: player.passiveSkill.name,
+      playerId: player.id,
+      playerName: player.name,
+    } : null,
+  }
 }
 
 function relocateEntity(state, entity, rng = Math.random) {
@@ -246,7 +255,7 @@ function collectEscapeKeys(state, player) {
   }
 }
 
-function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now(), { skipLadder = false } = {}) {
+function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now(), { skipLadder = false, previousSpace = player.space } = {}) {
   const ladder = skipLadder ? null : state.board.ladders.find(item => item.from === player.space)
   if (ladder) {
     player.space = ladder.to
@@ -255,8 +264,36 @@ function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()
   collectEscapeKeys(state, player)
   const entity = state.entities.find(item => item.space === player.space)
   let encounter = null
+  let passiveTrigger = null
+  let passiveMovement = null
   if (entity) {
-    const prevented = isEscapeWeaponProtecting(player, state.turn)
+    let passiveDefended = false
+    if (player.passiveSkill?.name === 'Fight or Flight' && rng() < 0.15) {
+      const retreat = rng() < 0.5
+      passiveTrigger = {
+        name: player.passiveSkill.name,
+        playerId: player.id,
+        playerName: player.name,
+        effect: retreat ? 'retreat' : 'defend',
+      }
+      if (retreat) {
+        const entitySpace = player.space
+        player.space = ladder?.from ?? previousSpace
+        passiveMovement = { from: entitySpace, to: player.space }
+        addLog(state, `${player.name}'s Fight or Flight moved them back to space ${player.space}.`)
+      } else {
+        passiveDefended = true
+        addLog(state, `${player.name}'s Fight or Flight defended the entity attack.`)
+      }
+    }
+    if (passiveMovement) {
+      refreshEscapeExit(state)
+      concludeEscapeIfNeeded(state)
+      state.lastEscapeEncounter = null
+      return { ladder, encounter: null, passiveTrigger, passiveMovement }
+    }
+    const weaponPrevented = !passiveDefended && isEscapeWeaponProtecting(player, state.turn)
+    const prevented = weaponPrevented || passiveDefended
     encounter = {
       entityId: entity.id,
       playerId: player.id,
@@ -265,11 +302,12 @@ function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()
       prevented,
       healthBefore: player.health,
       healthAfter: prevented ? player.health : Math.max(0, player.health - 1),
+      passiveDefended,
     }
     if (prevented) {
-      beginWeaponCooldown(player, now)
+      if (weaponPrevented) beginWeaponCooldown(player, now)
       relocateEntity(state, entity, rng)
-      addLog(state, `${player.name}'s Crucifix prevented an entity attack.`)
+      if (weaponPrevented) addLog(state, `${player.name}'s Crucifix prevented an entity attack.`)
     } else {
       player.health = Math.max(0, player.health - 1)
       addLog(state, `${player.name} was attacked and has ${player.health} health remaining.`)
@@ -285,7 +323,7 @@ function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()
   refreshEscapeExit(state)
   concludeEscapeIfNeeded(state)
   state.lastEscapeEncounter = encounter
-  return { ladder, encounter }
+  return { ladder, encounter, passiveTrigger, passiveMovement }
 }
 
 export function takeEscapeTurn(state, roll, direction, rng = Math.random, now = Date.now()) {
@@ -298,8 +336,21 @@ export function takeEscapeTurn(state, roll, direction, rng = Math.random, now = 
   const step = Math.sign(intendedLanding - from)
   let rollLanding = intendedLanding
   let interruptedByEntity = false
+  let movementPassive = null
   for (let space = from + step; step && (step > 0 ? space <= intendedLanding : space >= intendedLanding); space += step) {
     if (!state.entities.some(entity => entity.space === space)) continue
+    const isFinalSpace = space === intendedLanding
+    if (!isFinalSpace && player.passiveSkill?.name === 'Optimistic Mind' && rng() < 0.15) {
+      movementPassive = {
+        name: player.passiveSkill.name,
+        playerId: player.id,
+        playerName: player.name,
+        effect: 'continue',
+        space,
+      }
+      addLog(state, `${player.name}'s Optimistic Mind ignored the entity on space ${space}.`)
+      continue
+    }
     rollLanding = space
     interruptedByEntity = true
     break
@@ -310,9 +361,31 @@ export function takeEscapeTurn(state, roll, direction, rng = Math.random, now = 
   addLog(state, interruptedByEntity
     ? `${player.name} encountered an entity while moving and stopped on space ${rollLanding}.`
     : `${player.name} moved ${direction} ${movedSpaces} space(s) to ${player.space}.`)
-  const resolution = resolveEscapeLanding(state, player, rng, now, { skipLadder: interruptedByEntity })
+  const previousSpace = rollLanding === from ? from : rollLanding - step
+  const resolution = resolveEscapeLanding(state, player, rng, now, { skipLadder: interruptedByEntity, previousSpace })
+  let completionPassive = null
+  if (!state.gameOver && !player.eliminated && player.passiveSkill?.name === 'Concentrate' && rng() < 0.15) {
+    completionPassive = {
+      name: player.passiveSkill.name,
+      playerId: player.id,
+      playerName: player.name,
+      effect: 'reveal_entities',
+    }
+    addLog(state, `${player.name}'s Concentrate revealed every entity.`)
+  }
   if (!state.gameOver) advanceTurn(state, now)
-  return { player, from, intendedLanding, rollLanding, destination: player.space, signedRoll, interruptedByEntity, ...resolution }
+  return {
+    player,
+    from,
+    intendedLanding,
+    rollLanding,
+    destination: player.space,
+    signedRoll,
+    interruptedByEntity,
+    movementPassive,
+    completionPassive,
+    ...resolution,
+  }
 }
 
 export function skipEscapeTurn(state, now = Date.now()) {

@@ -59,6 +59,104 @@ test('weapon protection starts next round, lasts two rounds, then starts cooldow
   assert.equal(owner.weaponCooldownUntil, startedAt + 60_000)
 })
 
+test('Brave Bob can extend weapon protection to four turns', () => {
+  const state = createGameState(board, [
+    { id: 'bob', name: 'Brave Bob', passiveSkill: { name: 'Fighter Spirit' } },
+    players[1],
+  ])
+  const result = armEscapeWeapon(state, state.players[0], 10_000, () => 0.1)
+
+  assert.equal(result.passiveTrigger.name, 'Fighter Spirit')
+  assert.equal(state.players[0].weaponProtectFromTurn, 2)
+  assert.equal(state.players[0].weaponProtectThroughTurn, 5)
+})
+
+test('Crybaby Curl can retreat from an entity without starting an attack', () => {
+  const state = createGameState(board, [
+    { id: 'curl', name: 'Crybaby Curl', passiveSkill: { name: 'Fight or Flight' } },
+    players[1],
+  ])
+  state.players[0].space = 50
+  state.entities = [{ id: 'ghost', space: 51 }]
+  state.keys.forEach((key, index) => { key.space = 80 + index })
+
+  const result = takeEscapeTurn(state, 1, 'forward', () => 0.1)
+
+  assert.equal(result.passiveTrigger.effect, 'retreat')
+  assert.deepEqual(result.passiveMovement, { from: 51, to: 50 })
+  assert.equal(result.encounter, null)
+  assert.equal(state.players[0].health, 5)
+})
+
+test('Crybaby Curl can passively defend without consuming an active weapon', () => {
+  const state = createGameState(board, [
+    { id: 'curl', name: 'Crybaby Curl', passiveSkill: { name: 'Fight or Flight' } },
+    players[1],
+  ])
+  state.players[0].space = 50
+  state.players[0].weaponProtectFromTurn = 1
+  state.players[0].weaponProtectThroughTurn = 2
+  state.entities = [{ id: 'ghost', space: 51 }]
+  state.keys.forEach((key, index) => { key.space = 80 + index })
+  const rolls = [0.1, 0.9, 0.2]
+
+  const result = takeEscapeTurn(state, 1, 'forward', () => rolls.shift() ?? 0.2)
+
+  assert.equal(result.passiveTrigger.effect, 'defend')
+  assert.equal(result.encounter.prevented, true)
+  assert.equal(result.encounter.passiveDefended, true)
+  assert.equal(state.players[0].health, 5)
+  assert.equal(state.players[0].weaponProtectFromTurn, 1)
+})
+
+test('Energetic Sam can ignore an entity crossed before the final square', () => {
+  const state = createGameState(board, [
+    { id: 'sam', name: 'Energetic Sam', passiveSkill: { name: 'Optimistic Mind' } },
+    players[1],
+  ])
+  state.players[0].space = 50
+  state.entities = [{ id: 'ghost', space: 52 }]
+  state.keys.forEach((key, index) => { key.space = 80 + index })
+
+  const result = takeEscapeTurn(state, 4, 'forward', () => 0.1)
+
+  assert.equal(result.movementPassive.name, 'Optimistic Mind')
+  assert.equal(result.movementPassive.space, 52)
+  assert.equal(result.rollLanding, 54)
+  assert.equal(result.encounter, null)
+})
+
+test('Energetic Sam cannot ignore an entity on the final square', () => {
+  const state = createGameState(board, [
+    { id: 'sam', name: 'Energetic Sam', passiveSkill: { name: 'Optimistic Mind' } },
+    players[1],
+  ])
+  state.players[0].space = 50
+  state.entities = [{ id: 'ghost', space: 54 }]
+  state.keys.forEach((key, index) => { key.space = 80 + index })
+
+  const result = takeEscapeTurn(state, 4, 'forward', () => 0.1)
+
+  assert.equal(result.movementPassive, null)
+  assert.equal(result.encounter.entityId, 'ghost')
+  assert.equal(state.players[0].health, 4)
+})
+
+test('Calm Alice can reveal every entity after completing a move', () => {
+  const state = createGameState(board, [
+    { id: 'alice', name: 'Calm Alice', passiveSkill: { name: 'Concentrate' } },
+    players[1],
+  ])
+  state.players[0].space = 50
+  state.entities = []
+  state.keys.forEach((key, index) => { key.space = 80 + index })
+
+  const result = takeEscapeTurn(state, 2, 'forward', () => 0.1)
+
+  assert.equal(result.completionPassive.name, 'Concentrate')
+  assert.equal(result.completionPassive.effect, 'reveal_entities')
+})
+
 test('two held keys drop on the death square and one visual neighbor', () => {
   const state = createGameState(board, players)
   const player = state.players[0]

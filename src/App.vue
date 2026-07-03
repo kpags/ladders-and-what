@@ -11,6 +11,8 @@ import escapeAttackedGif from '../assets/gifs/escape_from/quiet_mansion/transpar
 import escapeDefendedGif from '../assets/gifs/escape_from/quiet_mansion/defended/gif.gif'
 import escapeExitGif from '../assets/gifs/escape_from/quiet_mansion/exit.gif'
 import escapeExitLastFrame from '../assets/gifs/escape_from/quiet_mansion/exit_last_frame.png'
+import escapeFlightGif from '../assets/gifs/escape_from/quiet_mansion/flight.gif'
+import escapeConcentrateGif from '../assets/gifs/escape_from/quiet_mansion/concentrate.gif'
 import oldWomanGif from '../assets/gifs/escape_from/quiet_mansion/entities/old_woman/gif.gif'
 import redEyesGif from '../assets/gifs/escape_from/quiet_mansion/entities/red_eyes/gif.gif'
 import whiteFaceGif from '../assets/gifs/escape_from/quiet_mansion/entities/white_face/gif.gif'
@@ -112,6 +114,9 @@ const escapeMoveChoice = ref(null)
 const rollDeadline = ref(null)
 const escapeOverlay = ref(null)
 const weaponEquippedOverlay = ref(null)
+const escapePassiveOverlay = ref(null)
+const escapePassiveGifOverlay = ref(null)
+const revealedEscapeEntities = ref(null)
 const healthBlinkPlayerId = ref(null)
 const displayedHealth = ref({})
 const escapeEncounterSpace = ref(null)
@@ -236,6 +241,9 @@ function clearGamePresentation() {
   rollDeadline.value = null
   escapeOverlay.value = null
   weaponEquippedOverlay.value = null
+  escapePassiveOverlay.value = null
+  escapePassiveGifOverlay.value = null
+  revealedEscapeEntities.value = null
   healthBlinkPlayerId.value = null
   escapeEncounterSpace.value = null
   movingPlayerId.value = null
@@ -483,9 +491,33 @@ async function handleServerEvent(event) {
       if (directionChoice.value?.eventId === event.id) directionChoice.value = null
     }, remaining)
   } else if (event.type === 'escape_weapon_armed') {
+    const armedPlayer = game.value?.players.find(player => player.id === event.data.playerId)
+    if (armedPlayer) {
+      armedPlayer.weaponProtectFromTurn = event.data.protectFromTurn
+      armedPlayer.weaponProtectThroughTurn = event.data.protectThroughTurn
+    }
     weaponEquippedOverlay.value = { ...event.data, eventId: event.id }
     window.setTimeout(() => {
       if (weaponEquippedOverlay.value?.eventId === event.id) weaponEquippedOverlay.value = null
+    }, remaining)
+  } else if (event.type === 'escape_passive_triggered') {
+    escapePassiveOverlay.value = { ...event.data, eventId: event.id }
+    window.setTimeout(() => {
+      if (escapePassiveOverlay.value?.eventId === event.id) escapePassiveOverlay.value = null
+    }, remaining)
+  } else if (event.type === 'escape_passive_gif') {
+    escapePassiveGifOverlay.value = {
+      eventId: event.id,
+      kind: event.data.kind,
+      src: event.data.kind === 'flight' ? escapeFlightGif : escapeConcentrateGif,
+    }
+    window.setTimeout(() => {
+      if (escapePassiveGifOverlay.value?.eventId === event.id) escapePassiveGifOverlay.value = null
+    }, remaining)
+  } else if (event.type === 'escape_entities_revealed') {
+    revealedEscapeEntities.value = { ids: event.data.entityIds || [], eventId: event.id }
+    window.setTimeout(() => {
+      if (revealedEscapeEntities.value?.eventId === event.id) revealedEscapeEntities.value = null
     }, remaining)
   } else if (event.type === 'escape_entity_revealed') {
     escapeEncounterSpace.value = event.data.space
@@ -986,6 +1018,10 @@ function escapeObjectVisible(space) {
   return game.value?.mode !== 'escape_from' || escapeVisiblePlayers.value.some(player => visualSpace(player) === space)
 }
 
+function escapeEntityVisible(entity) {
+  return Boolean(revealedEscapeEntities.value?.ids.includes(entity.id)) || escapeObjectVisible(entity.space)
+}
+
 function shownHealth(player) {
   return displayedHealth.value[player.id] ?? player.health ?? 0
 }
@@ -1150,21 +1186,30 @@ onUnmounted(() => {
                   <button v-if="lobbyPlayers[slot - 1].id === clientId && lobbyCharacterIndices.length" type="button" class="lobby-char-arrow left" @click.stop.prevent="changeLobbyCharacter(-1)">‹</button>
                   <div
                     class="lobby-pawn"
-                    :class="{ owned: lobbyPlayers[slot - 1].id === clientId }"
-                    :tabindex="lobbyPlayers[slot - 1].id === clientId ? 0 : null"
-                    :aria-describedby="lobbyPlayers[slot - 1].id === clientId ? `lobby-character-tip-${slot}` : null"
+                    :class="{
+                      owned: lobbyPlayers[slot - 1].id === clientId,
+                      'has-tooltip': lobbyPlayers[slot - 1].id === clientId || Boolean(lobbyPlayers[slot - 1].character.passiveSkill),
+                    }"
+                    :tabindex="lobbyPlayers[slot - 1].id === clientId || lobbyPlayers[slot - 1].character.passiveSkill ? 0 : null"
+                    :role="lobbyPlayers[slot - 1].character.passiveSkill ? 'button' : null"
+                    :aria-label="lobbyPlayers[slot - 1].character.passiveSkill ? `Show ${lobbyPlayers[slot - 1].character.name} passive skill` : null"
+                    :aria-describedby="lobbyPlayers[slot - 1].id === clientId || lobbyPlayers[slot - 1].character.passiveSkill ? `lobby-character-tip-${slot}` : null"
                   ><span>{{ lobbyPlayers[slot - 1].character.face }}</span></div>
                   <button v-if="lobbyPlayers[slot - 1].id === clientId && lobbyCharacterIndices.length" type="button" class="lobby-char-arrow right" @click.stop.prevent="changeLobbyCharacter(1)">›</button>
                   <div
-                    v-if="lobbyPlayers[slot - 1].id === clientId"
+                    v-if="lobbyPlayers[slot - 1].id === clientId || lobbyPlayers[slot - 1].character.passiveSkill"
                     :id="`lobby-character-tip-${slot}`"
                     class="lobby-character-tooltip"
                     role="tooltip"
                   >
-                    <strong>{{ lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name }}</strong>
+                    <strong>{{ lobbyPlayers[slot - 1].character.passiveSkill ? lobbyPlayers[slot - 1].character.name : (lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name) }}</strong>
                     <template v-if="lobbyPlayers[slot - 1].character.specialSkill">
                       <small>{{ lobbyPlayers[slot - 1].character.specialSkill.name }}</small>
                       <p>{{ lobbyPlayers[slot - 1].character.specialSkill.description }}</p>
+                    </template>
+                    <template v-else-if="lobbyPlayers[slot - 1].character.passiveSkill">
+                      <small>Passive · {{ lobbyPlayers[slot - 1].character.passiveSkill.name }}</small>
+                      <p>{{ lobbyPlayers[slot - 1].character.passiveSkill.description }}</p>
                     </template>
                   </div>
                   <input
@@ -1353,6 +1398,13 @@ onUnmounted(() => {
           <small>Weapon ready</small>
           <strong>{{ weaponEquippedOverlay.playerName }} equipped their weapon</strong>
         </div>
+        <div v-if="escapePassiveOverlay" class="escape-passive-overlay" role="status" aria-live="assertive">
+          <small>{{ escapePassiveOverlay.playerName }}'s passive skill</small>
+          <strong>{{ escapePassiveOverlay.name }}</strong>
+        </div>
+        <div v-if="escapePassiveGifOverlay" class="escape-passive-gif-overlay" :class="escapePassiveGifOverlay.kind" role="status">
+          <img :src="escapePassiveGifOverlay.src" :alt="`${escapePassiveGifOverlay.kind} passive skill`">
+        </div>
         <div v-if="exactBounceOverlay" class="exact-bounce-overlay" role="status">
           <strong>Oops going {{ exactBounceOverlay.extra }} {{ exactBounceOverlay.extra === 1 ? 'space' : 'spaces' }} backwards</strong>
         </div>
@@ -1508,10 +1560,10 @@ onUnmounted(() => {
                 alt="Key"
               >
               <img
-                v-for="entity in game.mode === 'escape_from' ? game.entities.filter(item => escapeObjectVisible(item.space)) : []"
+                v-for="entity in game.mode === 'escape_from' ? game.entities.filter(escapeEntityVisible) : []"
                 :key="entity.id"
                 class="escape-board-object escape-entity"
-                :class="{ encountered: escapeEncounterSpace === entity.space }"
+                :class="{ encountered: escapeEncounterSpace === entity.space, revealed: revealedEscapeEntities?.ids.includes(entity.id) }"
                 :src="escapeEntityGif"
                 :style="boardSpacePosition(entity.space)"
                 alt="Entity"
@@ -1608,7 +1660,7 @@ onUnmounted(() => {
               <article
                 v-for="(player, index) in game.players"
                 :key="player.id"
-                :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id, 'health-hit': healthBlinkPlayerId === player.id, 'mode-eliminated': player.eliminated && ['escape_from','run_away'].includes(game.mode), owned: player.id === clientId }"
+                :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id, 'health-hit': healthBlinkPlayerId === player.id, 'weapon-armed': game.mode === 'escape_from' && player.weaponProtectFromTurn != null, 'mode-eliminated': player.eliminated && ['escape_from','run_away'].includes(game.mode), owned: player.id === clientId }"
                 :style="{ '--player-color': player.color }"
                 @click="toggleEmojiPicker(player, 'console')"
               >

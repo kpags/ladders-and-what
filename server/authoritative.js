@@ -10,6 +10,7 @@ import {
   syncEscapeBriefingPlayers,
   voteToCloseEscapeBriefing,
 } from './escapeBriefing.js'
+import { chooseAiReactions } from './aiReactions.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const RECONNECT_GRACE_MS = 10_000
@@ -301,6 +302,31 @@ function finishSequenceAndBeginTurn(room) {
   beginTurn(room)
 }
 
+async function showEscapePassive(room, passive, token) {
+  if (!passive) return true
+  emitEvent(room, 'escape_passive_triggered', passive, 1500)
+  return wait(room, 1500, token)
+}
+
+async function showEscapePassiveGif(room, kind, duration, token) {
+  emitEvent(room, 'escape_passive_gif', { kind }, duration)
+  return wait(room, duration, token)
+}
+
+async function finishEscapeWeaponArm(room, result) {
+  const token = ++room.sequenceToken
+  if (!await showEscapePassive(room, result.passiveTrigger, token)) return
+  emitEvent(room, 'escape_weapon_armed', {
+    playerId: result.player.id,
+    playerName: result.player.name,
+    protectFromTurn: result.player.weaponProtectFromTurn,
+    protectThroughTurn: result.player.weaponProtectThroughTurn,
+  }, 3000)
+  if (!await wait(room, 3000, token)) return
+  broadcastGame(room)
+  finishSequenceAndBeginTurn(room)
+}
+
 async function finishEscapeDirection(room, direction) {
   const choice = room.directionChoice
   if (!choice || room.game.gameOver) return
@@ -322,9 +348,31 @@ async function finishEscapeDirection(room, direction) {
     resultLabel: `Move ${choice.roll} spaces ${direction}`,
   }, 500)
   if (!await wait(room, 500, token)) return
-  const duration = Math.abs(result.rollLanding - result.from) * 540
-  emitEvent(room, 'movement', { playerId: choice.playerId, from: result.from, to: result.rollLanding, kind: 'escape' }, duration)
-  if (!await wait(room, duration, token)) return
+  if (result.movementPassive) {
+    const firstDuration = Math.abs(result.movementPassive.space - result.from) * 540
+    emitEvent(room, 'movement', {
+      playerId: choice.playerId,
+      from: result.from,
+      to: result.movementPassive.space,
+      kind: 'escape',
+    }, firstDuration)
+    if (!await wait(room, firstDuration, token)) return
+    if (!await showEscapePassive(room, result.movementPassive, token)) return
+    const remainingDuration = Math.abs(result.rollLanding - result.movementPassive.space) * 540
+    if (remainingDuration) {
+      emitEvent(room, 'movement', {
+        playerId: choice.playerId,
+        from: result.movementPassive.space,
+        to: result.rollLanding,
+        kind: 'escape',
+      }, remainingDuration)
+      if (!await wait(room, remainingDuration, token)) return
+    }
+  } else {
+    const duration = Math.abs(result.rollLanding - result.from) * 540
+    emitEvent(room, 'movement', { playerId: choice.playerId, from: result.from, to: result.rollLanding, kind: 'escape' }, duration)
+    if (!await wait(room, duration, token)) return
+  }
   if (result.ladder) {
     emitEvent(room, 'ladder', {
       playerId: choice.playerId,
@@ -332,6 +380,20 @@ async function finishEscapeDirection(room, direction) {
       to: result.ladder.to,
     }, 1600)
     if (!await wait(room, 1600, token)) return
+  }
+  if (!await showEscapePassive(room, result.passiveTrigger, token)) return
+  if (result.passiveTrigger?.effect === 'retreat') {
+    if (!await showEscapePassiveGif(room, 'flight', 640, token)) return
+  }
+  if (result.passiveMovement) {
+    const duration = Math.min(500, Math.max(180, Math.abs(result.passiveMovement.to - result.passiveMovement.from) * 60))
+    emitEvent(room, 'movement', {
+      playerId: choice.playerId,
+      from: result.passiveMovement.from,
+      to: result.passiveMovement.to,
+      kind: 'escape',
+    }, duration)
+    if (!await wait(room, duration, token)) return
   }
   if (result.encounter) {
     emitEvent(room, 'escape_entity_revealed', result.encounter, 1200)
@@ -345,6 +407,15 @@ async function finishEscapeDirection(room, direction) {
     if (!await wait(room, 3000, token)) return
     broadcastGame(room)
   } else broadcastGame(room)
+  if (result.completionPassive) {
+    if (!await showEscapePassive(room, result.completionPassive, token)) return
+    if (!await showEscapePassiveGif(room, 'concentrate', 800, token)) return
+    emitEvent(room, 'escape_entities_revealed', {
+      playerId: result.completionPassive.playerId,
+      entityIds: room.game.entities.map(entity => entity.id),
+    }, 2000)
+    if (!await wait(room, 2000, token)) return
+  }
   if (room.game.exitUnlockPending) {
     room.game.exitUnlockPending = false
     emitEvent(room, 'escape_exit_unlocked', {}, 1500)
@@ -448,6 +519,11 @@ async function playWhatEffects(room, player, what, effects, resolvedSpace, token
       }, duration)
       if (!await wait(room, duration, token)) return null
     }
+    if (step.exactBounce || step.definition.effect === 'move_back' || step.definition.effect === 'lose_turn') {
+      triggerAiReactions(room, player.id, 'negative')
+    } else if (step.definition.effect === 'move_forward') {
+      triggerAiReactions(room, player.id, 'positive')
+    }
     resolvedSpace = step.destination
     if (room.game.gameOver) break
   }
@@ -479,6 +555,7 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
   if (rollDuration > 0) {
     emitEvent(room, 'movement', { playerId: player.id, from: startSpace, to: rollLanding, kind: 'roll' }, rollDuration)
     if (!await wait(room, rollDuration, token)) return
+    triggerAiReactions(room, player.id, rollLanding < startSpace ? 'negative' : 'positive')
   }
 
   const questionChain = room.game.lastQuestionChain || []
@@ -495,6 +572,7 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
       kind: 'exact-bounce',
     }, duration)
     if (!await wait(room, duration, token)) return
+    triggerAiReactions(room, player.id, 'negative')
     resolvedSpace = exactBounce.destination
   }
 
@@ -504,6 +582,7 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
       if (!await wait(room, 1600, token)) return
       emitEvent(room, 'mine_push', resolution, 900)
       if (!await wait(room, 900, token)) return
+      triggerAiReactions(room, player.id, 'negative')
       const settleDelay = Math.floor(Math.random() * 501)
       if (settleDelay && !await wait(room, settleDelay, token)) return
       resolvedSpace = resolution.destination
@@ -537,6 +616,7 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
   if (ladder) {
     emitEvent(room, 'ladder', { playerId: player.id, from: ladder.from, to: ladder.to }, 1600)
     if (!await wait(room, 1600, token)) return
+    triggerAiReactions(room, player.id, 'ladder')
   } else if (resolvedSpace !== player.space && !room.game.lastMineExplosion) {
     const duration = Math.abs(player.space - resolvedSpace) * 540
     emitEvent(room, 'movement', { playerId: player.id, from: resolvedSpace, to: player.space, kind: 'skill' }, duration)
@@ -549,6 +629,7 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
     if (!await wait(room, 1600, token)) return
     emitEvent(room, 'mine_push', mineExplosion, 900)
     if (!await wait(room, 900, token)) return
+    triggerAiReactions(room, player.id, 'negative')
     const settleDelay = Math.floor(Math.random() * 501)
     if (settleDelay && !await wait(room, settleDelay, token)) return
   }
@@ -558,6 +639,9 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
   if (room.game.mode === 'run_away' && player.finished && !player.eliminated && player.space === 100) {
     emitEvent(room, 'safe', { playerId: player.id, playerName: player.name }, 1200)
     if (!await wait(room, 1200, token)) return
+  }
+  if (player.finished && !player.eliminated && player.space === 100) {
+    triggerAiReactions(room, player.id, 'finish')
   }
 
   if (!await runDestructionSequence(room, token)) return
@@ -608,6 +692,7 @@ async function runParkourWhatSequence(room, result, token) {
       to: result.ladder.to,
     }, 1600)
     if (!await wait(room, 1600, token)) return
+    triggerAiReactions(room, player.id, 'ladder')
   }
 
   const traversal = room.game.lastTraversalElimination
@@ -615,6 +700,9 @@ async function runParkourWhatSequence(room, result, token) {
   if (room.game.mode === 'run_away' && player.finished && !player.eliminated && player.space === 100) {
     emitEvent(room, 'safe', { playerId: player.id, playerName: player.name }, 1200)
     if (!await wait(room, 1200, token)) return
+  }
+  if (player.finished && !player.eliminated && player.space === 100) {
+    triggerAiReactions(room, player.id, 'finish')
   }
   if (!await runDestructionSequence(room, token)) return
 
@@ -823,19 +911,8 @@ function beginTurn(room) {
     const weaponReady = current.weaponProtectFromTurn == null && current.weaponCooldownUntil <= Date.now()
     if (nearEntity && weaponReady && Math.random() < 0.5) {
       room.busy = true
-      armEscapeWeapon(room.game, current)
-      emitEvent(room, 'escape_weapon_armed', {
-        playerId: current.id,
-        playerName: current.name,
-        protectFromTurn: current.weaponProtectFromTurn,
-        protectThroughTurn: current.weaponProtectThroughTurn,
-      }, 3000)
-      const token = ++room.sequenceToken
-      wait(room, 3000, token).then(valid => {
-        if (!valid) return
-        broadcastGame(room)
-        finishSequenceAndBeginTurn(room)
-      })
+      const result = armEscapeWeapon(room.game, current)
+      finishEscapeWeaponArm(room, result)
       return
     }
   }
@@ -1037,6 +1114,33 @@ function sendPlayerReaction(room, playerId, reaction) {
   })
 }
 
+function triggerAiReactions(room, actorId, outcome) {
+  if (!['standard', 'run_away'].includes(room.game?.mode)) return
+  for (const reaction of chooseAiReactions(room.game.players, actorId, outcome)) {
+    const startedAt = Date.now()
+    if (reaction.type === 'emoji') {
+      broadcast(room, {
+        type: 'player_emote',
+        playerId: reaction.playerId,
+        emoji: reaction.value,
+        duration: 2000,
+        startedAt,
+        serverNow: startedAt,
+      })
+    } else {
+      broadcast(room, {
+        type: 'player_reaction',
+        playerId: reaction.playerId,
+        reaction: reaction.value,
+        text: reaction.value === 'boo' ? 'Boo!' : 'Haha!',
+        duration: 2000,
+        startedAt,
+        serverNow: startedAt,
+      })
+    }
+  }
+}
+
 function useSkill(room, requesterId, targetId = null, automatic = false) {
   if (room.pendingSkillTarget?.playerId === requesterId) {
     finishRagebaitSelection(room, requesterId, targetId)
@@ -1103,6 +1207,11 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
           kind: 'reroll',
         }, duration)
         if (!await wait(room, duration, token)) return false
+        triggerAiReactions(
+          room,
+          landingResolution.playerId,
+          resolution.destination < resolvedSpace ? 'negative' : 'positive',
+        )
         resolvedSpace = resolution.destination
       }
 
@@ -1114,6 +1223,7 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
           to: ladder.to,
         }, 1600)
         if (!await wait(room, 1600, token)) return false
+        triggerAiReactions(room, landingResolution.playerId, 'ladder')
       }
       return true
     }
@@ -1153,6 +1263,11 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
       emitEvent(room, 'movement', { ...result.movement, kind: 'skill' }, duration)
       wait(room, duration, token).then(async moved => {
         if (!moved) return
+        triggerAiReactions(
+          room,
+          result.movement.playerId,
+          result.movement.to < result.movement.from ? 'negative' : 'positive',
+        )
         if (current.specialSkill?.name === 'Ragebait') {
           emitEvent(room, 'ragebait_consequence', {
             playerId: current.id,
@@ -1161,6 +1276,7 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
             message: `${current.name} cannot move for the next 2 turns.`,
           }, 3000)
           if (!await wait(room, 3000, token)) return
+          triggerAiReactions(room, current.id, 'negative')
         }
         if (await playLandingResolutions()) showResult()
       })
@@ -1436,18 +1552,7 @@ wss.on('connection', socket => {
         if (!result.ok) reject(socket, result.message)
         else {
           room.busy = true
-          const token = ++room.sequenceToken
-          emitEvent(room, 'escape_weapon_armed', {
-            playerId: result.player.id,
-            playerName: result.player.name,
-            protectFromTurn: result.player.weaponProtectFromTurn,
-            protectThroughTurn: result.player.weaponProtectThroughTurn,
-          }, 3000)
-          wait(room, 3000, token).then(valid => {
-            if (!valid) return
-            broadcastGame(room)
-            finishSequenceAndBeginTurn(room)
-          })
+          finishEscapeWeaponArm(room, result)
         }
       }
     }
