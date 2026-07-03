@@ -84,6 +84,7 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Successful Quiet Mansion attacks now relocate the attacking entity after its GIF sequence, and Escape mode no longer exposes character emoji/sound reaction controls.
 - Added the nearby-entity red-edge explanation to the Escape instructions.
 - Changed the Quiet Mansion exit animation to a centered, uncropped `contain` layout while preserving the board darkness and player vision around its unused area.
+- Regenerated the final frame for the updated 16-frame exit GIF and aligned playback to its 2.4-second duration, freezing at 2.25 seconds; responsive board-relative containment prevents cropping on narrow and short screens.
 
 ## TODO
 

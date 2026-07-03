@@ -524,7 +524,7 @@ async function handleServerEvent(event) {
     escapeOverlay.value = { type: 'exit', src: escapeExitGif, eventId: event.id }
     window.setTimeout(() => {
       if (escapeOverlay.value?.eventId === event.id) escapeOverlay.value.src = escapeExitLastFrame
-    }, Math.min(1750, remaining))
+    }, Math.min(2250, remaining))
   }
 }
 
