@@ -113,7 +113,11 @@
     "color": "#E8E8E8",
     "modes": ["escape_from"],
     "face": "¬‿¬",
-    "description": "Clever. Resourceful. Always finding a way out."
+    "description": "Clever. Resourceful. Always finding a way out.",
+    "passiveSkill": {
+      "name": "Fighter Spirit",
+      "description": "When arming the weapon, it has 30% chance to extend the duration of the weapon by 2 more turns."
+    }
   },
   {
     "id": "crybaby-curl",
@@ -121,7 +125,11 @@
     "color": "#80AAFF",
     "modes": ["escape_from"],
     "face": "ಠ益ಠ",
-    "description": "Sensitive. Emotional. Always on the verge of tears."
+    "description": "Sensitive. Emotional. Always on the verge of tears.",
+    "passiveSkill": {
+      "name": "Fight or Flight",
+      "description": "When encountering an entity, it has 15% chance to skip the attack sequence and move back to previous space OR continue the attack sequence but successfully defended it even without arming the weapon."
+    }
   },
   {
     "id": "calm-alice",
@@ -129,7 +137,11 @@
     "color": "#FFF0AB",
     "modes": ["escape_from"],
     "face": "ಠ‿↼",
-    "description": "Calm. Composed. Always maintaining serenity."
+    "description": "Calm. Composed. Always maintaining serenity.",
+    "passiveSkill": {
+      "name": "Concentrate",
+      "description": "After completing a move, has a 15% chance to reveal the positions of all the entities for 2 seconds."
+    }
   },
   {
     "id": "energetic-sam",
@@ -137,6 +149,10 @@
     "color": "#FFC1AB",
     "modes": ["escape_from"],
     "face": "ಠ‿ಠ",
-    "description": "Energetic. Enthusiastic. Always full of life."
+    "description": "Energetic. Enthusiastic. Always full of life.",
+    "passiveSkill": {
+      "name": "Optimistic Mind",
+      "description": "When encountering an entity while on the move, has a 15% chance to ignore it (does not trigger the attack sequence) and continue moving. This skill does not work when the move ends on the square with the entity."
+    }
   }
 ]
