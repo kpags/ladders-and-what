@@ -1,4 +1,5 @@
 from pathlib import Path
+from collections import deque
 from PIL import Image, ImageSequence
 
 
@@ -11,6 +12,7 @@ def background_mask(frame, mode):
     pixels = frame.load()
     mask = Image.new("1", frame.size)
     output = mask.load()
+    candidates = set()
     for y in range(frame.height):
         for x in range(frame.width):
             r, g, b, _ = pixels[x, y]
@@ -19,7 +21,24 @@ def background_mask(frame, mode):
                 low = min(r, g, b)
                 output[x, y] = high >= 224 and high - low <= 22
             else:
-                output[x, y] = max(r, g, b) <= 42
+                if max(r, g, b) <= 42:
+                    candidates.add((x, y))
+
+    if mode == "dark_connected":
+        queue = deque(
+            (x, y)
+            for x, y in candidates
+            if x in (0, frame.width - 1) or y in (0, frame.height - 1)
+        )
+        connected = set(queue)
+        while queue:
+            x, y = queue.popleft()
+            for neighbor in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)):
+                if neighbor in candidates and neighbor not in connected:
+                    connected.add(neighbor)
+                    queue.append(neighbor)
+        for x, y in connected:
+            output[x, y] = 1
     return mask
 
 
@@ -37,9 +56,9 @@ def transparent_frame(frame, mode):
     return paletted
 
 
-def convert(relative_path, mode):
+def convert(relative_path, mode, destination=None):
     source = SOURCE / relative_path
-    destination = TARGET / relative_path
+    destination = destination or TARGET / relative_path
     destination.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(source) as image:
         durations = []
@@ -61,3 +80,14 @@ def convert(relative_path, mode):
 
 
 convert(Path("keys.gif"), "light")
+convert(Path("entity_board_model.gif"), "dark_connected", SOURCE / "entity_board_model.gif")
+
+
+def extract_last_frame(relative_path, destination):
+    with Image.open(SOURCE / relative_path) as image:
+        image.seek(image.n_frames - 1)
+        image.convert("RGBA").save(SOURCE / destination)
+    print((SOURCE / destination).relative_to(ROOT))
+
+
+extract_last_frame(Path("exit.gif"), Path("exit_last_frame.png"))

@@ -449,8 +449,11 @@ async function finishEscapeDirection(room, direction) {
     if (!await wait(room, 1500, token)) return
   }
   if (room.game.exitSequencePending) {
-    emitEvent(room, 'escape_exit_opening', {}, 2400)
-    if (!await wait(room, 2400, token)) return
+    const deadForest = room.game.board.name === 'Dead Forest'
+    const animationMs = deadForest ? 3200 : 2250
+    const duration = deadForest ? 4200 : 2400
+    emitEvent(room, 'escape_exit_opening', { animationMs }, duration)
+    if (!await wait(room, duration, token)) return
     completeEscape(room.game)
     broadcastGame(room)
   }

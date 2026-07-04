@@ -239,10 +239,10 @@ class AudioManager {
     this.random(`characters/${type}`)
   }
 
-  escapeDanger(distance) {
+  escapeDanger(distance, board = 'quiet_mansion') {
     const rate = ({ 4: 0.75, 3: 0.95, 2: 1.2, 1: 1.5, 0: 1.8 })[distance] || 0.75
     let audio = this.channels.get('escape-danger')
-    if (!audio) audio = this.random('quiet_mansion/drums', { channel: 'escape-danger', loop: true, volume: 0.55 })
+    if (!audio) audio = this.random(`${board || 'quiet_mansion'}/drums`, { channel: 'escape-danger', loop: true, volume: 0.55 })
     if (audio) audio.playbackRate = rate
   }
 

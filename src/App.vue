@@ -24,6 +24,7 @@ import deadForestEntityGif from '../assets/gifs/escape_from/dead_forest/entity_b
 import deadForestAttackedGif from '../assets/gifs/escape_from/dead_forest/attacked/gif.gif'
 import deadForestDefendedGif from '../assets/gifs/escape_from/dead_forest/defended/gif.gif'
 import deadForestExitGif from '../assets/gifs/escape_from/dead_forest/exit.gif'
+import deadForestExitLastFrame from '../assets/gifs/escape_from/dead_forest/exit_last_frame.png'
 import deadForestFlightGif from '../assets/gifs/escape_from/dead_forest/flight.gif'
 import deadForestConcentrateGif from '../assets/gifs/escape_from/dead_forest/concentrate.gif'
 import jeanGif from '../assets/gifs/escape_from/dead_forest/entities/jean/gif.gif'
@@ -191,7 +192,7 @@ const escapeMedia = {
     attacked: deadForestAttackedGif,
     defended: deadForestDefendedGif,
     exit: deadForestExitGif,
-    exitLast: null,
+    exitLast: deadForestExitLastFrame,
     flight: deadForestFlightGif,
     concentrate: deadForestConcentrateGif,
     ghosts: { jean: jeanGif, bald: baldGif, uncle: uncleGif },
@@ -209,8 +210,8 @@ watch([page, () => game.value?.board?.music || game.value?.board?.name], ([nextP
   audioManager.setScene(nextPage === 'game' ? 'game' : 'menu', boardMusic)
 }, { immediate: true })
 
-watch(dangerDistance, distance => {
-  if (distance != null && distance <= 4) audioManager.escapeDanger(distance)
+watch([dangerDistance, () => game.value?.board?.music], ([distance, board]) => {
+  if (distance != null && distance <= 4) audioManager.escapeDanger(distance, board)
   else audioManager.stopEscapeDanger()
 })
 
@@ -596,7 +597,7 @@ async function handleServerEvent(event) {
       if (escapeOverlay.value?.eventId === event.id && currentEscapeMedia.value.exitLast) {
         escapeOverlay.value.src = currentEscapeMedia.value.exitLast
       }
-    }, Math.min(2250, remaining))
+    }, Math.min(event.data.animationMs || 2250, remaining))
   }
 }
 
@@ -1760,7 +1761,8 @@ onUnmounted(() => {
                   blown: blownPlayerId === player.id,
                   finished: player.finished && resolvingPlayerId !== player.id,
                   eliminated: player.eliminated,
-                  'sound-picker-open': game.mode === 'escape_from' && emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board'
+                  'sound-picker-open': game.mode === 'escape_from' && emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board',
+                  'social-active': game.mode === 'escape_from' && Boolean(activeReactions[player.id])
                 }"
                 :style="tokenPosition(visualSpace(player), index)"
                 :title="`${player.name}: space ${player.space}`"
