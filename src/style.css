@@ -348,10 +348,19 @@ input[type=range] { height:30px; }
 .game-board > img { display:block; width:100%; height:100%; object-fit:contain; }
 .escape-board { overflow:hidden; background:#020303; }
 .escape-darkness { position:absolute; z-index:20; inset:0; width:100%; height:100%; pointer-events:none; }
+.dead-forest-fog .fog-clouds { transform-origin:center; animation:dead-forest-fog 7s ease-in-out infinite alternate; }
+@keyframes dead-forest-fog {
+  from { opacity:.82; transform:translate(-1.5px,-1px) scale(1.03); }
+  to { opacity:1; transform:translate(1.5px,1px) scale(1.08); }
+}
 .escape-board-object { position:absolute; z-index:9; width:7%; height:8%; object-fit:contain; transform:translate(-50%,-50%); pointer-events:none; mix-blend-mode:screen; }
 .escape-board-object.escape-key { width:5.5%; height:7%; }
 .escape-board-object.escape-entity { width:4.5%; height:5.8%; }
+.dead-forest-board .escape-board-object { height:auto; aspect-ratio:1; object-fit:contain; mix-blend-mode:normal; }
+.dead-forest-board .escape-board-object.escape-key { width:6.2%; }
+.dead-forest-board .escape-board-object.escape-entity { width:5.2%; }
 .escape-board .board-token { z-index:10; }
+.escape-board .board-token.sound-picker-open { z-index:35; }
 .escape-danger-edge { position:fixed; z-index:80; inset:0; pointer-events:none; box-shadow:inset 0 0 clamp(28px,7vw,100px) clamp(8px,2vw,28px) #d4000088; animation:escape-danger var(--danger-speed) ease-in-out infinite alternate; }
 @keyframes escape-danger { from { opacity:.18; } to { opacity:.72; } }
 .escape-board-object.escape-entity.encountered { z-index:30; animation:entity-encounter 1.2s ease-in-out both; }
@@ -368,6 +377,13 @@ input[type=range] { height:30px; }
 .escape-encounter-overlay { position:absolute; z-index:50; inset:0; isolation:isolate; display:grid; place-items:center; padding:8%; pointer-events:none; background:#000; }
 .escape-encounter-overlay img { width:min(46%,440px); max-height:58%; object-fit:contain; mix-blend-mode:screen; }
 .escape-encounter-overlay.attacked img,.escape-encounter-overlay.defended img { width:min(54%,520px); max-height:64%; }
+.dead-forest-board .escape-encounter-overlay:not(.exit) { overflow:hidden; background:radial-gradient(circle at 45% 40%,#9aa89e 0,#65736a 46%,#39463f 100%); }
+.dead-forest-board .escape-encounter-overlay:not(.exit)::before { content:""; position:absolute; inset:-12%; background:radial-gradient(ellipse at 25% 30%,#d6ddd6b8 0 9%,transparent 31%),radial-gradient(ellipse at 72% 65%,#c7d1c999 0 12%,transparent 36%),radial-gradient(ellipse at 50% 48%,#899a8ddd 0 22%,transparent 58%); filter:blur(14px); animation:dead-forest-encounter-fog 3.2s ease-in-out infinite alternate; }
+.dead-forest-board .escape-encounter-overlay:not(.exit) img { position:relative; z-index:1; mix-blend-mode:normal; filter:drop-shadow(0 8px 18px #101a15aa); }
+@keyframes dead-forest-encounter-fog {
+  from { opacity:.68; transform:translate(-2%,-1%) scale(1.03); }
+  to { opacity:1; transform:translate(2%,1%) scale(1.12); }
+}
 .escape-encounter-overlay.exit { place-items:center; padding:clamp(4px,1.5vmin,14px); overflow:hidden; background:transparent; }
 .escape-encounter-overlay.exit img { display:block; width:100%; height:100%; max-width:100%; max-height:100%; object-fit:contain; object-position:50% 50%; mix-blend-mode:normal; }
 .escape-board.encounter-active .escape-darkness,
@@ -379,6 +395,9 @@ input[type=range] { height:30px; }
 .escape-move-options button.large-dice { border:5px solid #17110a; cursor:pointer; transition:transform .15s,filter .15s; }
 .escape-move-options button.large-dice:hover:not(:disabled) { transform:translateY(-7px) rotate(2deg); filter:brightness(1.12); }
 .escape-move-options button.large-dice:disabled { opacity:.55; cursor:wait; }
+.escape-skip-move { justify-self:center; min-width:min(340px,86vw); padding:.7rem 1rem; border:3px solid #20170e; border-radius:10px; background:linear-gradient(#83c869,#3b8035); box-shadow:0 5px 0 #14260f; color:#f7f0d8; text-transform:uppercase; font:1rem 'Luckiest Guy'; }
+.escape-skip-move:hover:not(:disabled) { filter:brightness(1.1); transform:translateY(-2px); }
+.escape-skip-move:disabled { opacity:.45; cursor:not-allowed; }
 .escape-direction-overlay small { color:#d5c7ae; text-transform:uppercase; font:1.2rem 'Luckiest Guy'; }
 .escape-roll-result { color:#f7ead1; text-transform:uppercase; font:clamp(2rem,5vw,4rem)/1 'Luckiest Guy'; }
 .escape-roll-result b { display:inline-block; color:#ffc928; font-size:1.35em; -webkit-text-stroke:3px #17110a; paint-order:stroke fill; filter:drop-shadow(0 5px 0 #080b10); }
@@ -409,7 +428,7 @@ input[type=range] { height:30px; }
   to { opacity:1; transform:translate(-50%,-50%) rotate(var(--splat-rotation)) scale(1); }
 }
 @media (prefers-reduced-motion:reduce) {
-  .blood-splat,.escape-danger-edge,.player-emote { animation:none; }
+  .blood-splat,.escape-danger-edge,.player-emote,.dead-forest-fog .fog-clouds,.dead-forest-board .escape-encounter-overlay::before { animation:none; }
 }
 .board-token.eliminated { display:none; }
 .board-token { position:absolute; z-index:5; width:clamp(22px,2.7vw,40px); aspect-ratio:1; display:grid; place-items:center; border:3px solid #080b13; border-radius:50% 50% 28% 28%; background:var(--token-color); box-shadow:inset -5px -6px 7px #00142a66,inset 3px 3px 5px #ffffff66,0 4px 5px #000a; transform:translate(-50%,-50%); transition:left .44s ease,top .44s ease; }
@@ -420,6 +439,20 @@ input[type=range] { height:30px; }
 .emoji-picker::after { content:""; position:absolute; top:100%; left:50%; border:5px solid transparent; border-top-color:#293448; transform:translateX(-50%); }
 .emoji-picker button { width:27px; height:27px; display:grid; place-items:center; padding:0; border:0; border-radius:50%; background:#f6e7c7; cursor:pointer; font-size:17px; line-height:1; }
 .emoji-picker .reaction-row button { width:auto; min-width:42px; padding:0 7px; border-radius:8px; font-size:.68rem; font-weight:900; }
+.board-token .emoji-picker.edge-picker { flex-direction:row; top:50%; bottom:auto; transform:translateY(-50%); }
+.board-token .emoji-picker.edge-picker .emoji-row,
+.board-token .emoji-picker.edge-picker .reaction-row { flex-direction:column; }
+.board-token .emoji-picker.edge-picker::after { top:50%; transform:translateY(-50%); }
+.board-token .emoji-picker.edge-picker.edge-left { right:auto; left:calc(100% + 8px); }
+.board-token .emoji-picker.edge-picker.edge-left::after { right:100%; left:auto; border-color:transparent #293448 transparent transparent; }
+.board-token .emoji-picker.edge-picker.edge-right { right:calc(100% + 8px); left:auto; }
+.board-token .emoji-picker.edge-picker.edge-right::after { right:auto; left:100%; border-color:transparent transparent transparent #293448; }
+.board-token .emoji-picker.edge-picker:is(.edge-left,.edge-right).edge-top { top:0; transform:none; }
+.board-token .emoji-picker.edge-picker:is(.edge-left,.edge-right).edge-top::after { top:12px; transform:none; }
+.board-token .emoji-picker.edge-picker:is(.edge-left,.edge-right).edge-bottom { top:auto; bottom:0; transform:none; }
+.board-token .emoji-picker.edge-picker:is(.edge-left,.edge-right).edge-bottom::after { top:auto; bottom:12px; transform:none; }
+.board-token .emoji-picker.edge-picker:not(.edge-left):not(.edge-right).edge-top { top:calc(100% + 8px); left:50%; transform:translateX(-50%); }
+.board-token .emoji-picker.edge-picker:not(.edge-left):not(.edge-right).edge-bottom { top:auto; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%); }
 .board-token span.player-emote { position:absolute; z-index:18; bottom:calc(100% + 5px); left:50%; pointer-events:none; font:clamp(1rem,2vw,1.5rem)/1 sans-serif; filter:drop-shadow(0 2px 2px #000); animation:player-emote-float 2s ease-out both; }
 .board-token span.player-reaction { position:absolute; z-index:19; bottom:calc(100% + 5px); left:50%; padding:.15rem .35rem; border-radius:5px; background:#fff4d7; color:#17110a; pointer-events:none; white-space:nowrap; font:.68rem 'Luckiest Guy'; filter:drop-shadow(0 2px 2px #000); animation:player-emote-float 2s ease-out both; }
 @keyframes player-emote-float {
@@ -542,6 +575,11 @@ input[type=range] { height:30px; }
 }
 
 @media (max-width: 650px) {
+  .board-token .emoji-picker { flex-direction:row; padding:3px; border-radius:10px; }
+  .board-token .emoji-picker .emoji-row,
+  .board-token .emoji-picker .reaction-row { flex-direction:column; }
+  .board-token .emoji-picker button { height:25px; }
+  .board-token .emoji-picker .reaction-row button { min-width:48px; padding:0 5px; font-size:.62rem; }
   .escape-briefing-overlay { align-items:start; padding:.5rem; overflow:auto; }
   .escape-briefing-card { width:100%; max-height:none; min-height:calc(100dvh - 1rem); padding:3rem 1rem 1.2rem; border-radius:15px; }
   .escape-briefing-card h2 { margin:.2rem 2rem 1rem; font-size:1.8rem; }

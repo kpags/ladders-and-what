@@ -19,6 +19,11 @@ const QUIET_MANSION_Y_BOUNDS = [
   [1156, 1244], [1060, 1156], [945, 1060], [822, 945], [698, 822],
   [566, 698], [433, 566], [296, 433], [158, 296], [7, 158],
 ]
+const DEAD_FOREST_X_BOUNDS = [47, 171, 284, 400, 516, 631, 746, 861, 976, 1092, 1208]
+const DEAD_FOREST_Y_BOUNDS = [
+  [1118, 1205], [1009, 1118], [897, 1009], [779, 897], [659, 779],
+  [539, 659], [418, 539], [294, 418], [174, 294], [47, 174],
+]
 
 function quietMansionPercent(value) {
   return `${Number((value / QUIET_MANSION_SIZE * 100).toFixed(3))}%`
@@ -29,6 +34,7 @@ export function getBoardSpacePosition(board, space) {
   const atlantic = board?.name === 'Atlantic'
   const ghostTown = board?.name === 'Ghost Town'
   const quietMansion = board?.name === 'Quiet Mansion'
+  const deadForest = board?.name === 'Dead Forest'
   const runAway = board?.type === 'run_away'
   const row = Math.floor((space - 1) / 10)
   const positionInRow = (space - 1) % 10
@@ -54,6 +60,13 @@ export function getBoardSpacePosition(board, space) {
       top: quietMansionPercent((yBounds[0] + yBounds[1]) / 2),
     }
   }
+  if (deadForest) {
+    const yBounds = DEAD_FOREST_Y_BOUNDS[row]
+    return {
+      left: quietMansionPercent((DEAD_FOREST_X_BOUNDS[column] + DEAD_FOREST_X_BOUNDS[column + 1]) / 2),
+      top: quietMansionPercent((yBounds[0] + yBounds[1]) / 2),
+    }
+  }
   if (runAway) return { left: `${5 + column * 10}%`, top: `${95 - row * 10}%` }
   if (space === 100) return { left: `${volcano ? 11.1 : 8.8}%`, top: `${volcano ? 9 : 8.8}%` }
   return {
@@ -63,12 +76,25 @@ export function getBoardSpacePosition(board, space) {
 }
 
 export function getBoardSpaceBounds(board, space) {
-  if (board?.name !== 'Quiet Mansion') return null
+  if (!['Quiet Mansion', 'Dead Forest'].includes(board?.name)) return null
   const row = Math.floor((space - 1) / 10)
   const positionInRow = (space - 1) % 10
   const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
-  const xBounds = QUIET_MANSION_X_BOUNDS[row]
-  const yBounds = QUIET_MANSION_Y_BOUNDS[row]
+  const xBounds = board.name === 'Dead Forest' ? DEAD_FOREST_X_BOUNDS : QUIET_MANSION_X_BOUNDS[row]
+  const yBounds = board.name === 'Dead Forest' ? DEAD_FOREST_Y_BOUNDS[row] : QUIET_MANSION_Y_BOUNDS[row]
+  if (board.name === 'Dead Forest') {
+    const x = xBounds[column] / QUIET_MANSION_SIZE * 100
+    const y = yBounds[0] / QUIET_MANSION_SIZE * 100
+    const width = (xBounds[column + 1] - xBounds[column]) / QUIET_MANSION_SIZE * 100
+    const height = (yBounds[1] - yBounds[0]) / QUIET_MANSION_SIZE * 100
+    const size = Math.min(width, height)
+    return {
+      x: `${Number((x + (width - size) / 2).toFixed(3))}%`,
+      y: `${Number((y + (height - size) / 2).toFixed(3))}%`,
+      width: `${Number(size.toFixed(3))}%`,
+      height: `${Number(size.toFixed(3))}%`,
+    }
+  }
   return {
     x: quietMansionPercent(xBounds[column]),
     y: quietMansionPercent(yBounds[0]),

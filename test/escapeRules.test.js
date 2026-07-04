@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   armEscapeWeapon,
+  canSkipEscapeMove,
   chooseEscapeAiDirection,
   completeEscape,
   createGameState,
@@ -16,6 +17,7 @@ import {
 const root = resolve(import.meta.dirname, '..')
 const boards = JSON.parse(readFileSync(resolve(root, 'data/boards.json'), 'utf8'))
 const board = boards.find(item => item.name === 'Quiet Mansion')
+const deadForest = boards.find(item => item.name === 'Dead Forest')
 const players = [
   { id: 'p1', name: 'Brave Bob', color: '#fff' },
   { id: 'p2', name: 'Calm Alice', color: '#fea' },
@@ -57,6 +59,16 @@ test('weapon protection starts next round, lasts two rounds, then starts cooldow
   assert.equal(state.turn, 4)
   assert.equal(owner.weaponProtectFromTurn, null)
   assert.equal(owner.weaponCooldownUntil, startedAt + 60_000)
+})
+
+test('Dead Forest uses the shared Escape setup with its four collectible Tires', () => {
+  const state = createGameState(deadForest, players)
+
+  assert.equal(state.mode, 'escape_from')
+  assert.equal(state.keys.length, 4)
+  assert.equal(state.entities.length, 5)
+  assert.match(state.log[0], /tires/i)
+  assert.equal(state.board.default_weapon.name, 'Crowbar')
 })
 
 test('Brave Bob can extend weapon protection to four turns', () => {
@@ -211,6 +223,18 @@ test('Escape movement separates rolled traversal from ladder travel', () => {
   assert.deepEqual(result.ladder, { from: 6, to: 27, direction: 'up' })
 })
 
+test('Escape movement reports newly collected items for synchronized character audio', () => {
+  const state = createGameState(board, players)
+  state.players[0].space = 40
+  state.entities = []
+  state.keys[0].space = 41
+  state.keys.slice(1).forEach((key, index) => { key.space = 80 + index })
+
+  const result = takeEscapeTurn(state, 1, 'forward')
+
+  assert.deepEqual(result.collectedKeys, [state.keys[0].id])
+})
+
 test('Escape movement stops on the first entity crossed before the roll completes', () => {
   const state = createGameState(board, players)
   const player = state.players[0]
@@ -270,4 +294,25 @@ test('Quiet Mansion defers victory until the synchronized exit sequence complete
   assert.equal(state.gameOver, true)
   assert.equal(state.escapeOutcome, 'won')
   assert.equal(state.players.every(player => player.won), true)
+})
+
+test('Escape players can skip Pick Moves only while waiting on revealed Square 100', () => {
+  const state = createGameState(board, players)
+  const player = state.players[0]
+  player.space = 100
+  state.keys.forEach((key, index) => {
+    key.space = null
+    key.holderId = state.players[index % state.players.length].id
+  })
+  state.exitRevealed = true
+
+  assert.equal(canSkipEscapeMove(state, player), true)
+  state.exitRevealed = false
+  assert.equal(canSkipEscapeMove(state, player), false)
+  state.exitRevealed = true
+  state.keys[0].holderId = null
+  assert.equal(canSkipEscapeMove(state, player), false)
+  state.keys[0].holderId = player.id
+  player.space = 99
+  assert.equal(canSkipEscapeMove(state, player), false)
 })

@@ -640,6 +640,33 @@
             "description": "A crucifix that can be used to ward off evil spirits."
         },
         "keys_count": 3,
+        "key_name": "Keys",
+        "max_player_lives": 5,
+        "max_players": 4
+    },
+    {
+        "name": "Dead Forest",
+        "type": "escape_from",
+        "picture": "assets/boards/dead_forest/template.png",
+        "music": "dead_forest",
+        "ladders": [
+            { "from": 5, "to": 26, "direction": "up" },
+            { "from": 23, "to": 54, "direction": "up" },
+            { "from": 33, "to": 50, "direction": "up" },
+            { "from": 57, "to": 61, "direction": "up" },
+            { "from": 76, "to": 85, "direction": "up" },
+            { "from": 26, "to": 5, "direction": "down" },
+            { "from": 54, "to": 23, "direction": "down" },
+            { "from": 50, "to": 33, "direction": "down" },
+            { "from": 61, "to": 57, "direction": "down" },
+            { "from": 85, "to": 76, "direction": "down" }
+        ],
+        "default_weapon": {
+            "name": "Crowbar",
+            "description": "A crowbar that can be used to pry open doors and fend off enemies."
+        },
+        "keys_count": 4,
+        "key_name": "Tires",
         "max_player_lives": 5,
         "max_players": 4
     }

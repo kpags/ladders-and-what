@@ -204,16 +204,35 @@ class AudioManager {
     this.play(fileFrom(soundFiles, `/run_away/gunshot/${weapon}.mp3`))
   }
 
-  escapeVoice(ghost) {
-    this.random(`quiet_mansion/entities/${ghost}`)
+  escapeVoice(ghost, board = 'quiet_mansion') {
+    this.random(`${board || 'quiet_mansion'}/entities/${ghost}`)
   }
 
-  escapeOutcome(type) {
-    this.random(`quiet_mansion/${type}`)
+  escapeOutcome(type, board = 'quiet_mansion') {
+    this.random(`${board || 'quiet_mansion'}/${type}`)
   }
 
-  escapeUnlock() {
-    this.play(fileFrom(soundFiles, '/escape_from/quiet_mansion/unlocking_exit.mp3'))
+  escapeUnlock(board = 'quiet_mansion') {
+    const boardSound = fileFrom(soundFiles, `/escape_from/${board || 'quiet_mansion'}/unlocking_exit.mp3`)
+    this.play(boardSound || fileFrom(soundFiles, '/escape_from/quiet_mansion/unlocking_exit.mp3'))
+  }
+
+  escapeKeyCollected(characterId) {
+    const folder = String(characterId || '').replace(/-/g, '_')
+    this.random(`characters/escape_from/${folder}/keys`, { channel: 'escape-character', volume: 0.5 })
+  }
+
+  escapeSocial(characterId, reaction) {
+    const folder = String(characterId || '').replace(/-/g, '_')
+    const prefix = `/characters/escape_from/${folder}/social/${reaction}_`
+    const files = Object.entries(soundFiles)
+      .filter(([path]) => path.includes(prefix) && path.endsWith('.mp3'))
+      .map(([, url]) => url)
+    this.play(files[Math.floor(Math.random() * files.length)], { channel: 'escape-character', volume: 0.5 })
+  }
+
+  stopEscapeCharacterSounds() {
+    this.stop('escape-character')
   }
 
   characterReaction(type) {

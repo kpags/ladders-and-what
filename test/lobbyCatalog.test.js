@@ -25,8 +25,23 @@ test('incompatible and invalid character indices normalize deterministically', (
 
 test('Quiet Mansion is available for Escape From', () => {
   const quietMansion = boards.find(board => board.name === 'Quiet Mansion')
+  const deadForest = boards.find(board => board.name === 'Dead Forest')
   assert.equal(boardIsAvailable(quietMansion), true)
-  assert.deepEqual(boardIndicesForMode(boards, 'escape_from'), [boards.indexOf(quietMansion)])
+  assert.equal(boardIsAvailable(deadForest), true)
+  assert.deepEqual(boardIndicesForMode(boards, 'escape_from'), [
+    boards.indexOf(quietMansion),
+    boards.indexOf(deadForest),
+  ])
+})
+
+test('Dead Forest exposes its Square 100 bounds for the fog reveal', () => {
+  const deadForest = boards.find(board => board.name === 'Dead Forest')
+  assert.deepEqual(getBoardSpaceBounds(deadForest, 100), {
+    x: '3.748%',
+    y: '3.868%',
+    width: '9.888%',
+    height: '9.888%',
+  })
 })
 
 test('Quiet Mansion exposes the exact Square 100 bounds for its darkness reveal', () => {

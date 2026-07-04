@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, chooseEscapeAiDirection, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, SKILL_COOLDOWN_MS, skipEscapeTurn, takeEscapeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, SKILL_COOLDOWN_MS, skipEscapeTurn, takeEscapeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 import { createDestructionSkipState, updateDestructionSkipVote } from './destructionSkip.js'
@@ -24,6 +24,7 @@ const rooms = new Map()
 const sockets = new Map()
 const ESCAPE_ROLL_MS = 10_000
 const ESCAPE_DIRECTION_MS = 10_000
+const ESCAPE_SOCIAL_SOUND_MS = 3_200
 
 function firstBoardIndex(modeKey) {
   return boardIndicesForMode(boards, modeKey)[0] ?? -1
@@ -151,6 +152,12 @@ function clearTimer(timer) {
   if (timer) clearTimeout(timer)
 }
 
+function clearEscapeSocialQueue(room) {
+  for (const timer of room.escapeSocialTimers || []) clearTimer(timer)
+  room.escapeSocialTimers?.clear()
+  room.escapeSocialAvailableAt = 0
+}
+
 function clearRoomTimers(room) {
   clearTimer(room.turnTimer)
   clearTimer(room.rollTimer)
@@ -162,6 +169,7 @@ function clearRoomTimers(room) {
   room.pendingMine = null
   clearTimer(room.pendingSkillTarget?.timer)
   room.pendingSkillTarget = null
+  clearEscapeSocialQueue(room)
   room.destructionSkip = null
   room.sequenceToken++
 }
@@ -341,6 +349,7 @@ async function finishEscapeDirection(room, direction) {
     finishSequenceAndBeginTurn(room)
     return
   }
+  const exitWasRevealed = room.game.exitRevealed
   const result = takeEscapeTurn(room.game, choice.roll, direction)
   emitEvent(room, 'dice_stopped', {
     playerId: choice.playerId,
@@ -381,6 +390,18 @@ async function finishEscapeDirection(room, direction) {
     }, 1600)
     if (!await wait(room, 1600, token)) return
   }
+  if (result.collectedKeys?.length) {
+    broadcast(room, {
+      type: 'escape_key_collected',
+      playerId: result.player.id,
+      characterId: result.player.characterId,
+      count: result.collectedKeys.length,
+      serverNow: Date.now(),
+    })
+  }
+  if (!exitWasRevealed && room.game.exitRevealed) {
+    triggerEscapeAiSocial(room, 'lets_go')
+  }
   if (!await showEscapePassive(room, result.passiveTrigger, token)) return
   if (result.passiveTrigger?.effect === 'retreat') {
     if (!await showEscapePassiveGif(room, 'flight', 640, token)) return
@@ -396,15 +417,21 @@ async function finishEscapeDirection(room, direction) {
     if (!await wait(room, duration, token)) return
   }
   if (result.encounter) {
+    clearEscapeSocialQueue(room)
     emitEvent(room, 'escape_entity_revealed', result.encounter, 1200)
     if (!await wait(room, 1200, token)) return
     emitEvent(room, 'escape_entity_encounter', {
       ...result.encounter,
-      ghost: ['old_woman', 'red_eyes', 'white_face'][Math.floor(Math.random() * 3)],
+      ghost: (room.game.board.name === 'Dead Forest'
+        ? ['jean', 'bald', 'uncle']
+        : ['old_woman', 'red_eyes', 'white_face'])[Math.floor(Math.random() * 3)],
     }, 4000)
     if (!await wait(room, 4000, token)) return
     emitEvent(room, result.encounter.prevented ? 'escape_defended' : 'escape_attacked', result.encounter, 3000)
     if (!await wait(room, 3000, token)) return
+    if (!result.encounter.prevented && result.encounter.healthAfter > 0) {
+      triggerEscapeAiSocial(room, 'careful', result.encounter.playerId)
+    }
     broadcastGame(room)
   } else broadcastGame(room)
   if (result.completionPassive) {
@@ -694,7 +721,6 @@ async function runParkourWhatSequence(room, result, token) {
     if (!await wait(room, 1600, token)) return
     triggerAiReactions(room, player.id, 'ladder')
   }
-
   const traversal = room.game.lastTraversalElimination
   if (traversal && !await showCaughtPlayer(room, player, traversal.space, token)) return
   if (room.game.mode === 'run_away' && player.finished && !player.eliminated && player.space === 100) {
@@ -819,6 +845,24 @@ function chooseEscapeMove(room, requesterId, roll) {
   room.directionTimer = setTimeout(() => finishEscapeDirection(room, null), ESCAPE_DIRECTION_MS)
 }
 
+function skipEscapeMoveChoice(room, requesterId) {
+  const choice = room.escapeMoveChoice
+  const current = room.game?.players[room.game.currentPlayerIndex]
+  if (!choice || choice.playerId !== requesterId || current?.id !== requesterId) {
+    return reject(sockets.get(requesterId), 'There is no move choice for this player.')
+  }
+  if (!choice.canSkip || !canSkipEscapeMove(room.game, current)) {
+    return reject(sockets.get(requesterId), 'Skip turn is only available while waiting on Square 100.')
+  }
+  clearTimer(room.rollTimer)
+  room.rollTimer = null
+  room.escapeMoveChoice = null
+  room.currentEvent = null
+  skipEscapeTurn(room.game)
+  broadcastGame(room)
+  finishSequenceAndBeginTurn(room)
+}
+
 function expireEscapeMoveChoice(room) {
   if (!room.escapeMoveChoice) return
   room.escapeMoveChoice = null
@@ -847,14 +891,17 @@ function startRoll(room, requesterId, automatic = false, continuingSequence = fa
       if (!options.includes(value)) options.push(value)
     }
     const duration = current.isAI ? 900 : ESCAPE_ROLL_MS
-    room.escapeMoveChoice = { playerId: current.id, options, startedAt: Date.now() }
+    const canSkip = canSkipEscapeMove(room.game, current)
+    room.escapeMoveChoice = { playerId: current.id, options, canSkip, startedAt: Date.now() }
     emitEvent(room, 'escape_move_choice', {
       playerId: current.id,
       options,
+      canSkip,
       expiresAt: Date.now() + duration,
     }, duration)
     room.rollTimer = setTimeout(() => {
-      if (current.isAI) chooseEscapeMove(room, current.id, options[Math.floor(Math.random() * options.length)])
+      if (current.isAI && canSkip) skipEscapeMoveChoice(room, current.id)
+      else if (current.isAI) chooseEscapeMove(room, current.id, options[Math.floor(Math.random() * options.length)])
       else expireEscapeMoveChoice(room)
     }, duration)
     return
@@ -906,6 +953,9 @@ function beginTurn(room) {
   }
 
   const current = room.game.players[room.game.currentPlayerIndex]
+  if (room.game.mode === 'escape_from' && current.isAI && canSkipEscapeMove(room.game, current)) {
+    triggerEscapeAiSocial(room, 'lets_go')
+  }
   if (room.game.mode === 'escape_from' && current.isAI) {
     const nearEntity = room.game.entities.some(entity => Math.abs(entity.space - current.space) <= 4)
     const weaponReady = current.weaponProtectFromTurn == null && current.weaponCooldownUntil <= Date.now()
@@ -1099,8 +1149,10 @@ function sendPlayerEmote(room, playerId, emoji) {
 }
 
 function sendPlayerReaction(room, playerId, reaction) {
-  if (room.game?.mode === 'escape_from') return
-  const labels = { aww: 'Aww', boo: 'Boo!', laugh: 'Haha!' }
+  const escapeMode = room.game?.mode === 'escape_from'
+  const labels = escapeMode
+    ? { lets_go: "Let's Go!", im_coming: "I'm Coming!", careful: 'Careful!' }
+    : { aww: 'Aww', boo: 'Boo!', laugh: 'Haha!' }
   const player = room.game?.players.find(item => item.id === playerId && !item.isAI)
   if (!player || !labels[reaction]) return
   broadcast(room, {
@@ -1108,10 +1160,53 @@ function sendPlayerReaction(room, playerId, reaction) {
     playerId,
     reaction,
     text: labels[reaction],
+    characterId: escapeMode ? player.characterId : undefined,
     duration: 2000,
     startedAt: Date.now(),
     serverNow: Date.now(),
   })
+  if (escapeMode && reaction === 'lets_go') {
+    room.escapeSocialAvailableAt = Math.max(room.escapeSocialAvailableAt || 0, Date.now() + ESCAPE_SOCIAL_SOUND_MS)
+    triggerEscapeAiSocial(room, 'im_coming', playerId)
+  }
+}
+
+function triggerEscapeAiSocial(room, reaction, excludedPlayerId = null) {
+  if (room.game?.mode !== 'escape_from') return
+  const labels = { lets_go: "Let's Go!", im_coming: "I'm Coming!", careful: 'Careful!' }
+  if (!labels[reaction]) return
+  for (const player of room.game.players) {
+    if (!player.isAI || player.id === excludedPlayerId || player.eliminated || player.finished || Math.random() >= 0.5) continue
+    const conversational = reaction === 'lets_go' || reaction === 'im_coming'
+    const playAt = conversational ? Math.max(Date.now(), room.escapeSocialAvailableAt || 0) : Date.now()
+    if (conversational) room.escapeSocialAvailableAt = playAt + ESCAPE_SOCIAL_SOUND_MS
+    const play = () => {
+      if (!rooms.has(room.code) || room.game?.gameOver) return
+      const currentPlayer = room.game.players.find(item => item.id === player.id)
+      if (!currentPlayer || currentPlayer.eliminated || currentPlayer.finished) return
+      const startedAt = Date.now()
+      broadcast(room, {
+        type: 'player_reaction',
+        playerId: player.id,
+        reaction,
+        text: labels[reaction],
+        characterId: player.characterId,
+        duration: 2000,
+        startedAt,
+        serverNow: startedAt,
+      })
+    }
+    const delay = playAt - Date.now()
+    if (delay <= 0) play()
+    else {
+      const timer = setTimeout(() => {
+        room.escapeSocialTimers?.delete(timer)
+        play()
+      }, delay)
+      room.escapeSocialTimers ||= new Set()
+      room.escapeSocialTimers.add(timer)
+    }
+  }
 }
 
 function triggerAiReactions(room, actorId, outcome) {
@@ -1302,6 +1397,7 @@ function startGame(room, requesterId) {
     return {
       ...character,
       id: player.id,
+      characterId: character.id,
       name: player.isAI ? `${character.name} AI` : (player.customName || character.name),
       isAI: player.isAI,
     }
@@ -1409,6 +1505,8 @@ wss.on('connection', socket => {
         revision: 0,
         eventId: 0,
         disconnectTimers: new Map(),
+        escapeSocialTimers: new Set(),
+        escapeSocialAvailableAt: 0,
         sequenceToken: 0,
         turnDeadline: null,
         busy: false,
@@ -1466,6 +1564,21 @@ wss.on('connection', socket => {
       else {
         player.characterIndex = characterIndex
         broadcastRoom(room)
+      }
+    } else if (message.type === 'ai_character') {
+      if (room.hostId !== clientId) reject(socket, 'Only the host can change AI characters.')
+      else if (room.phase !== 'lobby') reject(socket, 'AI characters can only be changed in the lobby.')
+      else {
+        const player = room.players.find(item => item.id === message.playerId && item.isAI)
+        if (!player) reject(socket, 'AI player was not found.')
+        else {
+          const characterIndex = normalizeRoomCharacter(room, message.characterIndex, room.players.indexOf(player))
+          if (characterIndex == null) reject(socket, 'No characters are available for this game mode.')
+          else {
+            player.characterIndex = characterIndex
+            broadcastRoom(room)
+          }
+        }
       }
     } else if (message.type === 'mode') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can select the game mode.')
@@ -1539,6 +1652,7 @@ wss.on('connection', socket => {
     else if (message.type === 'start_roll') startRoll(room, clientId)
     else if (message.type === 'stop_roll') stopRoll(room, clientId)
     else if (message.type === 'choose_escape_move') chooseEscapeMove(room, clientId, message.roll)
+    else if (message.type === 'skip_escape_move') skipEscapeMoveChoice(room, clientId)
     else if (message.type === 'use_skill') useSkill(room, clientId, message.targetId)
     else if (message.type === 'place_mine') finishHiddenMinePlacement(room, clientId, message.space)
     else if (message.type === 'destruction_skip') voteToSkipDestruction(room, clientId, Boolean(message.checked))

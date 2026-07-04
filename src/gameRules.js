@@ -118,7 +118,8 @@ export function initializeEscapeState(state, rng = Math.random) {
   state.escapeOutcome = null
   state.nextEntityRelocationTurn = 3
   state.lastEscapeEncounter = null
-  state.log = ['Find every key, unlock square 100, and escape together.']
+  const keyName = state.board.key_name || state.board.keys_name || 'Keys'
+  state.log = [`Find every ${keyName.toLowerCase()}, unlock square 100, and escape together.`]
   state.lastEvent = state.log[0]
 }
 
@@ -203,7 +204,7 @@ export function completeEscape(state) {
   state.gameOver = true
   state.escapeOutcome = 'won'
   state.exitSequencePending = false
-  addLog(state, 'Every surviving player escaped the Quiet Mansion!')
+  addLog(state, `Every surviving player escaped the ${state.board.name}!`)
   return true
 }
 
@@ -246,13 +247,16 @@ function concludeEscapeIfNeeded(state) {
 }
 
 function collectEscapeKeys(state, player) {
+  const collected = []
   for (const key of state.keys.filter(item => !item.holderId && item.space === player.space)) {
     if (player.heldKeys.length >= 2) break
     key.holderId = player.id
     key.space = null
     player.heldKeys.push(key.id)
+    collected.push(key.id)
     addLog(state, `${player.name} collected a key (${player.heldKeys.length}/2 held).`)
   }
+  return collected
 }
 
 function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now(), { skipLadder = false, previousSpace = player.space } = {}) {
@@ -261,7 +265,7 @@ function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()
     player.space = ladder.to
     addLog(state, `${player.name} used a ladder from ${ladder.from} to ${ladder.to}.`)
   }
-  collectEscapeKeys(state, player)
+  const collectedKeys = collectEscapeKeys(state, player)
   const entity = state.entities.find(item => item.space === player.space)
   let encounter = null
   let passiveTrigger = null
@@ -290,7 +294,7 @@ function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()
       refreshEscapeExit(state)
       concludeEscapeIfNeeded(state)
       state.lastEscapeEncounter = null
-      return { ladder, encounter: null, passiveTrigger, passiveMovement }
+      return { ladder, encounter: null, passiveTrigger, passiveMovement, collectedKeys }
     }
     const weaponPrevented = !passiveDefended && isEscapeWeaponProtecting(player, state.turn)
     const prevented = weaponPrevented || passiveDefended
@@ -323,7 +327,7 @@ function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()
   refreshEscapeExit(state)
   concludeEscapeIfNeeded(state)
   state.lastEscapeEncounter = encounter
-  return { ladder, encounter, passiveTrigger, passiveMovement }
+  return { ladder, encounter, passiveTrigger, passiveMovement, collectedKeys }
 }
 
 export function takeEscapeTurn(state, roll, direction, rng = Math.random, now = Date.now()) {
@@ -393,6 +397,18 @@ export function skipEscapeTurn(state, now = Date.now()) {
   const player = state.players[state.currentPlayerIndex]
   addLog(state, `${player.name} did not complete their roll and stayed on square ${player.space}.`)
   advanceTurn(state, now)
+}
+
+export function canSkipEscapeMove(state, player = state?.players?.[state.currentPlayerIndex]) {
+  return Boolean(
+    state?.mode === 'escape_from'
+    && state.exitRevealed
+    && state.keys?.every(key => key.holderId)
+    && player
+    && !player.eliminated
+    && !player.finished
+    && player.space === 100
+  )
 }
 
 export function escapeAiTarget(state, player) {
