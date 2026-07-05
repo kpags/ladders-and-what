@@ -30,6 +30,9 @@ import deadForestConcentrateGif from '../assets/gifs/escape_from/dead_forest/con
 import jeanGif from '../assets/gifs/escape_from/dead_forest/entities/jean/gif.gif'
 import baldGif from '../assets/gifs/escape_from/dead_forest/entities/bald/gif.gif'
 import uncleGif from '../assets/gifs/escape_from/dead_forest/entities/uncle/gif.gif'
+import jeanLastGif from '../assets/gifs/escape_from/dead_forest/entities/jean/last_frame.png'
+import baldLastGif from '../assets/gifs/escape_from/dead_forest/entities/bald/last_frame.png'
+import uncleLastGif from '../assets/gifs/escape_from/dead_forest/entities/uncle/last_frame.png'
 import { audioManager } from './audioManager'
 import { getBoardSpaceBounds, getBoardSpacePosition } from './boardLayout'
 import { boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
@@ -196,7 +199,8 @@ const escapeMedia = {
     flight: deadForestFlightGif,
     concentrate: deadForestConcentrateGif,
     ghosts: { jean: jeanGif, bald: baldGif, uncle: uncleGif },
-    ghostLast: {},
+    ghostLast: { jean: jeanLastGif, bald: baldLastGif, uncle: uncleLastGif },
+    ghostAnimationMs: { jean: 800, bald: 560, uncle: 560 },
   },
 }
 const currentEscapeMedia = computed(() => escapeMedia[game.value?.board?.name] || escapeMedia['Quiet Mansion'])
@@ -566,7 +570,7 @@ async function handleServerEvent(event) {
     escapeEncounterSpace.value = null
     audioManager.escapeVoice(event.data.ghost, game.value?.board?.music)
     escapeOverlay.value = { type: 'ghost', src: currentEscapeMedia.value.ghosts[event.data.ghost], eventId: event.id }
-    const animationMs = 1000
+    const animationMs = currentEscapeMedia.value.ghostAnimationMs?.[event.data.ghost] || 1000
     window.setTimeout(() => {
       const lastFrame = currentEscapeMedia.value.ghostLast[event.data.ghost]
       if (escapeOverlay.value?.eventId === event.id && lastFrame) escapeOverlay.value.src = lastFrame

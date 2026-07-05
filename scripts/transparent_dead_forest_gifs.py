@@ -20,11 +20,16 @@ def background_mask(frame, mode):
                 high = max(r, g, b)
                 low = min(r, g, b)
                 output[x, y] = high >= 224 and high - low <= 22
+            elif mode == "light_connected":
+                high = max(r, g, b)
+                low = min(r, g, b)
+                if high >= 160 and high - low <= 24:
+                    candidates.add((x, y))
             else:
                 if max(r, g, b) <= 42:
                     candidates.add((x, y))
 
-    if mode == "dark_connected":
+    if mode in ("dark_connected", "light_connected"):
         queue = deque(
             (x, y)
             for x, y in candidates
@@ -79,10 +84,6 @@ def convert(relative_path, mode, destination=None):
     print(destination.relative_to(ROOT))
 
 
-convert(Path("keys.gif"), "light")
-convert(Path("entity_board_model.gif"), "dark_connected", SOURCE / "entity_board_model.gif")
-
-
 def extract_last_frame(relative_path, destination):
     with Image.open(SOURCE / relative_path) as image:
         image.seek(image.n_frames - 1)
@@ -90,4 +91,14 @@ def extract_last_frame(relative_path, destination):
     print((SOURCE / destination).relative_to(ROOT))
 
 
+convert(Path("keys.gif"), "light")
+convert(Path("entity_board_model.gif"), "dark_connected", SOURCE / "entity_board_model.gif")
+convert(
+    Path("entities/jean/gif.gif"),
+    "light_connected",
+    SOURCE / "entities" / "jean" / "gif.gif",
+)
 extract_last_frame(Path("exit.gif"), Path("exit_last_frame.png"))
+extract_last_frame(Path("entities/jean/gif.gif"), Path("entities/jean/last_frame.png"))
+extract_last_frame(Path("entities/bald/gif.gif"), Path("entities/bald/last_frame.png"))
+extract_last_frame(Path("entities/uncle/gif.gif"), Path("entities/uncle/last_frame.png"))

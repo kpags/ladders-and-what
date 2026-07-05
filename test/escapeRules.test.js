@@ -71,6 +71,27 @@ test('Dead Forest uses the shared Escape setup with its four collectible Tires',
   assert.equal(state.board.default_weapon.name, 'Crowbar')
 })
 
+test('Escape entities relocate only after two complete global turns', () => {
+  const state = createGameState(deadForest, players)
+  const initialRelocationTurn = state.nextEntityRelocationTurn
+
+  skipEscapeTurn(state)
+  assert.equal(state.turn, 1)
+  assert.equal(state.nextEntityRelocationTurn, initialRelocationTurn)
+
+  skipEscapeTurn(state)
+  assert.equal(state.turn, 2)
+  assert.equal(state.nextEntityRelocationTurn, initialRelocationTurn)
+
+  skipEscapeTurn(state)
+  assert.equal(state.turn, 2)
+  assert.equal(state.nextEntityRelocationTurn, initialRelocationTurn)
+
+  skipEscapeTurn(state)
+  assert.equal(state.turn, 3)
+  assert.equal(state.nextEntityRelocationTurn, 5)
+})
+
 test('Brave Bob can extend weapon protection to four turns', () => {
   const state = createGameState(board, [
     { id: 'bob', name: 'Brave Bob', passiveSkill: { name: 'Fighter Spirit' } },

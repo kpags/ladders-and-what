@@ -42,3 +42,11 @@ test('Dead Forest entity model removes only its connected background', () => {
   assert.ok(frames.every(frame => frame.transparent))
   assert.ok(frames.every(frame => frame.durationMs === 120))
 })
+
+test('Dead Forest Jean animation has a transparent background and keeps its timing', () => {
+  const path = resolve(root, 'assets/gifs/escape_from/dead_forest/entities/jean/gif.gif')
+  const frames = graphicControlExtensions(readFileSync(path))
+  assert.equal(frames.length, 8)
+  assert.ok(frames.every(frame => frame.transparent))
+  assert.ok(frames.every(frame => frame.durationMs === 100))
+})
