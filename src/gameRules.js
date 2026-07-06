@@ -197,8 +197,8 @@ function escapePickupCandidates(state) {
 
 export function spawnEscapePickups(state, rng = Math.random) {
   if (state.mode !== 'escape_from' || state.gameOver) return null
-  const medkitEligible = !state.medkits.length && state.turn >= state.nextMedkitSpawnTurn
-  const lightEligible = !state.lightSources.length && state.turn >= state.nextLightSourceSpawnTurn
+  const medkitEligible = state.turn >= state.nextMedkitSpawnTurn
+  const lightEligible = state.turn >= state.nextLightSourceSpawnTurn
   const medkitSucceeded = medkitEligible && rng() < 0.5
   const lightSucceeded = lightEligible && rng() < 0.5
   if (!medkitSucceeded && !lightSucceeded) return null
@@ -212,11 +212,12 @@ export function spawnEscapePickups(state, rng = Math.random) {
   const spaces = candidates.slice(0, needed)
 
   if (type === 'medkit') {
-    state.medkits = [{ id: `medkit-${state.turn}`, space: spaces[0] }]
+    const existing = state.medkits[0]
+    state.medkits = [{ id: existing?.id || `medkit-${state.turn}`, space: spaces[0] }]
     state.nextMedkitSpawnTurn = state.turn + 4
   } else {
     state.lightSources = spaces.map((space, index) => ({
-      id: `light-${state.turn}-${index + 1}`,
+      id: state.lightSources[index]?.id || `light-${state.turn}-${index + 1}`,
       space,
     }))
     state.nextLightSourceSpawnTurn = state.turn + 3

@@ -1893,7 +1893,7 @@ onUnmounted(() => {
               <article
                 v-for="(player, index) in game.players"
                 :key="player.id"
-                :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id, 'health-hit': healthBlinkPlayerId === player.id, 'health-heal': healthHealPlayerId === player.id, 'weapon-armed': game.mode === 'escape_from' && player.weaponProtectFromTurn != null, 'mode-eliminated': player.eliminated && ['escape_from','run_away'].includes(game.mode), owned: player.id === clientId }"
+                :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id, 'health-hit': healthBlinkPlayerId === player.id, 'health-heal': healthHealPlayerId === player.id, 'weapon-armed': game.mode === 'escape_from' && player.weaponProtectFromTurn != null, 'mode-eliminated': player.eliminated && ['escape_from','run_away'].includes(game.mode), owned: player.id === clientId, 'picker-open': emojiPickerPlayerId === player.id && emojiPickerPlacement === 'console' }"
                 :style="{ '--player-color': player.color }"
                 @click="toggleEmojiPicker(player, 'console')"
               >

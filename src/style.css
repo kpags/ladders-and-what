@@ -488,7 +488,8 @@ input[type=range] { height:30px; }
 .player-order article { min-height:54px; display:grid; grid-template-columns:38px 1fr; align-items:center; gap:.45rem; padding:.35rem; border:3px solid #252d3b; border-radius:10px; background:#0c1320e8; opacity:.75; }
 .player-order article.owned { cursor:pointer; }
 .player-order article.owned { position:relative; overflow:visible; }
-.console-emoji-picker { bottom:calc(100% + 5px); }
+.player-order article.picker-open { z-index:30; }
+.console-emoji-picker { top:calc(100% + 5px); bottom:auto; }
 .player-order article.current { border-color:var(--player-color); opacity:1; box-shadow:0 0 14px color-mix(in srgb,var(--player-color) 55%,transparent); }
 .player-order article.weapon-armed { opacity:1; background:linear-gradient(rgba(35,150,75,.28),rgba(20,105,58,.28)),#0c1320e8; box-shadow:inset 0 0 18px rgba(66,224,115,.22); }
 .player-order article.finished { border-color:#e9b624; opacity:1; background:#28200eeb; }

@@ -369,6 +369,40 @@ test('Escape pickup spawning is mutually exclusive and respects blocked squares 
   assert.notEqual(spawnEscapePickups(state, () => 0.1)?.type, 'medkit')
 })
 
+test('Escape pickup spawn rounds relocate uncollected items without stacking', () => {
+  const state = createGameState(board, players)
+  state.turn = 5
+  state.nextMedkitSpawnTurn = 5
+  state.nextLightSourceSpawnTurn = 9
+  state.medkits = [{ id: 'medkit-existing', space: 45 }]
+
+  const medkitSpawn = spawnEscapePickups(state, () => 0.1)
+
+  assert.equal(medkitSpawn.type, 'medkit')
+  assert.equal(state.medkits.length, 1)
+  assert.equal(state.medkits[0].id, 'medkit-existing')
+  assert.notEqual(state.medkits[0].space, 45)
+
+  const oldLightSpaces = [35, 36]
+  state.turn = 9
+  state.nextMedkitSpawnTurn = 20
+  state.nextLightSourceSpawnTurn = 9
+  state.lightSources = oldLightSpaces.map((space, index) => ({
+    id: `light-existing-${index + 1}`,
+    space,
+  }))
+
+  const lightSpawn = spawnEscapePickups(state, () => 0.1)
+  const newLightSpaces = state.lightSources.map(item => item.space)
+
+  assert.equal(lightSpawn.type, 'light_sources')
+  assert.equal(state.lightSources.length, 2)
+  assert.deepEqual(state.lightSources.map(item => item.id), ['light-existing-1', 'light-existing-2'])
+  assert.equal(new Set(newLightSpaces).size, 2)
+  assert.ok(newLightSpaces.every(space => !oldLightSpaces.includes(space)))
+  assert.ok(!newLightSpaces.includes(state.medkits[0].space))
+})
+
 test('Escape pickups heal at the cap and grant a two-global-turn vision boost', () => {
   const healing = createGameState(board, players)
   const healingPlayer = healing.players[0]
