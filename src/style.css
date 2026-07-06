@@ -356,13 +356,21 @@ input[type=range] { height:30px; }
 .escape-board-object { position:absolute; z-index:9; width:7%; height:8%; object-fit:contain; transform:translate(-50%,-50%); pointer-events:none; mix-blend-mode:screen; }
 .escape-board-object.escape-key { width:5.5%; height:7%; }
 .escape-board-object.escape-entity { width:4.5%; height:5.8%; }
+.escape-board-object.escape-pickup { width:6.2%; height:7%; object-fit:contain; mix-blend-mode:normal; }
+.escape-board-object.escape-light-source { width:5.5%; }
 .dead-forest-board .escape-board-object { height:auto; aspect-ratio:1; object-fit:contain; mix-blend-mode:normal; }
 .dead-forest-board .escape-board-object.escape-key { width:6.2%; }
 .dead-forest-board .escape-board-object.escape-entity { width:5.2%; }
+.dead-forest-board .escape-board-object.escape-pickup { width:6.2%; }
 .escape-board .board-token { z-index:10; }
 .escape-board .board-token.sound-picker-open,
 .escape-board .board-token.social-active { z-index:35; }
 .escape-danger-edge { position:fixed; z-index:80; inset:0; pointer-events:none; box-shadow:inset 0 0 clamp(28px,7vw,100px) clamp(8px,2vw,28px) #d4000088; animation:escape-danger var(--danger-speed) ease-in-out infinite alternate; }
+.escape-pickup-notice { position:absolute; z-index:92; bottom:2.5%; left:50%; width:max-content; max-width:calc(100% - 20px); padding:.55rem .9rem; border:2px solid #d6b34c; border-radius:10px; background:#101720eb; box-shadow:0 5px 18px #000b; color:#fff2c4; text-align:center; transform:translateX(-50%); pointer-events:none; font:clamp(.68rem,1.7vw,1rem) 'Luckiest Guy'; animation:pickup-notice 2.8s ease both; }
+.escape-pickup-notice.medkit { border-color:#ef5960; color:#ffd6d8; }
+@keyframes pickup-notice { 0%,100% { opacity:0; transform:translate(-50%,8px); } 12%,85% { opacity:1; transform:translate(-50%,0); } }
+.boosted-vision-cell { animation:boosted-vision-reveal .45s ease-out both; }
+@keyframes boosted-vision-reveal { from { opacity:0; } to { opacity:1; } }
 @keyframes escape-danger { from { opacity:.18; } to { opacity:.72; } }
 .escape-board-object.escape-entity.encountered { z-index:30; animation:entity-encounter 1.2s ease-in-out both; }
 .escape-board-object.escape-entity.revealed { z-index:30; opacity:1; animation:entity-revealed .3s ease-in-out infinite alternate; }
@@ -429,7 +437,7 @@ input[type=range] { height:30px; }
   to { opacity:1; transform:translate(-50%,-50%) rotate(var(--splat-rotation)) scale(1); }
 }
 @media (prefers-reduced-motion:reduce) {
-  .blood-splat,.escape-danger-edge,.player-emote,.dead-forest-fog .fog-clouds,.dead-forest-board .escape-encounter-overlay::before { animation:none; }
+  .blood-splat,.escape-danger-edge,.player-emote,.boosted-vision-cell,.dead-forest-fog .fog-clouds,.dead-forest-board .escape-encounter-overlay::before { animation:none; }
 }
 .board-token.eliminated { display:none; }
 .board-token { position:absolute; z-index:5; width:clamp(22px,2.7vw,40px); aspect-ratio:1; display:grid; place-items:center; border:3px solid #080b13; border-radius:50% 50% 28% 28%; background:var(--token-color); box-shadow:inset -5px -6px 7px #00142a66,inset 3px 3px 5px #ffffff66,0 4px 5px #000a; transform:translate(-50%,-50%); transition:left .44s ease,top .44s ease; }
@@ -486,6 +494,10 @@ input[type=range] { height:30px; }
 .player-order article.finished { border-color:#e9b624; opacity:1; background:#28200eeb; }
 .player-order article.loser { border-color:#d43a3a; opacity:1; background:#351113eb; }
 .player-order article.health-hit { position:relative; z-index:2; animation:health-hit .2s ease-in-out 6 alternate; }
+.player-order article.health-heal { position:relative; z-index:2; animation:health-heal .2s ease-in-out 6 alternate; }
+@keyframes health-heal {
+  to { border-color:#4dff77; background:#123d20; box-shadow:0 0 20px #35ff6ecc,inset 0 0 16px #68ff8b66; }
+}
 .player-order article.mode-eliminated { position:relative; overflow:hidden; }
 .player-order article.mode-eliminated::after { content:"×"; position:absolute; z-index:5; inset:0; display:grid; place-items:center; background:#29000070; color:#f32626; text-shadow:0 3px 0 #4b0000,0 0 12px #ff2222; font:clamp(3.2rem,6vw,5rem)/1 'Luckiest Guy'; }
 @keyframes health-hit {
@@ -581,6 +593,8 @@ input[type=range] { height:30px; }
   .board-token .emoji-picker .reaction-row { flex-direction:column; }
   .board-token .emoji-picker button { height:25px; }
   .board-token .emoji-picker .reaction-row button { min-width:48px; padding:0 5px; font-size:.62rem; }
+  .console-emoji-picker { top:calc(100% + 5px); bottom:auto; }
+  .escape-pickup-notice { bottom:1.5%; max-width:calc(100% - 10px); padding:.4rem .55rem; font-size:.64rem; }
   .escape-briefing-overlay { align-items:start; padding:.5rem; overflow:auto; }
   .escape-briefing-card { width:100%; max-height:none; min-height:calc(100dvh - 1rem); padding:3rem 1rem 1.2rem; border-radius:15px; }
   .escape-briefing-card h2 { margin:.2rem 2rem 1rem; font-size:1.8rem; }

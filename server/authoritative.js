@@ -307,7 +307,27 @@ function finishSequenceAndBeginTurn(room) {
   room.rollTimer = null
   room.directionTimer = null
   unlockRoomForNextTurn(room)
+  broadcastEscapePickupSpawn(room)
   beginTurn(room)
+}
+
+function broadcastEscapePickupSpawn(room) {
+  const spawn = room.game?.lastEscapePickupSpawn
+  if (!spawn) return
+  const key = `${spawn.turn}:${spawn.type}`
+  if (room.lastEscapePickupSpawnKey === key) return
+  room.lastEscapePickupSpawnKey = key
+  const startedAt = Date.now()
+  broadcast(room, {
+    type: 'escape_pickup_spawned',
+    pickupType: spawn.type,
+    text: spawn.type === 'medkit'
+      ? 'A Medkit has spawned and can heal 1 health point.'
+      : '2 Light Sources spawned and expand vision.',
+    duration: 2800,
+    startedAt,
+    serverNow: startedAt,
+  })
 }
 
 async function showEscapePassive(room, passive, token) {
@@ -397,6 +417,18 @@ async function finishEscapeDirection(room, direction) {
       characterId: result.player.characterId,
       count: result.collectedKeys.length,
       serverNow: Date.now(),
+    })
+  }
+  for (const pickupType of result.collectedPickups || []) {
+    const startedAt = Date.now()
+    broadcast(room, {
+      type: 'escape_pickup_collected',
+      pickupType,
+      playerId: result.player.id,
+      healthAfter: result.player.health,
+      duration: pickupType === 'light_source' ? 1400 : 1200,
+      startedAt,
+      serverNow: startedAt,
     })
   }
   if (!exitWasRevealed && room.game.exitRevealed) {

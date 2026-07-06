@@ -222,6 +222,11 @@ class AudioManager {
     this.random(`characters/escape_from/${folder}/keys`, { channel: 'escape-character', volume: 0.5 })
   }
 
+  escapePickup(type) {
+    const folder = type === 'light_source' ? 'light_source' : 'medkit'
+    this.random(`escape_from/${folder}`, { channel: `escape-${folder}`, volume: 0.75 })
+  }
+
   escapeSocial(characterId, reaction) {
     const folder = String(characterId || '').replace(/-/g, '_')
     const prefix = `/characters/escape_from/${folder}/social/${reaction}_`

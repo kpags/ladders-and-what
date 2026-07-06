@@ -10,6 +10,7 @@ import {
   createGameState,
   isEscapeWeaponProtecting,
   skipEscapeTurn,
+  spawnEscapePickups,
   takeEscapeTurn,
   visualAdjacentSpaces,
 } from '../src/gameRules.js'
@@ -336,4 +337,67 @@ test('Escape players can skip Pick Moves only while waiting on revealed Square 1
   state.keys[0].holderId = player.id
   player.space = 99
   assert.equal(canSkipEscapeMove(state, player), false)
+})
+
+test('Escape pickup spawning is mutually exclusive and respects blocked squares and cooldowns', () => {
+  const state = createGameState(board, players)
+  state.turn = 2
+  const blocked = new Set([
+    ...state.players.map(player => player.space),
+    ...state.keys.map(key => key.space),
+    ...state.entities.map(entity => entity.space),
+    ...state.board.ladders.flatMap(ladder => [ladder.from, ladder.to]),
+    100,
+  ])
+  const values = [0.1, 0.1, 0.9]
+  const spawned = spawnEscapePickups(state, () => values.shift() ?? 0.5)
+
+  assert.equal(spawned.type, 'light_sources')
+  assert.equal(state.lightSources.length, 2)
+  assert.equal(new Set(state.lightSources.map(item => item.space)).size, 2)
+  assert.ok(state.lightSources.every(item => !blocked.has(item.space)))
+  assert.equal(state.medkits.length, 0)
+  assert.equal(state.nextLightSourceSpawnTurn, 5)
+  assert.equal(state.nextMedkitSpawnTurn, 2)
+
+  state.lightSources = []
+  state.turn = 4
+  assert.equal(spawnEscapePickups(state, () => 0.1)?.type, 'medkit')
+  assert.equal(state.nextMedkitSpawnTurn, 8)
+  state.medkits = []
+  state.turn = 7
+  assert.notEqual(spawnEscapePickups(state, () => 0.1)?.type, 'medkit')
+})
+
+test('Escape pickups heal at the cap and grant a two-global-turn vision boost', () => {
+  const healing = createGameState(board, players)
+  const healingPlayer = healing.players[0]
+  healingPlayer.space = 50
+  healingPlayer.health = 4
+  healing.medkits = [{ id: 'medkit-test', space: 50 }]
+  const healed = takeEscapeTurn(healing, 0, 'forward')
+
+  assert.deepEqual(healed.collectedPickups, ['medkit'])
+  assert.equal(healingPlayer.health, 5)
+  assert.equal(healing.medkits.length, 0)
+
+  const capped = createGameState(board, players)
+  capped.players[0].space = 50
+  capped.players[0].health = 5
+  capped.medkits = [{ id: 'medkit-cap', space: 50 }]
+  takeEscapeTurn(capped, 0, 'forward')
+  assert.equal(capped.players[0].health, 5)
+
+  const lighting = createGameState(board, players)
+  const lightPlayer = lighting.players[0]
+  lightPlayer.space = 50
+  lighting.lightSources = [{ id: 'light-test', space: 50 }]
+  const lit = takeEscapeTurn(lighting, 0, 'forward')
+
+  assert.deepEqual(lit.collectedPickups, ['light_source'])
+  assert.equal(lightPlayer.visionBoostThroughTurn, 3)
+  assert.equal(lighting.lightSources.length, 0)
+  for (let action = 0; action < 5; action++) skipEscapeTurn(lighting)
+  assert.equal(lighting.turn, 4)
+  assert.equal(lightPlayer.visionBoostThroughTurn, null)
 })

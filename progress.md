@@ -87,6 +87,11 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Regenerated the final frame for the updated 16-frame exit GIF and aligned playback to its 2.4-second duration, freezing at 2.25 seconds; responsive board-relative containment prevents cropping on narrow and short screens.
 - Ragebait now resolves either a WHAT or a ladder climb when its target lands on the corresponding square.
 - Both board tokens and in-game character boxes open the emoji picker; Escape From additionally shows its character sound/reaction row, while other modes show emojis only.
+- Added mutually exclusive Escape pickup spawning at global-turn boundaries: one 1-HP Medkit with a three-turn wait or two Light Sources with a two-turn wait, using blocked-square-safe placement and non-pausing spawn notices.
+- Added immediate pickup collection, max-health enforcement, two-future-turn eight-neighbor shared vision, object visibility expansion, and board-specific pickup rendering.
+- Converted all Medkit and Light Source GIF frames from baked checkerboard backgrounds to real transparency while preserving their 12-frame animation.
+- Continuation validation passed all 79 automated tests, server/client syntax checks, `git diff --check`, and a production build routed to the system temp folder.
+- The bundled browser runner rendered the home screen but its sandbox denied the local WebSocket; the in-app browser was not attached, so a live synchronized pickup screenshot remains the only outstanding manual QA item.
 
 ## TODO
 

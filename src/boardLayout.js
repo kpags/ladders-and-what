@@ -102,3 +102,21 @@ export function getBoardSpaceBounds(board, space) {
     height: quietMansionPercent(yBounds[1] - yBounds[0]),
   }
 }
+
+export function getVisualSurroundingSpaces(space) {
+  const row = Math.floor((space - 1) / 10)
+  const position = (space - 1) % 10
+  const column = row % 2 === 0 ? position : 9 - position
+  const result = []
+  for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
+    for (let columnOffset = -1; columnOffset <= 1; columnOffset++) {
+      if (!rowOffset && !columnOffset) continue
+      const nextRow = row + rowOffset
+      const nextColumn = column + columnOffset
+      if (nextRow < 0 || nextRow > 9 || nextColumn < 0 || nextColumn > 9) continue
+      const nextPosition = nextRow % 2 === 0 ? nextColumn : 9 - nextColumn
+      result.push(nextRow * 10 + nextPosition + 1)
+    }
+  }
+  return result
+}

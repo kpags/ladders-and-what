@@ -5,6 +5,7 @@ import boards from '../data/boards.json'
 import gameModes from '../data/game_modes.json'
 import explosionGif from '../assets/gifs/run_away/explosion.gif'
 import zombieGif from '../assets/gifs/run_away/zombie.gif'
+import escapeMedkitGif from '../assets/gifs/escape_from/medkit.gif'
 import escapeKeyGif from '../assets/gifs/escape_from/quiet_mansion/transparent/keys.gif'
 import escapeEntityGif from '../assets/gifs/escape_from/quiet_mansion/transparent/entity_board_model.gif'
 import escapeAttackedGif from '../assets/gifs/escape_from/quiet_mansion/transparent/attacked/gif.gif'
@@ -13,6 +14,7 @@ import escapeExitGif from '../assets/gifs/escape_from/quiet_mansion/exit.gif'
 import escapeExitLastFrame from '../assets/gifs/escape_from/quiet_mansion/exit_last_frame.png'
 import escapeFlightGif from '../assets/gifs/escape_from/quiet_mansion/flight.gif'
 import escapeConcentrateGif from '../assets/gifs/escape_from/quiet_mansion/concentrate.gif'
+import escapeLightSourceGif from '../assets/gifs/escape_from/quiet_mansion/light_source.gif'
 import oldWomanGif from '../assets/gifs/escape_from/quiet_mansion/entities/old_woman/gif.gif'
 import redEyesGif from '../assets/gifs/escape_from/quiet_mansion/entities/red_eyes/gif.gif'
 import whiteFaceGif from '../assets/gifs/escape_from/quiet_mansion/entities/white_face/gif.gif'
@@ -27,6 +29,7 @@ import deadForestExitGif from '../assets/gifs/escape_from/dead_forest/exit.gif'
 import deadForestExitLastFrame from '../assets/gifs/escape_from/dead_forest/exit_last_frame.png'
 import deadForestFlightGif from '../assets/gifs/escape_from/dead_forest/flight.gif'
 import deadForestConcentrateGif from '../assets/gifs/escape_from/dead_forest/concentrate.gif'
+import deadForestLightSourceGif from '../assets/gifs/escape_from/dead_forest/light_source.gif'
 import jeanGif from '../assets/gifs/escape_from/dead_forest/entities/jean/gif.gif'
 import baldGif from '../assets/gifs/escape_from/dead_forest/entities/bald/gif.gif'
 import uncleGif from '../assets/gifs/escape_from/dead_forest/entities/uncle/gif.gif'
@@ -34,7 +37,7 @@ import jeanLastGif from '../assets/gifs/escape_from/dead_forest/entities/jean/la
 import baldLastGif from '../assets/gifs/escape_from/dead_forest/entities/bald/last_frame.png'
 import uncleLastGif from '../assets/gifs/escape_from/dead_forest/entities/uncle/last_frame.png'
 import { audioManager } from './audioManager'
-import { getBoardSpaceBounds, getBoardSpacePosition } from './boardLayout'
+import { getBoardSpaceBounds, getBoardSpacePosition, getVisualSurroundingSpaces } from './boardLayout'
 import { boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
 
 const boardImages = import.meta.glob('../assets/boards/**/template.{png,jpg,jpeg,webp}', {
@@ -132,8 +135,11 @@ const escapePassiveOverlay = ref(null)
 const escapePassiveGifOverlay = ref(null)
 const revealedEscapeEntities = ref(null)
 const healthBlinkPlayerId = ref(null)
+const healthHealPlayerId = ref(null)
 const displayedHealth = ref({})
 const escapeEncounterSpace = ref(null)
+const escapePickupNotice = ref(null)
+const visionRevealProgress = ref({})
 let clockTimer
 let diceTimer
 let operatorTimer
@@ -170,6 +176,19 @@ const skillTargetSeconds = computed(() => skillTargetDeadline.value ? Math.max(0
 const escapeVisiblePlayers = computed(() => game.value?.mode === 'escape_from'
   ? game.value.players.filter(player => !player.eliminated && !player.finished)
   : [])
+const boostedVisionSpaces = computed(() => {
+  const spaces = new Set()
+  if (game.value?.mode !== 'escape_from') return spaces
+  for (const progress of Object.values(visionRevealProgress.value)) {
+    for (const space of progress.spaces) spaces.add(space)
+  }
+  for (const player of escapeVisiblePlayers.value) {
+    if (player.visionBoostThroughTurn == null || game.value.turn > player.visionBoostThroughTurn) continue
+    const visible = visionRevealProgress.value[player.id]?.spaces || getVisualSurroundingSpaces(visualSpace(player))
+    for (const space of visible) spaces.add(space)
+  }
+  return spaces
+})
 const escapeCollectedKeys = computed(() => game.value?.keys?.filter(key => key.holderId).length || 0)
 const dangerDistance = computed(() => {
   if (game.value?.mode !== 'escape_from' || !controlledGamePlayer.value || controlledGamePlayer.value.eliminated) return null
@@ -186,6 +205,7 @@ const escapeMedia = {
     exitLast: escapeExitLastFrame,
     flight: escapeFlightGif,
     concentrate: escapeConcentrateGif,
+    lightSource: escapeLightSourceGif,
     ghosts: { old_woman: oldWomanGif, red_eyes: redEyesGif, white_face: whiteFaceGif },
     ghostLast: { old_woman: oldWomanLastGif, red_eyes: redEyesLastGif, white_face: whiteFaceLastGif },
   },
@@ -198,6 +218,7 @@ const escapeMedia = {
     exitLast: deadForestExitLastFrame,
     flight: deadForestFlightGif,
     concentrate: deadForestConcentrateGif,
+    lightSource: deadForestLightSourceGif,
     ghosts: { jean: jeanGif, bald: baldGif, uncle: uncleGif },
     ghostLast: { jean: jeanLastGif, bald: baldLastGif, uncle: uncleLastGif },
     ghostAnimationMs: { jean: 800, bald: 560, uncle: 560 },
@@ -286,7 +307,10 @@ function clearGamePresentation() {
   escapePassiveGifOverlay.value = null
   revealedEscapeEntities.value = null
   healthBlinkPlayerId.value = null
+  healthHealPlayerId.value = null
   escapeEncounterSpace.value = null
+  escapePickupNotice.value = null
+  visionRevealProgress.value = {}
   movingPlayerId.value = null
   climbingPlayerId.value = null
 }
@@ -616,6 +640,10 @@ function applyGameSnapshot(message) {
   const previousWinnerId = game.value?.winner?.id
   const wasGameOver = game.value?.gameOver
   game.value = message.game
+  for (const [playerId, progress] of Object.entries(visionRevealProgress.value)) {
+    const player = message.game?.players.find(item => item.id === playerId)
+    if (progress.complete && player?.visionBoostThroughTurn != null) delete visionRevealProgress.value[playerId]
+  }
   const currentPlayerState = message.game?.players.find(player => player.id === clientId)
   if (currentPlayerState?.finished && !currentPlayerState.eliminated && !currentPlayerState.forfeited && !previousPlayer?.finished) {
     audioManager.playOutcome('winner', true)
@@ -680,6 +708,49 @@ function handleSocketMessage(event) {
   }
   if (message.type === 'escape_key_collected') {
     audioManager.escapeKeyCollected(message.characterId)
+    return
+  }
+  if (message.type === 'escape_pickup_spawned') {
+    escapePickupNotice.value = {
+      text: message.text,
+      pickupType: message.pickupType,
+      startedAt: message.startedAt,
+    }
+    const expiresIn = Math.max(0, message.duration - ((Date.now() + serverClockOffset) - message.startedAt))
+    window.setTimeout(() => {
+      if (escapePickupNotice.value?.startedAt === message.startedAt) escapePickupNotice.value = null
+    }, expiresIn)
+    return
+  }
+  if (message.type === 'escape_pickup_collected') {
+    audioManager.escapePickup(message.pickupType)
+    if (message.pickupType === 'medkit') {
+      healthHealPlayerId.value = message.playerId
+      displayedHealth.value[message.playerId] = message.healthAfter
+      window.setTimeout(() => {
+        if (healthHealPlayerId.value === message.playerId) healthHealPlayerId.value = null
+      }, message.duration)
+    } else if (message.pickupType === 'light_source') {
+      const player = game.value?.players.find(item => item.id === message.playerId)
+      const spaces = player ? getVisualSurroundingSpaces(visualSpace(player)) : []
+      visionRevealProgress.value[message.playerId] = { spaces: [], complete: false }
+      spaces.forEach((space, index) => {
+        window.setTimeout(() => {
+          if (!visionRevealProgress.value[message.playerId]) return
+          visionRevealProgress.value[message.playerId].spaces = [
+            ...visionRevealProgress.value[message.playerId].spaces,
+            space,
+          ]
+        }, 120 * (index + 1))
+      })
+      window.setTimeout(() => {
+        const progress = visionRevealProgress.value[message.playerId]
+        if (!progress) return
+        progress.complete = true
+        const syncedPlayer = game.value?.players.find(item => item.id === message.playerId)
+        if (syncedPlayer?.visionBoostThroughTurn != null) delete visionRevealProgress.value[message.playerId]
+      }, message.duration)
+    }
     return
   }
 
@@ -929,10 +1000,10 @@ function boardPickerClasses(player) {
   const x = Number.parseFloat(position.left)
   const y = Number.parseFloat(position.top)
   return {
-    'edge-picker': x <= 18 || x >= 82 || y <= 18 || y >= 82,
-    'edge-left': x <= 18,
-    'edge-right': x >= 82,
-    'edge-top': y <= 18,
+    'edge-picker': x <= 24 || x >= 76 || y <= 30 || y >= 82,
+    'edge-left': x <= 24,
+    'edge-right': x >= 76,
+    'edge-top': y <= 30,
     'edge-bottom': y >= 82,
   }
 }
@@ -1046,11 +1117,17 @@ function sendPlayerReaction(playerId, reaction) {
 }
 
 function socialReactionsForMode() {
-  return [
-    { key: 'lets_go', label: "Let's Go" },
-    { key: 'im_coming', label: 'Coming' },
-    { key: 'careful', label: 'Careful' },
-  ]
+  return game.value?.mode === 'escape_from'
+    ? [
+        { key: 'lets_go', label: "Let's Go" },
+        { key: 'im_coming', label: 'Coming' },
+        { key: 'careful', label: 'Careful' },
+      ]
+    : [
+        { key: 'aww', label: 'Aww' },
+        { key: 'boo', label: 'Boo!' },
+        { key: 'laugh', label: 'Haha!' },
+      ]
 }
 
 function placeMine(space) {
@@ -1104,7 +1181,9 @@ function skipEscapeMove() {
 }
 
 function escapeObjectVisible(space) {
-  return game.value?.mode !== 'escape_from' || escapeVisiblePlayers.value.some(player => visualSpace(player) === space)
+  return game.value?.mode !== 'escape_from'
+    || escapeVisiblePlayers.value.some(player => visualSpace(player) === space)
+    || boostedVisionSpaces.value.has(space)
 }
 
 function escapeEntityVisible(entity) {
@@ -1149,12 +1228,18 @@ onMounted(() => {
       players: game.value.players.map(player => ({
         name: player.name,
         space: player.space,
+        health: player.health,
+        visionBoostThroughTurn: player.visionBoostThroughTurn,
         finished: player.finished,
         eliminated: player.eliminated,
       })),
       destroyedSpaces: game.value.destroyedSpaces,
       keys: game.value.keys,
       entities: game.value.mode === 'escape_from' ? game.value.entities : undefined,
+      medkits: game.value.mode === 'escape_from' ? game.value.medkits : undefined,
+      lightSources: game.value.mode === 'escape_from' ? game.value.lightSources : undefined,
+      pickupNotice: escapePickupNotice.value?.text || null,
+      revealingVisionSpaces: [...boostedVisionSpaces.value],
       exitRevealed: game.value.exitRevealed,
       exitUnlocked: game.value.exitUnlocked,
       winners: game.value.winners.map(player => player.name),
@@ -1621,6 +1706,9 @@ onUnmounted(() => {
           <div class="game-board-wrap">
             <div class="game-board" :class="{ 'escape-board': game.mode === 'escape_from', 'dead-forest-board': game.board.name === 'Dead Forest', 'encounter-active': escapeOverlay && escapeOverlay.type !== 'exit' }">
               <img :src="boardPicture(game.board)" :alt="`${game.board.name} gameplay board`">
+              <div v-if="escapePickupNotice" class="escape-pickup-notice" :class="escapePickupNotice.pickupType" role="status">
+                {{ escapePickupNotice.text }}
+              </div>
               <svg v-if="game.mode === 'escape_from'" class="escape-darkness" :class="{ 'dead-forest-fog': game.board.name === 'Dead Forest' }" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                 <defs>
                   <filter id="escape-lamp-soften" x="-30%" y="-30%" width="160%" height="160%">
@@ -1658,6 +1746,13 @@ onUnmounted(() => {
                       />
                     </g>
                     <rect
+                      v-for="space in boostedVisionSpaces"
+                      :key="`boosted-vision-${space}`"
+                      class="boosted-vision-cell"
+                      v-bind="boardSpaceBounds(space)"
+                      fill="black"
+                    />
+                    <rect
                       v-if="game.exitRevealed"
                       v-bind="boardSpaceBounds(100)"
                       fill="black"
@@ -1678,6 +1773,22 @@ onUnmounted(() => {
                 :src="currentEscapeMedia.key"
                 :style="boardSpacePosition(key.space)"
                 :alt="escapeKeyName"
+              >
+              <img
+                v-for="medkit in game.mode === 'escape_from' ? game.medkits.filter(item => escapeObjectVisible(item.space)) : []"
+                :key="medkit.id"
+                class="escape-board-object escape-pickup escape-medkit"
+                :src="escapeMedkitGif"
+                :style="boardSpacePosition(medkit.space)"
+                alt="Medkit"
+              >
+              <img
+                v-for="light in game.mode === 'escape_from' ? game.lightSources.filter(item => escapeObjectVisible(item.space)) : []"
+                :key="light.id"
+                class="escape-board-object escape-pickup escape-light-source"
+                :src="currentEscapeMedia.lightSource"
+                :style="boardSpacePosition(light.space)"
+                alt="Light Source"
               >
               <img
                 v-for="entity in game.mode === 'escape_from' ? game.entities.filter(escapeEntityVisible) : []"
@@ -1758,7 +1869,7 @@ onUnmounted(() => {
                   blown: blownPlayerId === player.id,
                   finished: player.finished && resolvingPlayerId !== player.id,
                   eliminated: player.eliminated,
-                  'sound-picker-open': game.mode === 'escape_from' && emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board',
+                  'sound-picker-open': emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board',
                   'social-active': game.mode === 'escape_from' && Boolean(activeReactions[player.id])
                 }"
                 :style="tokenPosition(visualSpace(player), index)"
@@ -1767,7 +1878,7 @@ onUnmounted(() => {
               >
                 <div v-if="emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board'" class="emoji-picker" :class="boardPickerClasses(player)" @click.stop>
                   <div v-if="game.mode !== 'escape_from'" class="emoji-row"><button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button></div>
-                  <div v-if="game.mode === 'escape_from'" class="reaction-row"><button v-for="reaction in socialReactionsForMode()" :key="reaction.key" type="button" @click="sendPlayerReaction(player.id, reaction.key)">{{ reaction.label }}</button></div>
+                  <div class="reaction-row"><button v-for="reaction in socialReactionsForMode()" :key="reaction.key" type="button" @click="sendPlayerReaction(player.id, reaction.key)">{{ reaction.label }}</button></div>
                 </div>
                 <span v-if="activeEmojis[player.id]" class="player-emote">{{ activeEmojis[player.id].emoji }}</span>
                 <span v-if="activeReactions[player.id]" class="player-reaction">{{ activeReactions[player.id].text }}</span>
@@ -1782,13 +1893,13 @@ onUnmounted(() => {
               <article
                 v-for="(player, index) in game.players"
                 :key="player.id"
-                :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id, 'health-hit': healthBlinkPlayerId === player.id, 'weapon-armed': game.mode === 'escape_from' && player.weaponProtectFromTurn != null, 'mode-eliminated': player.eliminated && ['escape_from','run_away'].includes(game.mode), owned: player.id === clientId }"
+                :class="{ current: index === game.currentPlayerIndex && !game.gameOver, finished: player.finished && resolvingPlayerId !== player.id, loser: game.loser?.id === player.id && resolvingPlayerId !== player.id, 'health-hit': healthBlinkPlayerId === player.id, 'health-heal': healthHealPlayerId === player.id, 'weapon-armed': game.mode === 'escape_from' && player.weaponProtectFromTurn != null, 'mode-eliminated': player.eliminated && ['escape_from','run_away'].includes(game.mode), owned: player.id === clientId }"
                 :style="{ '--player-color': player.color }"
                 @click="toggleEmojiPicker(player, 'console')"
               >
                 <div v-if="emojiPickerPlayerId === player.id && emojiPickerPlacement === 'console'" class="emoji-picker console-emoji-picker" @click.stop>
                   <div v-if="game.mode !== 'escape_from'" class="emoji-row"><button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button></div>
-                  <div v-if="game.mode === 'escape_from'" class="reaction-row"><button v-for="reaction in socialReactionsForMode()" :key="reaction.key" type="button" @click="sendPlayerReaction(player.id, reaction.key)">{{ reaction.label }}</button></div>
+                  <div class="reaction-row"><button v-for="reaction in socialReactionsForMode()" :key="reaction.key" type="button" @click="sendPlayerReaction(player.id, reaction.key)">{{ reaction.label }}</button></div>
                 </div>
                 <span class="console-pawn">{{ player.face }}</span>
                 <div>

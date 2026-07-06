@@ -50,6 +50,7 @@ export function createGameState(board, players, startedAt = Date.now(), options 
       weaponPendingPenaltyMs: 0,
       weaponProtectFromTurn: null,
       weaponProtectThroughTurn: null,
+      visionBoostThroughTurn: null,
     })),
     currentPlayerIndex: 0,
     winners: [],
@@ -111,6 +112,11 @@ export function initializeEscapeState(state, rng = Math.random) {
     if (entitySpaces.length === 5) break
   }
   state.entities = entitySpaces.map((space, index) => ({ id: `entity-${index + 1}`, space }))
+  state.medkits = []
+  state.lightSources = []
+  state.nextMedkitSpawnTurn = 2
+  state.nextLightSourceSpawnTurn = 2
+  state.lastEscapePickupSpawn = null
   state.exitRevealed = false
   state.exitUnlocked = false
   state.exitUnlockPending = false
@@ -160,10 +166,15 @@ function relocateEntity(state, entity, rng = Math.random) {
   const blocked = ladderSpaces(state.board)
   const keySpaces = state.keys.map(key => key.space).filter(Boolean)
   const playerSpaces = new Set(activePlayers(state).map(player => player.space))
+  const pickupSpaces = new Set([
+    ...(state.medkits || []).map(item => item.space),
+    ...(state.lightSources || []).map(item => item.space),
+  ])
   const otherEntities = state.entities.filter(item => item.id !== entity.id)
   const candidates = Array.from({ length: 99 }, (_, index) => index + 1).filter(space =>
     !blocked.has(space)
     && !playerSpaces.has(space)
+    && !pickupSpaces.has(space)
     && keySpaces.every(keySpace => Math.abs(space - keySpace) > 3)
     && otherEntities.every(other => Math.abs(space - other.space) > 5))
   if (candidates.length) entity.space = randomChoice(candidates, rng)
@@ -171,6 +182,47 @@ function relocateEntity(state, entity, rng = Math.random) {
 
 export function relocateEscapeEntities(state, rng = Math.random) {
   for (const entity of state.entities || []) relocateEntity(state, entity, rng)
+}
+
+function escapePickupCandidates(state) {
+  const blocked = ladderSpaces(state.board)
+  for (const player of state.players) blocked.add(player.space)
+  for (const key of state.keys || []) if (key.space != null) blocked.add(key.space)
+  for (const entity of state.entities || []) blocked.add(entity.space)
+  for (const medkit of state.medkits || []) blocked.add(medkit.space)
+  for (const light of state.lightSources || []) blocked.add(light.space)
+  blocked.add(100)
+  return Array.from({ length: 99 }, (_, index) => index + 1).filter(space => !blocked.has(space))
+}
+
+export function spawnEscapePickups(state, rng = Math.random) {
+  if (state.mode !== 'escape_from' || state.gameOver) return null
+  const medkitEligible = !state.medkits.length && state.turn >= state.nextMedkitSpawnTurn
+  const lightEligible = !state.lightSources.length && state.turn >= state.nextLightSourceSpawnTurn
+  const medkitSucceeded = medkitEligible && rng() < 0.5
+  const lightSucceeded = lightEligible && rng() < 0.5
+  if (!medkitSucceeded && !lightSucceeded) return null
+
+  const type = medkitSucceeded && lightSucceeded
+    ? (rng() < 0.5 ? 'medkit' : 'light_sources')
+    : medkitSucceeded ? 'medkit' : 'light_sources'
+  const needed = type === 'medkit' ? 1 : 2
+  const candidates = shuffled(escapePickupCandidates(state), rng)
+  if (candidates.length < needed) return null
+  const spaces = candidates.slice(0, needed)
+
+  if (type === 'medkit') {
+    state.medkits = [{ id: `medkit-${state.turn}`, space: spaces[0] }]
+    state.nextMedkitSpawnTurn = state.turn + 4
+  } else {
+    state.lightSources = spaces.map((space, index) => ({
+      id: `light-${state.turn}-${index + 1}`,
+      space,
+    }))
+    state.nextLightSourceSpawnTurn = state.turn + 3
+  }
+  state.lastEscapePickupSpawn = { type, spaces, turn: state.turn }
+  return state.lastEscapePickupSpawn
 }
 
 function refreshEscapeExit(state) {
@@ -259,6 +311,23 @@ function collectEscapeKeys(state, player) {
   return collected
 }
 
+function collectEscapePickups(state, player) {
+  const collected = []
+  const medkitIndex = state.medkits.findIndex(item => item.space === player.space)
+  if (medkitIndex >= 0) {
+    state.medkits.splice(medkitIndex, 1)
+    player.health = Math.min(state.board.max_player_lives || 5, player.health + 1)
+    collected.push('medkit')
+  }
+  const lightIndex = state.lightSources.findIndex(item => item.space === player.space)
+  if (lightIndex >= 0) {
+    state.lightSources.splice(lightIndex, 1)
+    player.visionBoostThroughTurn = Math.max(player.visionBoostThroughTurn || 0, state.turn + 2)
+    collected.push('light_source')
+  }
+  return collected
+}
+
 function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now(), { skipLadder = false, previousSpace = player.space } = {}) {
   const ladder = skipLadder ? null : state.board.ladders.find(item => item.from === player.space)
   if (ladder) {
@@ -266,6 +335,7 @@ function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()
     addLog(state, `${player.name} used a ladder from ${ladder.from} to ${ladder.to}.`)
   }
   const collectedKeys = collectEscapeKeys(state, player)
+  const collectedPickups = collectEscapePickups(state, player)
   const entity = state.entities.find(item => item.space === player.space)
   let encounter = null
   let passiveTrigger = null
@@ -294,7 +364,7 @@ function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()
       refreshEscapeExit(state)
       concludeEscapeIfNeeded(state)
       state.lastEscapeEncounter = null
-      return { ladder, encounter: null, passiveTrigger, passiveMovement, collectedKeys }
+      return { ladder, encounter: null, passiveTrigger, passiveMovement, collectedKeys, collectedPickups }
     }
     const weaponPrevented = !passiveDefended && isEscapeWeaponProtecting(player, state.turn)
     const prevented = weaponPrevented || passiveDefended
@@ -327,7 +397,7 @@ function resolveEscapeLanding(state, player, rng = Math.random, now = Date.now()
   refreshEscapeExit(state)
   concludeEscapeIfNeeded(state)
   state.lastEscapeEncounter = encounter
-  return { ladder, encounter, passiveTrigger, passiveMovement, collectedKeys }
+  return { ladder, encounter, passiveTrigger, passiveMovement, collectedKeys, collectedPickups }
 }
 
 export function takeEscapeTurn(state, roll, direction, rng = Math.random, now = Date.now()) {
@@ -813,6 +883,12 @@ function advanceTurn(state, now = Date.now()) {
       state.nextEntityRelocationTurn = state.turn + 2
       addLog(state, 'The entities shifted to new locations.')
     }
+    for (const player of state.players) {
+      if (player.visionBoostThroughTurn != null && state.turn > player.visionBoostThroughTurn) {
+        player.visionBoostThroughTurn = null
+      }
+    }
+    spawnEscapePickups(state)
   }
   const nextPlayer = state.players[nextIndex]
   if (nextPlayer.skillRefreshPending) {
