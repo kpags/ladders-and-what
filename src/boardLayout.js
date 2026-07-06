@@ -2,6 +2,8 @@ const ATLANTIC_COLUMNS = [6, 16.6, 26.4, 35.9, 45.3, 54.7, 64.1, 73.5, 83.1, 93.
 const ATLANTIC_ROWS = [95.3, 86.8, 77.4, 67.6, 57.7, 47.5, 37.2, 26.8, 16.4, 5.9]
 const GHOST_TOWN_COLUMNS = [8.41, 19.14, 28.67, 38.12, 47.53, 56.94, 66.27, 75.56, 84.93, 93.62]
 const GHOST_TOWN_ROWS = [92.94, 83.81, 75.04, 66.07, 56.66, 47.09, 37.36, 27.51, 17.58, 7.58]
+const HORIZON_COLUMNS = [5.98, 15.87, 25.68, 35.41, 45.18, 54.98, 64.75, 74.48, 84.21, 93.94]
+const HORIZON_ROWS = [93.62, 84.69, 74.2, 64.63, 54.98, 45.22, 35.49, 25.72, 16.03, 6.1]
 const QUIET_MANSION_SIZE = 1254
 const QUIET_MANSION_X_BOUNDS = [
   [11, 129, 250, 374, 499, 622, 746, 869, 990, 1114, 1242],
@@ -33,6 +35,7 @@ export function getBoardSpacePosition(board, space) {
   const volcano = board?.name === 'Volcano'
   const atlantic = board?.name === 'Atlantic'
   const ghostTown = board?.name === 'Ghost Town'
+  const horizon = board?.name === 'Horizon'
   const quietMansion = board?.name === 'Quiet Mansion'
   const deadForest = board?.name === 'Dead Forest'
   const runAway = board?.type === 'run_away'
@@ -50,6 +53,12 @@ export function getBoardSpacePosition(board, space) {
     return {
       left: `${GHOST_TOWN_COLUMNS[column]}%`,
       top: `${GHOST_TOWN_ROWS[row]}%`,
+    }
+  }
+  if (horizon) {
+    return {
+      left: `${HORIZON_COLUMNS[column]}%`,
+      top: `${HORIZON_ROWS[row]}%`,
     }
   }
   if (quietMansion) {

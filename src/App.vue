@@ -140,6 +140,9 @@ const displayedHealth = ref({})
 const escapeEncounterSpace = ref(null)
 const escapePickupNotice = ref(null)
 const visionRevealProgress = ref({})
+const guessWhatDifficulty = ref(null)
+const guessWhatQuestion = ref(null)
+const guessWhatResult = ref(null)
 let clockTimer
 let diceTimer
 let operatorTimer
@@ -173,6 +176,9 @@ const rollSeconds = computed(() => rollDeadline.value ? Math.max(0, Math.ceil((r
 const directionSeconds = computed(() => directionChoice.value ? Math.max(0, Math.ceil((directionChoice.value.expiresAt - (now.value + serverClockOffset)) / 1000)) : 0)
 const escapeMoveSeconds = computed(() => escapeMoveChoice.value ? Math.max(0, Math.ceil((escapeMoveChoice.value.expiresAt - (now.value + serverClockOffset)) / 1000)) : 0)
 const skillTargetSeconds = computed(() => skillTargetDeadline.value ? Math.max(0, Math.ceil((skillTargetDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
+const guessWhatSeconds = computed(() => guessWhatQuestion.value
+  ? Math.max(0, Math.ceil((guessWhatQuestion.value.expiresAt - (now.value + serverClockOffset)) / 1000))
+  : 0)
 const escapeVisiblePlayers = computed(() => game.value?.mode === 'escape_from'
   ? game.value.players.filter(player => !player.eliminated && !player.finished)
   : [])
@@ -311,6 +317,9 @@ function clearGamePresentation() {
   escapeEncounterSpace.value = null
   escapePickupNotice.value = null
   visionRevealProgress.value = {}
+  guessWhatDifficulty.value = null
+  guessWhatQuestion.value = null
+  guessWhatResult.value = null
   movingPlayerId.value = null
   climbingPlayerId.value = null
 }
@@ -385,6 +394,32 @@ async function handleServerEvent(event) {
   } else if (event.type === 'move_announcement') {
     moveOverlay.value = event.data
     window.setTimeout(() => { moveOverlay.value = null }, remaining)
+  } else if (event.type === 'guess_what_difficulty') {
+    guessWhatQuestion.value = null
+    guessWhatResult.value = null
+    guessWhatDifficulty.value = { ...event.data, eventId: event.id }
+    audioManager.guessWhatQuestion()
+  } else if (event.type === 'guess_what_question') {
+    guessWhatDifficulty.value = null
+    guessWhatResult.value = null
+    guessWhatQuestion.value = { ...event.data, eventId: event.id }
+  } else if (event.type === 'guess_what_answer_selected') {
+    guessWhatDifficulty.value = null
+    guessWhatResult.value = null
+    guessWhatQuestion.value = {
+      ...event.data,
+      eventId: event.id,
+      locked: true,
+      expiresAt: event.startedAt,
+    }
+  } else if (event.type === 'guess_what_answer') {
+    guessWhatDifficulty.value = null
+    guessWhatQuestion.value = null
+    guessWhatResult.value = { ...event.data, eventId: event.id }
+    audioManager.guessWhatAnswer(event.data.correct)
+    window.setTimeout(() => {
+      if (guessWhatResult.value?.eventId === event.id) guessWhatResult.value = null
+    }, remaining)
   } else if (event.type === 'exact_bounce') {
     exactBounceOverlay.value = { ...event.data, eventId: event.id }
     window.setTimeout(() => {
@@ -983,7 +1018,8 @@ function tokenPosition(space, playerIndex) {
   const ghostTown = game.value?.board?.name === 'Ghost Town'
   const quietMansion = game.value?.board?.name === 'Quiet Mansion'
   const deadForest = game.value?.board?.name === 'Dead Forest'
-  const offsetScale = volcano ? 0.72 : ghostTown ? 0.55 : (quietMansion || deadForest) ? 0.35 : 1
+  const horizon = game.value?.board?.name === 'Horizon'
+  const offsetScale = volcano ? 0.72 : ghostTown ? 0.55 : horizon ? 0.45 : (quietMansion || deadForest) ? 0.35 : 1
   const [rawOffsetX, rawOffsetY] = offsets[playerIndex % offsets.length]
   const offsetX = rawOffsetX * offsetScale
   const offsetY = rawOffsetY * offsetScale
@@ -1055,6 +1091,7 @@ function playTurn() {
 
 function useSkill(targetId = null) {
   if (!game.value || page.value !== 'game' || turnBusy.value || game.value.gameOver) return
+  if (game.value.mode === 'guess_what') return
   const player = game.value.players[game.value.currentPlayerIndex]
   if (!isControlledTurn.value) {
     skillNotice.value = 'Skill can only be used during your turn.'
@@ -1134,6 +1171,16 @@ function placeMine(space) {
   if (!minePlacement.value) return
   minePlacement.value = null
   sendLobby({ type: 'place_mine', space })
+}
+
+function chooseGuessWhatDifficulty(difficulty) {
+  if (guessWhatDifficulty.value?.playerId !== clientId) return
+  sendLobby({ type: 'choose_guess_what_difficulty', difficulty })
+}
+
+function answerGuessWhat(answer) {
+  if (guessWhatQuestion.value?.playerId !== clientId || guessWhatQuestion.value.locked) return
+  sendLobby({ type: 'answer_guess_what', answer })
 }
 
 function handleGameKey(event) {
@@ -1548,6 +1595,56 @@ onUnmounted(() => {
           <strong>Penalty</strong>
           <small>{{ penaltyOverlay.message }}</small>
         </div>
+        <div v-if="guessWhatDifficulty" class="guess-what-overlay" role="dialog" aria-modal="true" aria-labelledby="guess-difficulty-title">
+          <section class="guess-what-card difficulty-card">
+            <small>Question square</small>
+            <h2 id="guess-difficulty-title">Choose a difficulty</h2>
+            <p>{{ guessWhatDifficulty.playerId === clientId ? 'Pick your challenge.' : `Waiting for ${guessWhatDifficulty.playerName}.` }}</p>
+            <div class="guess-difficulty-options">
+              <button
+                v-for="difficulty in ['easy', 'medium', 'hard']"
+                :key="difficulty"
+                type="button"
+                :class="difficulty"
+                :disabled="guessWhatDifficulty.playerId !== clientId || !guessWhatDifficulty.counts[difficulty]"
+                @click="chooseGuessWhatDifficulty(difficulty)"
+              >
+                <strong>{{ difficulty }}</strong>
+                <span>{{ guessWhatDifficulty.counts[difficulty] }} available</span>
+                <small>{{ difficulty === 'easy' ? '5s · 3+' : difficulty === 'medium' ? '10s · 5+' : '15s · 7+' }} moves</small>
+              </button>
+            </div>
+          </section>
+        </div>
+        <div v-if="guessWhatQuestion" class="guess-what-overlay" role="dialog" aria-modal="true" aria-labelledby="guess-question-title">
+          <section class="guess-what-card question-card" :class="guessWhatQuestion.difficulty">
+            <header>
+              <span>{{ guessWhatQuestion.difficulty }}</span>
+              <strong v-if="!guessWhatQuestion.locked" :class="{ urgent: guessWhatSeconds <= 3 }">{{ guessWhatSeconds }}s</strong>
+              <strong v-else class="answer-locked">Locked</strong>
+            </header>
+            <h2 id="guess-question-title">{{ guessWhatQuestion.question }}</h2>
+            <div class="guess-answer-options">
+              <button
+                v-for="choice in guessWhatQuestion.choices"
+                :key="choice"
+                type="button"
+                :class="{ selected: guessWhatQuestion.locked && guessWhatQuestion.selectedAnswer === choice }"
+                :disabled="guessWhatQuestion.playerId !== clientId || guessWhatQuestion.locked"
+                @click="answerGuessWhat(choice)"
+              >{{ choice }}</button>
+            </div>
+            <small v-if="guessWhatQuestion.locked">
+              {{ guessWhatQuestion.timedOut ? `${guessWhatQuestion.playerName} did not answer.` : `${guessWhatQuestion.playerName} chose “${guessWhatQuestion.selectedAnswer}”.` }}
+            </small>
+            <small v-else-if="guessWhatQuestion.playerId !== clientId">Waiting for {{ guessWhatQuestion.playerName }} to answer</small>
+          </section>
+        </div>
+        <div v-if="guessWhatResult" class="guess-what-result" :class="{ correct: guessWhatResult.correct, wrong: !guessWhatResult.correct }" role="status">
+          <strong>{{ guessWhatResult.correct ? 'Correct!' : guessWhatResult.timedOut ? 'Time’s up!' : 'Wrong answer!' }}</strong>
+          <span v-if="guessWhatResult.correct">Move forward {{ guessWhatResult.movement }} spaces</span>
+          <span v-else>The answer was {{ guessWhatResult.correctAnswer }} · Move back 2 spaces</span>
+        </div>
         <div v-if="sighOverlay" class="sigh-overlay" role="status">
           <strong>*Sigh*</strong>
         </div>
@@ -1917,7 +2014,7 @@ onUnmounted(() => {
               </article>
             </div>
 
-            <div v-if="!game.gameOver && controlledGamePlayer" class="skill-panel">
+            <div v-if="!game.gameOver && controlledGamePlayer && game.mode !== 'guess_what'" class="skill-panel">
               <template v-if="game.mode === 'escape_from'">
                 <div class="skill-title">
                   <span>Weapon · Press <kbd>G</kbd></span>

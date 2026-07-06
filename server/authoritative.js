@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, SKILL_COOLDOWN_MS, skipEscapeTurn, takeEscapeTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipEscapeTurn, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 import { createDestructionSkipState, updateDestructionSkipVote } from './destructionSkip.js'
@@ -18,6 +18,7 @@ const TURN_MS = 15_000
 const boards = JSON.parse(readFileSync(new URL('../data/boards.json', import.meta.url), 'utf8'))
 const gameModes = JSON.parse(readFileSync(new URL('../data/game_modes.json', import.meta.url), 'utf8'))
 const characters = JSON.parse(readFileSync(new URL('../data/characters.json', import.meta.url), 'utf8'))
+const questionnaires = JSON.parse(readFileSync(new URL('../data/guess_what_questions.json', import.meta.url), 'utf8'))
 const parkourWhats = boards.find(board => board.name === 'Nature')?.whats
   .filter(what => ['Bee Swarm', 'Dung'].includes(what.name)) || []
 const rooms = new Map()
@@ -25,6 +26,8 @@ const sockets = new Map()
 const ESCAPE_ROLL_MS = 10_000
 const ESCAPE_DIRECTION_MS = 10_000
 const ESCAPE_SOCIAL_SOUND_MS = 3_200
+const GUESS_WHAT_TIMERS = { easy: 5_000, medium: 10_000, hard: 15_000 }
+const GUESS_WHAT_BASE_MOVES = { easy: 3, medium: 5, hard: 7 }
 
 function firstBoardIndex(modeKey) {
   return boardIndicesForMode(boards, modeKey)[0] ?? -1
@@ -169,6 +172,9 @@ function clearRoomTimers(room) {
   room.pendingMine = null
   clearTimer(room.pendingSkillTarget?.timer)
   room.pendingSkillTarget = null
+  clearTimer(room.guessWhatTimer)
+  room.guessWhatTimer = null
+  room.pendingGuessWhat = null
   clearEscapeSocialQueue(room)
   room.destructionSkip = null
   room.sequenceToken++
@@ -306,6 +312,9 @@ function finishSequenceAndBeginTurn(room) {
   room.turnTimer = null
   room.rollTimer = null
   room.directionTimer = null
+  clearTimer(room.guessWhatTimer)
+  room.guessWhatTimer = null
+  room.pendingGuessWhat = null
   unlockRoomForNextTurn(room)
   broadcastEscapePickupSpawn(room)
   beginTurn(room)
@@ -793,6 +802,194 @@ async function runAwayRollSequence(room, player, startSpace, dice, token) {
   runTurnSequence(room, player, startSpace, result, token, false, true, description.movement)
 }
 
+function guessWhatCounts(game) {
+  return Object.fromEntries(['easy', 'medium', 'hard'].map(difficulty => [
+    difficulty,
+    game.remainingQuestionIds?.[difficulty]?.length || 0,
+  ]))
+}
+
+function openGuessWhatDifficulty(room, player, token) {
+  const counts = guessWhatCounts(room.game)
+  const available = Object.keys(counts).filter(difficulty => counts[difficulty] > 0)
+  if (!available.length) {
+    room.pendingGuessWhat = null
+    finishSequenceAndBeginTurn(room)
+    return
+  }
+  room.pendingGuessWhat = { stage: 'difficulty', playerId: player.id, token }
+  emitEvent(room, 'guess_what_difficulty', {
+    playerId: player.id,
+    playerName: player.name,
+    counts,
+  }, 86_400_000)
+  if (player.isAI) {
+    room.guessWhatTimer = setTimeout(() => {
+      chooseGuessWhatDifficulty(room, player.id, available[Math.floor(Math.random() * available.length)])
+    }, 650)
+  }
+}
+
+async function finishGuessWhatMovement(room, result, token) {
+  if (result.exactBounce) {
+    emitEvent(room, 'exact_bounce', result.exactBounce, 3000)
+    if (!await wait(room, 3000, token)) return
+    const bounceDuration = Math.abs(result.exactBounce.destination - 100) * 540
+    if (bounceDuration) {
+      emitEvent(room, 'movement', {
+        playerId: result.player.id,
+        from: 100,
+        to: result.exactBounce.destination,
+        kind: 'exact-bounce',
+      }, bounceDuration)
+      if (!await wait(room, bounceDuration, token)) return
+    }
+  }
+  if (result.needsQuestion) {
+    openGuessWhatDifficulty(room, result.player, token)
+    return
+  }
+  finishSequenceAndBeginTurn(room)
+}
+
+async function runGuessWhatRollSequence(room, result, token) {
+  emitEvent(room, 'dice_stopped', {
+    playerId: result.player.id,
+    result: result.roll,
+    resultLabel: `Rolled ${result.roll}`,
+  }, 1600)
+  if (!await wait(room, 1600, token)) return
+  const firstDestination = result.exactBounce ? 100 : result.destination
+  const duration = Math.abs(firstDestination - result.from) * 540
+  if (duration) {
+    emitEvent(room, 'movement', {
+      playerId: result.player.id,
+      from: result.from,
+      to: firstDestination,
+      kind: 'roll',
+    }, duration)
+    if (!await wait(room, duration, token)) return
+  }
+  finishGuessWhatMovement(room, result, token)
+}
+
+function chooseGuessWhatDifficulty(room, requesterId, requestedDifficulty) {
+  const pending = room.pendingGuessWhat
+  const difficulty = String(requestedDifficulty || '').toLowerCase()
+  if (!pending || pending.stage !== 'difficulty' || pending.playerId !== requesterId) {
+    return reject(sockets.get(requesterId), 'There is no difficulty choice for this player.')
+  }
+  const ids = room.game.remainingQuestionIds?.[difficulty] || []
+  if (!GUESS_WHAT_TIMERS[difficulty] || !ids.length) {
+    return reject(sockets.get(requesterId), 'That difficulty has no questions available.')
+  }
+  clearTimer(room.guessWhatTimer)
+  const source = questionnaires[room.game.board.questionnaire] || []
+  const questionId = ids[Math.floor(Math.random() * ids.length)]
+  const question = source.find(item => item.id === questionId && item.difficulty === difficulty)
+  if (!question) return reject(sockets.get(requesterId), 'The selected question is unavailable.')
+  const wrong = question.choices.filter(choice => choice !== question.answer)
+  const choices = [question.answer, ...wrong.sort(() => Math.random() - 0.5).slice(0, 2)]
+    .sort(() => Math.random() - 0.5)
+  const duration = GUESS_WHAT_TIMERS[difficulty]
+  const expiresAt = Date.now() + duration
+  room.pendingGuessWhat = {
+    stage: 'question',
+    playerId: requesterId,
+    token: pending.token,
+    questionId,
+    difficulty,
+    question: question.question,
+    answer: question.answer,
+    choices,
+    startedAt: Date.now(),
+    expiresAt,
+  }
+  emitEvent(room, 'guess_what_question', {
+    playerId: requesterId,
+    playerName: room.game.players.find(player => player.id === requesterId)?.name,
+    questionId,
+    difficulty,
+    question: question.question,
+    choices,
+    expiresAt,
+  }, duration)
+  room.guessWhatTimer = setTimeout(() => answerGuessWhatQuestion(room, requesterId, null, true), duration)
+  const player = room.game.players.find(item => item.id === requesterId)
+  if (player?.isAI) {
+    const minimumThinkingMs = difficulty === 'easy' ? 2_200 : 3_000
+    const preferredMaximumMs = difficulty === 'hard' ? 7_000 : difficulty === 'medium' ? 5_500 : 3_800
+    const maximumThinkingMs = Math.max(minimumThinkingMs, Math.min(duration - 1_100, preferredMaximumMs))
+    const delay = minimumThinkingMs + Math.floor(Math.random() * (maximumThinkingMs - minimumThinkingMs + 1))
+    clearTimer(room.guessWhatTimer)
+    room.guessWhatTimer = setTimeout(() => {
+      answerGuessWhatQuestion(room, requesterId, choices[Math.floor(Math.random() * choices.length)])
+    }, delay)
+  }
+}
+
+function answerGuessWhatQuestion(room, requesterId, selectedAnswer, timedOut = false) {
+  const pending = room.pendingGuessWhat
+  if (!pending || pending.stage !== 'question' || pending.playerId !== requesterId) {
+    if (!timedOut) reject(sockets.get(requesterId), 'There is no question for this player.')
+    return
+  }
+  clearTimer(room.guessWhatTimer)
+  room.guessWhatTimer = null
+  const correct = !timedOut && pending.choices.includes(selectedAnswer) && selectedAnswer === pending.answer
+  const total = GUESS_WHAT_TIMERS[pending.difficulty]
+  const remaining = Math.max(0, pending.expiresAt - Date.now())
+  const percentage = (remaining / total) * 100
+  const speedBonus = percentage >= 80 ? 3 : percentage >= 50 ? 2 : percentage >= 30 ? 1 : 0
+  const movement = correct ? GUESS_WHAT_BASE_MOVES[pending.difficulty] + speedBonus : -2
+  const token = pending.token
+  room.pendingGuessWhat = { ...pending, stage: 'resolving', selectedAnswer, timedOut }
+  emitEvent(room, 'guess_what_answer_selected', {
+    playerId: requesterId,
+    playerName: room.game.players.find(player => player.id === requesterId)?.name,
+    question: pending.question,
+    choices: pending.choices,
+    difficulty: pending.difficulty,
+    timedOut,
+    selectedAnswer,
+  }, 1500)
+  wait(room, 1500, token).then(async valid => {
+    if (!valid) return
+    const resolving = room.pendingGuessWhat
+    if (!resolving || resolving.stage !== 'resolving' || resolving.questionId !== pending.questionId) return
+    room.pendingGuessWhat = null
+    const result = resolveGuessWhatAnswer(room.game, requesterId, {
+      questionId: pending.questionId,
+      correct,
+      movement,
+    })
+    if (!result) return
+    emitEvent(room, 'guess_what_answer', {
+      playerId: requesterId,
+      correct,
+      timedOut,
+      selectedAnswer,
+      correctAnswer: pending.answer,
+      difficulty: pending.difficulty,
+      movement,
+      speedBonus,
+    }, 2200)
+    if (!await wait(room, 2200, token)) return
+    const movementDestination = result.exactBounce ? 100 : result.destination
+    const duration = Math.abs(movementDestination - result.from) * 540
+    if (duration) {
+      emitEvent(room, 'movement', {
+        playerId: requesterId,
+        from: result.from,
+        to: movementDestination,
+        kind: correct ? 'question-correct' : 'question-wrong',
+      }, duration)
+      if (!await wait(room, duration, token)) return
+    }
+    finishGuessWhatMovement(room, result, token)
+  })
+}
+
 function stopRoll(room, requesterId, automatic = false) {
   if (!room.rolling || room.phase !== 'playing') return
   const current = room.game.players[room.game.currentPlayerIndex]
@@ -820,6 +1017,14 @@ function stopRoll(room, requesterId, automatic = false) {
       expiresAt: Date.now() + ESCAPE_DIRECTION_MS,
     }, ESCAPE_DIRECTION_MS)
     room.directionTimer = setTimeout(() => finishEscapeDirection(room, null), ESCAPE_DIRECTION_MS)
+    return
+  }
+  if (room.game.mode === 'guess_what') {
+    const roll = Math.floor(Math.random() * 6) + 1
+    room.rolling = null
+    const result = takeGuessWhatTurn(room.game, roll)
+    const token = ++room.sequenceToken
+    runGuessWhatRollSequence(room, result, token)
     return
   }
   const elapsed = Date.now() - room.rolling.startedAt
@@ -1023,6 +1228,10 @@ function beginTurn(room) {
   if (current.isAI) {
     room.turnDeadline = null
     room.turnTimer = setTimeout(() => {
+      if (room.game.mode === 'guess_what') {
+        startRoll(room, current.id, true)
+        return
+      }
       if (current.rerollPending || current.specialRollPending) {
         startRoll(room, current.id, true)
         return
@@ -1276,6 +1485,7 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
     return
   }
   if (room.phase !== 'playing' || room.busy || room.game.gameOver) return
+  if (room.game.mode === 'guess_what') return reject(sockets.get(requesterId), 'Character skills are disabled in Guess WHAT?!')
   const current = room.game.players[room.game.currentPlayerIndex]
   if (current.id !== requesterId) return reject(sockets.get(requesterId), 'Skill can only be used during your turn.')
   if (automatic && !current.isAI) return
@@ -1438,6 +1648,7 @@ function startGame(room, requesterId) {
   })
   room.game = createGameState(board, definitions, Date.now(), {
     exactMoveFor100: room.exactMoveFor100,
+    questionnaire: questionnaires[board.questionnaire] || [],
   })
   room.phase = 'playing'
   room.escapeBriefing = room.game.mode === 'escape_from'
@@ -1622,16 +1833,17 @@ wss.on('connection', socket => {
           return
         }
         room.modeKey = message.modeKey
+        if (!['standard', 'run_away'].includes(room.modeKey)) room.exactMoveFor100 = false
         room.boardIndex = firstBoardIndex(room.modeKey)
         remapRoomCharacters(room)
         broadcastRoom(room)
       }
     } else if (message.type === 'exact_move_for_100') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can change game settings.')
-      else if (room.phase === 'lobby') {
+      else if (room.phase === 'lobby' && ['standard', 'run_away'].includes(room.modeKey)) {
         room.exactMoveFor100 = Boolean(message.enabled)
         broadcastRoom(room)
-      }
+      } else if (room.phase === 'lobby') reject(socket, 'Exact Move for S100 is unavailable in this game mode.')
     } else if (message.type === 'board') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can select the board.')
       else if (room.phase === 'lobby') {
@@ -1687,6 +1899,8 @@ wss.on('connection', socket => {
     else if (message.type === 'stop_roll') stopRoll(room, clientId)
     else if (message.type === 'choose_escape_move') chooseEscapeMove(room, clientId, message.roll)
     else if (message.type === 'skip_escape_move') skipEscapeMoveChoice(room, clientId)
+    else if (message.type === 'choose_guess_what_difficulty') chooseGuessWhatDifficulty(room, clientId, message.difficulty)
+    else if (message.type === 'answer_guess_what') answerGuessWhatQuestion(room, clientId, message.answer)
     else if (message.type === 'use_skill') useSkill(room, clientId, message.targetId)
     else if (message.type === 'place_mine') finishHiddenMinePlacement(room, clientId, message.space)
     else if (message.type === 'destruction_skip') voteToSkipDestruction(room, clientId, Boolean(message.checked))

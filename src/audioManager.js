@@ -160,6 +160,18 @@ class AudioManager {
     }, 450)
   }
 
+  guessWhatQuestion() {
+    this.random('guess_what/questions', { channel: 'guess-what' })
+  }
+
+  guessWhatAnswer(correct) {
+    const prefix = correct ? 'correct_answer' : 'wrong_answer'
+    const files = Object.entries(soundFiles)
+      .filter(([path]) => path.includes('/guess_what/answers/') && path.includes(prefix))
+      .map(([, url]) => url)
+    this.play(files[Math.floor(Math.random() * files.length)], { channel: 'guess-what' })
+  }
+
   loseTurn() {
     this.play(fileFrom(soundFiles, '/question_mark/what_lose_turn.mp3'))
   }

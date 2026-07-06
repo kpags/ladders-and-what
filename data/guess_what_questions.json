@@ -1,0 +1,844 @@
+{
+    "space": [
+        {
+            "id": 1,
+            "question": "What planet do we live on?",
+            "answer": "Earth",
+            "choices": ["Mars", "Earth", "Jupiter", "Venus"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 2,
+            "question": "What is the closest star to Earth?",
+            "answer": "The Sun",
+            "choices": ["The Moon", "The Sun", "Sirius", "Mars"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 3,
+            "question": "Which object orbits Earth?",
+            "answer": "The Moon",
+            "choices": ["The Moon", "The Sun", "Saturn", "Mercury"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 4,
+            "question": "Which planet is known as the Red Planet?",
+            "answer": "Mars",
+            "choices": ["Mars", "Neptune", "Venus", "Saturn"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 5,
+            "question": "How many planets are in our Solar System?",
+            "answer": "8",
+            "choices": ["7", "8", "9", "10"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 6,
+            "question": "Which planet is the largest in the Solar System?",
+            "answer": "Jupiter",
+            "choices": ["Earth", "Jupiter", "Mars", "Mercury"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 7,
+            "question": "Which planet has famous rings around it?",
+            "answer": "Saturn",
+            "choices": ["Saturn", "Earth", "Venus", "Mars"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 8,
+            "question": "What do astronauts wear in space to stay safe?",
+            "answer": "Space suit",
+            "choices": ["Raincoat", "Space suit", "School uniform", "Swimsuit"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 9,
+            "question": "What do we call a vehicle that travels into space?",
+            "answer": "Rocket",
+            "choices": ["Rocket", "Boat", "Bus", "Bicycle"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 10,
+            "question": "Which planet is closest to the Sun?",
+            "answer": "Mercury",
+            "choices": ["Earth", "Mercury", "Mars", "Neptune"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 11,
+            "question": "What gives Earth light during the day?",
+            "answer": "The Sun",
+            "choices": ["The Moon", "The Sun", "Stars only", "Clouds"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 12,
+            "question": "What is a group of stars that forms a pattern called?",
+            "answer": "Constellation",
+            "choices": ["Constellation", "Planet", "Comet", "Asteroid"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 13,
+            "question": "Which planet is often called Earth's twin because it is similar in size?",
+            "answer": "Venus",
+            "choices": ["Venus", "Jupiter", "Uranus", "Mercury"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 14,
+            "question": "What is the shape of most planets?",
+            "answer": "Round",
+            "choices": ["Flat", "Square", "Round", "Triangle"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 15,
+            "question": "What do we call small rocky objects that orbit the Sun?",
+            "answer": "Asteroids",
+            "choices": ["Asteroids", "Clouds", "Lakes", "Mountains"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 16,
+            "question": "Which planet is farthest from the Sun?",
+            "answer": "Neptune",
+            "choices": ["Mars", "Jupiter", "Neptune", "Earth"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 17,
+            "question": "What do we call the path a planet follows around the Sun?",
+            "answer": "Orbit",
+            "choices": ["Orbit", "Bridge", "Tunnel", "Trail"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 18,
+            "question": "Which planet has living things, water, and air we can breathe?",
+            "answer": "Earth",
+            "choices": ["Earth", "Saturn", "Mercury", "Neptune"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 19,
+            "question": "What do we see in the night sky that twinkle?",
+            "answer": "Stars",
+            "choices": ["Stars", "Cars", "Trees", "Rocks"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 20,
+            "question": "Which planet is known for being very hot because of its thick atmosphere?",
+            "answer": "Venus",
+            "choices": ["Venus", "Uranus", "Mars", "Neptune"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 21,
+            "question": "What force keeps planets in orbit around the Sun?",
+            "answer": "Gravity",
+            "choices": ["Gravity", "Wind", "Sound", "Magnet only"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 22,
+            "question": "What is the asteroid belt located between?",
+            "answer": "Mars and Jupiter",
+            "choices": ["Earth and Mars", "Mars and Jupiter", "Saturn and Uranus", "Mercury and Venus"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 23,
+            "question": "Which planet rotates on its side compared with most other planets?",
+            "answer": "Uranus",
+            "choices": ["Uranus", "Mars", "Earth", "Jupiter"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 24,
+            "question": "What is a comet mostly made of?",
+            "answer": "Ice, dust, and rock",
+            "choices": ["Ice, dust, and rock", "Only metal", "Only fire", "Only water"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 25,
+            "question": "What causes day and night on Earth?",
+            "answer": "Earth rotating on its axis",
+            "choices": ["The Sun turning off", "Earth rotating on its axis", "The Moon blocking the Sun", "Clouds moving"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 26,
+            "question": "About how long does Earth take to orbit the Sun once?",
+            "answer": "One year",
+            "choices": ["One day", "One week", "One month", "One year"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 27,
+            "question": "What causes the seasons on Earth?",
+            "answer": "Earth's tilted axis as it orbits the Sun",
+            "choices": ["Earth's tilted axis as it orbits the Sun", "The Moon changing color", "Earth moving closer every summer", "Stars getting brighter"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 28,
+            "question": "Which two planets are called gas giants?",
+            "answer": "Jupiter and Saturn",
+            "choices": ["Mercury and Venus", "Earth and Mars", "Jupiter and Saturn", "Uranus and Neptune"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 29,
+            "question": "Which two planets are called ice giants?",
+            "answer": "Uranus and Neptune",
+            "choices": ["Uranus and Neptune", "Jupiter and Saturn", "Earth and Mars", "Venus and Mercury"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 30,
+            "question": "What is the name of the galaxy that contains our Solar System?",
+            "answer": "Milky Way Galaxy",
+            "choices": ["Andromeda Galaxy", "Milky Way Galaxy", "Whirlpool Galaxy", "Triangulum Galaxy"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 31,
+            "question": "What do we call a moon, planet, or machine that orbits another object?",
+            "answer": "Satellite",
+            "choices": ["Satellite", "Meteor", "Crater", "Nebula"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 32,
+            "question": "What is the International Space Station?",
+            "answer": "A large spacecraft where astronauts live and work",
+            "choices": ["A planet", "A large spacecraft where astronauts live and work", "A comet", "A moon of Jupiter"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 33,
+            "question": "Which planet has the Great Red Spot?",
+            "answer": "Jupiter",
+            "choices": ["Jupiter", "Mars", "Saturn", "Venus"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 34,
+            "question": "What is the Great Red Spot?",
+            "answer": "A giant storm on Jupiter",
+            "choices": ["A volcano on Mars", "A giant storm on Jupiter", "A crater on the Moon", "A ring around Saturn"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 35,
+            "question": "What is a meteor called when it reaches Earth's surface?",
+            "answer": "Meteorite",
+            "choices": ["Meteorite", "Asteroid belt", "Comet tail", "Satellite"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 36,
+            "question": "What happens during a solar eclipse?",
+            "answer": "The Moon passes between Earth and the Sun",
+            "choices": ["Earth passes between the Sun and Moon", "The Moon passes between Earth and the Sun", "Mars blocks Jupiter", "The Sun disappears forever"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 37,
+            "question": "What happens during a lunar eclipse?",
+            "answer": "Earth passes between the Sun and the Moon",
+            "choices": ["Earth passes between the Sun and the Moon", "The Moon passes between Earth and the Sun", "Jupiter blocks the Moon", "The Moon falls into Earth's shadow forever"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 38,
+            "question": "Which planet has the tallest known volcano in the Solar System, Olympus Mons?",
+            "answer": "Mars",
+            "choices": ["Mars", "Earth", "Venus", "Mercury"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 39,
+            "question": "What is a light-year a measure of?",
+            "answer": "Distance",
+            "choices": ["Time only", "Distance", "Temperature", "Weight"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 40,
+            "question": "Why does the Moon appear to change shape during the month?",
+            "answer": "We see different portions of its sunlit half",
+            "choices": ["It physically changes size", "We see different portions of its sunlit half", "It melts and grows", "Clouds cover it in patterns"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 41,
+            "question": "Which planet has the shortest day because it rotates the fastest?",
+            "answer": "Jupiter",
+            "choices": ["Jupiter", "Earth", "Venus", "Neptune"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 42,
+            "question": "Which planet has the longest day because it rotates very slowly?",
+            "answer": "Venus",
+            "choices": ["Venus", "Mars", "Saturn", "Mercury"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 43,
+            "question": "What is the Kuiper Belt?",
+            "answer": "A region beyond Neptune with icy objects",
+            "choices": ["A region beyond Neptune with icy objects", "A ring around Earth", "A storm on Jupiter", "A crater on Mercury"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 44,
+            "question": "Which dwarf planet is located in the asteroid belt?",
+            "answer": "Ceres",
+            "choices": ["Pluto", "Ceres", "Eris", "Haumea"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 45,
+            "question": "Why was Pluto reclassified as a dwarf planet?",
+            "answer": "It has not cleared its orbital path of other objects",
+            "choices": ["It disappeared", "It is bigger than Jupiter", "It has not cleared its orbital path of other objects", "It has no gravity"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 46,
+            "question": "What is the Oort Cloud believed to be?",
+            "answer": "A distant shell of icy objects around the Solar System",
+            "choices": ["A distant shell of icy objects around the Solar System", "A cloud inside Earth's sky", "A ring around Mars", "A storm on Neptune"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 47,
+            "question": "Which moon of Saturn is known for having a thick atmosphere and lakes of liquid methane and ethane?",
+            "answer": "Titan",
+            "choices": ["Titan", "Europa", "Phobos", "Callisto"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 48,
+            "question": "Which moon of Jupiter is thought to have a subsurface ocean beneath its icy crust?",
+            "answer": "Europa",
+            "choices": ["Europa", "Titan", "Deimos", "Triton"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 49,
+            "question": "What are Saturn's rings mostly made of?",
+            "answer": "Ice particles, rock, and dust",
+            "choices": ["Fire and smoke", "Ice particles, rock, and dust", "Only liquid water", "Only gas"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 50,
+            "question": "What is a black hole?",
+            "answer": "An object with gravity so strong that not even light can escape",
+            "choices": ["A dark planet", "An object with gravity so strong that not even light can escape", "A hole in Earth's atmosphere", "A cold star that shines blue"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 51,
+            "question": "What is nuclear fusion in the Sun?",
+            "answer": "Hydrogen atoms combine to form helium and release energy",
+            "choices": ["Rocks burn like coal", "Hydrogen atoms combine to form helium and release energy", "Planets crash together", "Ice turns into gas"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 52,
+            "question": "What layer of the Sun is visible during a total solar eclipse as a faint outer glow?",
+            "answer": "Corona",
+            "choices": ["Core", "Corona", "Crust", "Mantle"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 53,
+            "question": "What is solar wind?",
+            "answer": "A stream of charged particles released by the Sun",
+            "choices": ["Air blowing from the Sun", "A stream of charged particles released by the Sun", "Wind on Mars", "A comet's tail only"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 54,
+            "question": "What causes auroras near Earth's poles?",
+            "answer": "Charged particles from the Sun interacting with Earth's magnetic field and atmosphere",
+            "choices": ["Clouds reflecting city lights", "Charged particles from the Sun interacting with Earth's magnetic field and atmosphere", "The Moon shining brighter", "Volcanoes glowing at night"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 55,
+            "question": "Which planet has supersonic winds and a dark storm system called the Great Dark Spot?",
+            "answer": "Neptune",
+            "choices": ["Neptune", "Mercury", "Earth", "Venus"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 56,
+            "question": "What is retrograde rotation?",
+            "answer": "Rotation in the opposite direction compared with most planets",
+            "choices": ["Moving closer to the Sun", "Rotation in the opposite direction compared with most planets", "Stopping in space", "Orbiting without gravity"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 57,
+            "question": "Which planets in our Solar System have retrograde rotation?",
+            "answer": "Venus and Uranus",
+            "choices": ["Earth and Mars", "Venus and Uranus", "Jupiter and Saturn", "Mercury and Neptune"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 58,
+            "question": "What is the habitable zone around a star?",
+            "answer": "The region where liquid water could exist on a planet's surface",
+            "choices": ["The hottest part of a star", "The region where liquid water could exist on a planet's surface", "The area with the most asteroids", "A planet's inner core"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 59,
+            "question": "What is the main reason Mars appears red?",
+            "answer": "Iron oxide, or rust, on its surface",
+            "choices": ["Red oceans", "Iron oxide, or rust, on its surface", "Red plants", "Its clouds are made of fire"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 60,
+            "question": "What is an exoplanet?",
+            "answer": "A planet outside our Solar System",
+            "choices": ["A planet outside our Solar System", "A moon of Earth", "A type of asteroid", "A broken comet"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 61,
+            "question": "What is the name of Earth's natural satellite?",
+            "answer": "The Moon",
+            "choices": ["The Moon", "Mars", "Venus", "Jupiter"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 62,
+            "question": "Which planet is known as the blue planet?",
+            "answer": "Earth",
+            "choices": ["Earth", "Mercury", "Saturn", "Mars"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 63,
+            "question": "What object is at the center of our Solar System?",
+            "answer": "The Sun",
+            "choices": ["The Sun", "The Moon", "Earth", "Jupiter"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 64,
+            "question": "Which planet is famous for its many visible stripes and storms?",
+            "answer": "Jupiter",
+            "choices": ["Jupiter", "Venus", "Mercury", "Neptune"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 65,
+            "question": "What do we call a person who travels in space?",
+            "answer": "Astronaut",
+            "choices": ["Astronaut", "Pilot", "Sailor", "Driver"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 66,
+            "question": "Which planet is second from the Sun?",
+            "answer": "Venus",
+            "choices": ["Venus", "Earth", "Mars", "Saturn"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 67,
+            "question": "Which planet is third from the Sun?",
+            "answer": "Earth",
+            "choices": ["Earth", "Venus", "Mercury", "Neptune"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 68,
+            "question": "Which planet is fourth from the Sun?",
+            "answer": "Mars",
+            "choices": ["Mars", "Earth", "Jupiter", "Uranus"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 69,
+            "question": "What do we call a large ball of hot gas that makes its own light?",
+            "answer": "Star",
+            "choices": ["Star", "Planet", "Moon", "Asteroid"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 70,
+            "question": "What do we call the study of space and objects in space?",
+            "answer": "Astronomy",
+            "choices": ["Astronomy", "Biology", "Geography", "Chemistry"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 71,
+            "question": "Which planet is known for having a very large system of rings and moons?",
+            "answer": "Saturn",
+            "choices": ["Saturn", "Mars", "Mercury", "Earth"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 72,
+            "question": "What color does Mars often look like from Earth?",
+            "answer": "Red",
+            "choices": ["Red", "Blue", "Green", "Purple"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 73,
+            "question": "What do we call the huge area beyond Earth where planets and stars are found?",
+            "answer": "Space",
+            "choices": ["Space", "Ocean", "Forest", "Desert"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 74,
+            "question": "Which object in the sky looks bright at night because it reflects sunlight?",
+            "answer": "The Moon",
+            "choices": ["The Moon", "The Sun", "A cloud", "A rainbow"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 75,
+            "question": "What do planets move around?",
+            "answer": "The Sun",
+            "choices": ["The Sun", "The Moon", "Clouds", "Airplanes"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 76,
+            "question": "Which planet is between Venus and Mars?",
+            "answer": "Earth",
+            "choices": ["Earth", "Saturn", "Mercury", "Neptune"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 77,
+            "question": "What is the name of the first planet from the Sun?",
+            "answer": "Mercury",
+            "choices": ["Mercury", "Venus", "Earth", "Mars"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 78,
+            "question": "What do we call a spacecraft that can carry people into space?",
+            "answer": "Rocket",
+            "choices": ["Rocket", "Boat", "Bus", "Bicycle"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 79,
+            "question": "Which planet is known for its beautiful rings?",
+            "answer": "Saturn",
+            "choices": ["Saturn", "Earth", "Venus", "Mars"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 80,
+            "question": "What is the Sun mainly made of?",
+            "answer": "Hot gases",
+            "choices": ["Hot gases", "Ice", "Wood", "Plastic"],
+            "difficulty": "easy"
+        },
+        {
+            "id": 81,
+            "question": "What is the name for the different shapes of the Moon we see from Earth?",
+            "answer": "Moon phases",
+            "choices": ["Moon phases", "Moon storms", "Moon rings", "Moon clouds"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 82,
+            "question": "What moon phase occurs when the whole near side of the Moon appears bright?",
+            "answer": "Full Moon",
+            "choices": ["Full Moon", "New Moon", "Crescent Moon", "Half Moon"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 83,
+            "question": "What moon phase occurs when the Moon is between Earth and the Sun and is hard to see?",
+            "answer": "New Moon",
+            "choices": ["New Moon", "Full Moon", "Gibbous Moon", "Quarter Moon"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 84,
+            "question": "Which planet has the most obvious ring system when viewed through a telescope?",
+            "answer": "Saturn",
+            "choices": ["Saturn", "Mars", "Venus", "Mercury"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 85,
+            "question": "What is a dwarf planet?",
+            "answer": "A round object that orbits the Sun but has not cleared its orbit",
+            "choices": ["A round object that orbits the Sun but has not cleared its orbit", "A moon that orbits Earth", "A star that is very small", "A planet made only of gas"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 86,
+            "question": "Which dwarf planet was once considered the ninth planet?",
+            "answer": "Pluto",
+            "choices": ["Pluto", "Ceres", "Eris", "Haumea"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 87,
+            "question": "What is the main difference between a planet and a moon?",
+            "answer": "A planet orbits a star, while a moon orbits a planet or dwarf planet",
+            "choices": ["A planet orbits a star, while a moon orbits a planet or dwarf planet", "A moon is always bigger than a planet", "A planet has no gravity", "A moon makes its own light"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 88,
+            "question": "Which planet has the strongest surface gravity among the planets?",
+            "answer": "Jupiter",
+            "choices": ["Jupiter", "Mars", "Mercury", "Venus"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 89,
+            "question": "What is the name of the force that pulls objects toward each other?",
+            "answer": "Gravity",
+            "choices": ["Gravity", "Friction", "Sound", "Magnet color"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 90,
+            "question": "What is the name for a rocky object from space that burns up in Earth's atmosphere?",
+            "answer": "Meteor",
+            "choices": ["Meteor", "Planet", "Comet nucleus", "Moon"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 91,
+            "question": "What is a meteoroid?",
+            "answer": "A small rocky or metallic object traveling in space",
+            "choices": ["A small rocky or metallic object traveling in space", "A planet with rings", "A type of star", "A cloud on Earth"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 92,
+            "question": "Which inner planet has almost no atmosphere?",
+            "answer": "Mercury",
+            "choices": ["Mercury", "Venus", "Earth", "Mars"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 93,
+            "question": "Which planet has a thick atmosphere mostly made of carbon dioxide?",
+            "answer": "Venus",
+            "choices": ["Venus", "Mercury", "Uranus", "Saturn"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 94,
+            "question": "Which planet has the largest moon in the Solar System, Ganymede?",
+            "answer": "Jupiter",
+            "choices": ["Jupiter", "Saturn", "Mars", "Neptune"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 95,
+            "question": "What is the name of Saturn's largest moon?",
+            "answer": "Titan",
+            "choices": ["Titan", "Europa", "Ganymede", "Phobos"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 96,
+            "question": "Which planet has two small moons named Phobos and Deimos?",
+            "answer": "Mars",
+            "choices": ["Mars", "Earth", "Venus", "Uranus"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 97,
+            "question": "What is the term for the point in a planet's orbit when it is closest to the Sun?",
+            "answer": "Perihelion",
+            "choices": ["Perihelion", "Aphelion", "Equator", "Solstice"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 98,
+            "question": "What is the term for the point in a planet's orbit when it is farthest from the Sun?",
+            "answer": "Aphelion",
+            "choices": ["Aphelion", "Perihelion", "Axis", "Eclipse"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 99,
+            "question": "What is an orbit?",
+            "answer": "The curved path an object follows around another object",
+            "choices": ["The curved path an object follows around another object", "A type of planet", "A space helmet", "A cloud of rain"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 100,
+            "question": "Why do astronauts float inside the International Space Station?",
+            "answer": "They are in continuous free fall around Earth",
+            "choices": ["They are in continuous free fall around Earth", "There is no gravity anywhere in space", "Their suits push them upward", "The Moon pulls them away"],
+            "difficulty": "medium"
+        },
+        {
+            "id": 101,
+            "question": "Which layer of the Sun is the visible surface we usually see?",
+            "answer": "Photosphere",
+            "choices": ["Photosphere", "Core", "Corona", "Radiative zone"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 102,
+            "question": "Which part of the Sun is where most nuclear fusion takes place?",
+            "answer": "Core",
+            "choices": ["Core", "Photosphere", "Corona", "Chromosphere"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 103,
+            "question": "What is the chromosphere of the Sun?",
+            "answer": "A reddish layer of the Sun's atmosphere above the photosphere",
+            "choices": ["A reddish layer of the Sun's atmosphere above the photosphere", "The rocky surface of the Sun", "The center of the Sun", "A moon of the Sun"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 104,
+            "question": "What is a solar prominence?",
+            "answer": "A large loop or arch of glowing gas extending from the Sun",
+            "choices": ["A large loop or arch of glowing gas extending from the Sun", "A crater on Mercury", "A ring around Jupiter", "A small asteroid"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 105,
+            "question": "What is a coronal mass ejection?",
+            "answer": "A huge burst of solar plasma and magnetic field released from the Sun",
+            "choices": ["A huge burst of solar plasma and magnetic field released from the Sun", "A meteor landing on Earth", "A new moon forming", "A planet changing direction"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 106,
+            "question": "Which planet has a moon named Triton that orbits in the opposite direction of the planet's rotation?",
+            "answer": "Neptune",
+            "choices": ["Neptune", "Saturn", "Mars", "Mercury"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 107,
+            "question": "What is unusual about Triton's orbit around Neptune?",
+            "answer": "It is retrograde, meaning it orbits opposite Neptune's rotation",
+            "choices": ["It is retrograde, meaning it orbits opposite Neptune's rotation", "It orbits the Sun instead of Neptune", "It has no gravity", "It is inside Saturn's rings"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 108,
+            "question": "What are Trojan asteroids?",
+            "answer": "Asteroids that share a planet's orbit near stable gravitational points",
+            "choices": ["Asteroids that share a planet's orbit near stable gravitational points", "Asteroids that orbit inside Earth", "Moons made of gas", "Stars near Jupiter"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 109,
+            "question": "What are Lagrange points?",
+            "answer": "Places where the gravity of two large bodies and orbital motion balance",
+            "choices": ["Places where the gravity of two large bodies and orbital motion balance", "The centers of black holes", "The hottest parts of a planet", "The rings of Saturn"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 110,
+            "question": "What is tidal locking?",
+            "answer": "When one side of an orbiting body always faces the object it orbits",
+            "choices": ["When one side of an orbiting body always faces the object it orbits", "When a planet stops orbiting", "When oceans disappear", "When stars form rings"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 111,
+            "question": "Why does the same side of the Moon always face Earth?",
+            "answer": "The Moon is tidally locked to Earth",
+            "choices": ["The Moon is tidally locked to Earth", "The Moon does not rotate at all", "Earth blocks the Moon from moving", "The Sun holds it still"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 112,
+            "question": "What is the Roche limit?",
+            "answer": "The distance where tidal forces can tear apart a smaller object near a larger one",
+            "choices": ["The distance where tidal forces can tear apart a smaller object near a larger one", "The edge of the Solar System", "The height of a rocket launch", "The age of a star"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 113,
+            "question": "What is albedo?",
+            "answer": "How much light a surface reflects",
+            "choices": ["How much light a surface reflects", "How fast a planet rotates", "How heavy a moon is", "How many rings a planet has"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 114,
+            "question": "Which planet has the highest average surface temperature?",
+            "answer": "Venus",
+            "choices": ["Venus", "Mercury", "Mars", "Jupiter"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 115,
+            "question": "Why is Venus hotter than Mercury even though Mercury is closer to the Sun?",
+            "answer": "Venus has a thick carbon dioxide atmosphere that traps heat",
+            "choices": ["Venus has a thick carbon dioxide atmosphere that traps heat", "Venus is closer to the Sun than Mercury", "Mercury is made of ice", "Venus has no clouds"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 116,
+            "question": "What is the magnetosphere of a planet?",
+            "answer": "The region around a planet controlled by its magnetic field",
+            "choices": ["The region around a planet controlled by its magnetic field", "The planet's rocky crust", "The planet's ring system", "The planet's shadow"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 117,
+            "question": "Which planet has the strongest magnetic field in the Solar System?",
+            "answer": "Jupiter",
+            "choices": ["Jupiter", "Mars", "Venus", "Mercury"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 118,
+            "question": "What is the heliosphere?",
+            "answer": "The bubble-like region of space influenced by the Sun's solar wind",
+            "choices": ["The bubble-like region of space influenced by the Sun's solar wind", "The solid surface of the Sun", "A belt of moons around Earth", "The rings of Neptune"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 119,
+            "question": "What is the heliopause?",
+            "answer": "The boundary where the solar wind is stopped by interstellar material",
+            "choices": ["The boundary where the solar wind is stopped by interstellar material", "The center of the Sun", "The orbit of Mercury", "The shadow of Earth"],
+            "difficulty": "hard"
+        },
+        {
+            "id": 120,
+            "question": "What is spectroscopy used for in astronomy?",
+            "answer": "Studying light to learn what objects are made of and how they move",
+            "choices": ["Studying light to learn what objects are made of and how they move", "Measuring only the size of rockets", "Counting clouds on Earth", "Building spacesuits"],
+            "difficulty": "hard"
+        }
+    ]
+}

@@ -11,13 +11,13 @@ function prepareBoard(board) {
   prepared.question_marks ||= []
   prepared.whats ||= []
   if (prepared.type === 'guess_what') {
-    const count = prepared.question_marks.length || 13
-    const candidates = Array.from({ length: 94 }, (_, index) => index + 5)
-    prepared.question_marks = []
-    while (prepared.question_marks.length < Math.min(count, candidates.length)) {
-      prepared.question_marks.push(candidates.splice(randomInteger(0, candidates.length - 1), 1)[0])
+    if (!prepared.question_marks.length) {
+      const candidates = Array.from({ length: 94 }, (_, index) => index + 5)
+      while (prepared.question_marks.length < Math.min(13, candidates.length)) {
+        prepared.question_marks.push(candidates.splice(randomInteger(0, candidates.length - 1), 1)[0])
+      }
+      prepared.question_marks.sort((a, b) => a - b)
     }
-    prepared.question_marks.sort((a, b) => a - b)
     prepared.hiddenQuestionMarks = true
   }
   return prepared
@@ -72,6 +72,12 @@ export function createGameState(board, players, startedAt = Date.now(), options 
     nextExplosionTurn: preparedBoard.type === 'run_away' ? randomInteger(3, 5) : null,
     lastExplosion: null,
     lastTraversalElimination: null,
+    remainingQuestionIds: preparedBoard.type === 'guess_what'
+      ? Object.fromEntries(['easy', 'medium', 'hard'].map(difficulty => [
+          difficulty,
+          (options.questionnaire || []).filter(question => question.difficulty === difficulty).map(question => question.id),
+        ]))
+      : null,
   }
   if (state.mode === 'escape_from') initializeEscapeState(state)
   return state
@@ -902,6 +908,68 @@ function advanceTurn(state, now = Date.now()) {
 export function endTurnAfterSkill(state) {
   if (!state.gameOver) advanceTurn(state)
   triggerExplosion(state)
+}
+
+export function takeGuessWhatTurn(state, forcedRoll) {
+  if (state.gameOver || state.mode !== 'guess_what') return null
+  const player = state.players[state.currentPlayerIndex]
+  const requestedRoll = Number(forcedRoll)
+  const roll = Number.isInteger(requestedRoll) && requestedRoll >= 1 && requestedRoll <= 6
+    ? requestedRoll
+    : randomInteger(1, 6)
+  const from = player.space
+  state.lastRoll = roll
+  state.lastWhat = null
+  state.lastQuestionChain = []
+  state.lastExactBounce = null
+  movePlayer(state, player, from + roll, true)
+  if (player.space >= 100) finishPlayer(state, player)
+  const needsQuestion = !player.finished && state.board.question_marks.includes(player.space)
+  addLog(state, `${player.name} rolled ${roll} and moved to space ${player.space}.`)
+  if (!needsQuestion && !state.gameOver) advanceTurn(state)
+  return {
+    player,
+    from,
+    roll,
+    destination: player.space,
+    exactBounce: state.lastExactBounce,
+    needsQuestion,
+  }
+}
+
+export function resolveGuessWhatAnswer(state, playerId, {
+  questionId,
+  correct,
+  movement,
+} = {}) {
+  if (state.gameOver || state.mode !== 'guess_what') return null
+  const player = state.players[state.currentPlayerIndex]
+  if (!player || player.id !== playerId) return null
+
+  if (correct) {
+    for (const ids of Object.values(state.remainingQuestionIds || {})) {
+      const index = ids.indexOf(questionId)
+      if (index >= 0) ids.splice(index, 1)
+    }
+  }
+
+  const from = player.space
+  state.lastExactBounce = null
+  movePlayer(state, player, from + Number(movement || 0), true)
+  if (player.space >= 100) finishPlayer(state, player)
+  const needsQuestion = !player.finished && state.board.question_marks.includes(player.space)
+  addLog(state, correct
+    ? `${player.name} answered correctly and moved forward ${movement} space(s) to space ${player.space}.`
+    : `${player.name} answered incorrectly and moved back 2 spaces to space ${player.space}.`)
+  if (!needsQuestion && !state.gameOver) advanceTurn(state)
+  return {
+    player,
+    from,
+    destination: player.space,
+    movement: Number(movement || 0),
+    exactBounce: state.lastExactBounce,
+    needsQuestion,
+  }
 }
 
 export function takeTurn(state, forcedRoll) {

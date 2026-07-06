@@ -37,6 +37,16 @@ test('Ghost Town uses its measured serpentine cell centers', () => {
   assert.deepEqual(getBoardSpacePosition(ghostTown, 100), { left: '8.41%', top: '7.58%' })
 })
 
+test('Horizon uses its measured serpentine cell centers', () => {
+  const horizon = boards.find(board => board.name === 'Horizon')
+
+  assert.deepEqual(getBoardSpacePosition(horizon, 1), { left: '5.98%', top: '93.62%' })
+  assert.deepEqual(getBoardSpacePosition(horizon, 10), { left: '93.94%', top: '93.62%' })
+  assert.deepEqual(getBoardSpacePosition(horizon, 11), { left: '93.94%', top: '84.69%' })
+  assert.deepEqual(getBoardSpacePosition(horizon, 20), { left: '5.98%', top: '84.69%' })
+  assert.deepEqual(getBoardSpacePosition(horizon, 100), { left: '5.98%', top: '6.1%' })
+})
+
 test('Quiet Mansion uses exact ten-by-ten cell centers', () => {
   const quietMansion = boards.find(board => board.name === 'Quiet Mansion')
 

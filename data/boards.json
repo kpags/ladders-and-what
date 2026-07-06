@@ -669,5 +669,15 @@
         "key_name": "Tires",
         "max_player_lives": 5,
         "max_players": 4
+    },
+    {
+        "name": "Horizon",
+        "type": "guess_what",
+        "picture": "assets/boards/horizon/template.png",
+        "music": "horizon",
+        "questionnaire": "space",
+        "question_marks": [
+            4, 7, 11, 15, 20, 23, 24, 29, 33, 36,40, 42, 43, 48, 50, 51, 55, 59, 63, 69, 72, 75, 78, 82, 85, 86, 91, 92, 94, 98
+        ]
     }
 ]

@@ -3,7 +3,7 @@
     "id": "blue-sass",
     "name": "Blue Sass",
     "color": "#0879e7",
-    "modes": ["standard", "run_away"],
+    "modes": ["standard", "run_away", "guess_what"],
     "face": "ಠ‿ಠ",
     "description": "Cool. Sarcastic. Probably judging you right now.",
     "specialSkill": {
@@ -15,7 +15,7 @@
     "id": "red-rage",
     "name": "Red Rage",
     "color": "#e9342d",
-    "modes": ["standard", "run_away"],
+    "modes": ["standard", "run_away", "guess_what"],
     "face": "ಠ益ಠ",
     "description": "Hot-headed and always ready to blame the dice.",
     "specialSkill": {
@@ -27,7 +27,7 @@
     "id": "yellow-sarcasm",
     "name": "Yellow Sarcasm",
     "color": "#f2ae13",
-    "modes": ["standard", "run_away"],
+    "modes": ["standard", "run_away", "guess_what"],
     "face": "¬‿¬",
     "description": "Smart mouth. Sharper moves. Zero regrets.",
     "specialSkill": {
@@ -39,7 +39,7 @@
     "id": "green-mayhem",
     "name": "Green Mayhem",
     "color": "#5da52b",
-    "modes": ["standard", "run_away"],
+    "modes": ["standard", "run_away", "guess_what"],
     "face": "◔‿◔",
     "description": "Unpredictable. Unapologetic. Unstoppable.",
     "specialSkill": {
@@ -51,7 +51,7 @@
     "id": "black-devil",
     "name": "Black Devil",
     "color": "#000000",
-    "modes": ["standard", "run_away"],
+    "modes": ["standard", "run_away", "guess_what"],
     "face": "ಠ_ಠ",
     "description": "Mysterious. Mischievous. Menacing.",
     "specialSkill": {
@@ -63,7 +63,7 @@
     "id": "purple-tricker",
     "name": "Purple Tricker",
     "color": "#800080",
-    "modes": ["standard", "run_away"],
+    "modes": ["standard", "run_away", "guess_what"],
     "face": "ಠ‿↼",
     "description": "Cunning. Deceptive. Delightfully tricky.",
     "specialSkill": {
@@ -75,7 +75,7 @@
     "id": "parkour-joe",
     "name": "Parkour Joe",
     "color": "#808080",
-    "modes": ["standard", "run_away"],
+    "modes": ["standard", "run_away", "guess_what"],
     "face": "ಠ益ಠ",
     "description": "Agile. Fearless. Always on the move.",
     "specialSkill": {
@@ -87,7 +87,7 @@
     "id": "bomber-jack",
     "name": "Bomber Jack",
     "color": "#ff4500",
-    "modes": ["standard", "run_away"],
+    "modes": ["standard", "run_away", "guess_what"],
     "face": "ಠ_ಠ",
     "description": "Explosive. Bold. Always ready to blow things up.",
     "specialSkill": {
@@ -99,7 +99,7 @@
     "id": "crab-karen",
     "name": "Crab Karen",
     "color": "#FFF7D6",
-    "modes": ["standard", "run_away"],
+    "modes": ["standard", "run_away", "guess_what"],
     "face": "¬‿¬",
     "description": "Crab Mentality. Demanding. Always ready to complain.",
     "specialSkill": {
