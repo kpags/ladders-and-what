@@ -646,3 +646,17 @@ test('Ragebait moves any selected player back, applies its consequence, and reso
   assert.equal(result.landingResolutions[0].questionChain[0].what.name, 'Ragebait Landing')
   assert.equal(state.players[1].skipTurns, 1)
 })
+
+test('Ragebait climbs a ladder when its target lands on the ladder bottom', () => {
+  const state = createState([60, 40])
+  state.board.ladders = [{ from: 25, to: 47 }]
+  state.players[0].specialSkill = { name: 'Ragebait' }
+  state.players[0].skillCooldownUntil = 0
+
+  const result = activateSkill(state, 1, 'player-2')
+
+  assert.equal(result.ok, true)
+  assert.equal(result.movement.to, 25)
+  assert.equal(state.players[1].space, 47)
+  assert.deepEqual(result.landingResolutions[0].ladder, { from: 25, to: 47 })
+})

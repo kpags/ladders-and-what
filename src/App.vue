@@ -1046,17 +1046,10 @@ function sendPlayerReaction(playerId, reaction) {
 }
 
 function socialReactionsForMode() {
-  if (game.value?.mode === 'escape_from') {
-    return [
-      { key: 'lets_go', label: "Let's Go" },
-      { key: 'im_coming', label: 'Coming' },
-      { key: 'careful', label: 'Careful' },
-    ]
-  }
   return [
-    { key: 'aww', label: 'Aww' },
-    { key: 'boo', label: 'Boo' },
-    { key: 'laugh', label: 'Laugh' },
+    { key: 'lets_go', label: "Let's Go" },
+    { key: 'im_coming', label: 'Coming' },
+    { key: 'careful', label: 'Careful' },
   ]
 }
 
@@ -1774,7 +1767,7 @@ onUnmounted(() => {
               >
                 <div v-if="emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board'" class="emoji-picker" :class="boardPickerClasses(player)" @click.stop>
                   <div v-if="game.mode !== 'escape_from'" class="emoji-row"><button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button></div>
-                  <div class="reaction-row"><button v-for="reaction in socialReactionsForMode()" :key="reaction.key" type="button" @click="sendPlayerReaction(player.id, reaction.key)">{{ reaction.label }}</button></div>
+                  <div v-if="game.mode === 'escape_from'" class="reaction-row"><button v-for="reaction in socialReactionsForMode()" :key="reaction.key" type="button" @click="sendPlayerReaction(player.id, reaction.key)">{{ reaction.label }}</button></div>
                 </div>
                 <span v-if="activeEmojis[player.id]" class="player-emote">{{ activeEmojis[player.id].emoji }}</span>
                 <span v-if="activeReactions[player.id]" class="player-reaction">{{ activeReactions[player.id].text }}</span>
@@ -1795,7 +1788,7 @@ onUnmounted(() => {
               >
                 <div v-if="emojiPickerPlayerId === player.id && emojiPickerPlacement === 'console'" class="emoji-picker console-emoji-picker" @click.stop>
                   <div v-if="game.mode !== 'escape_from'" class="emoji-row"><button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button></div>
-                  <div class="reaction-row"><button v-for="reaction in socialReactionsForMode()" :key="reaction.key" type="button" @click="sendPlayerReaction(player.id, reaction.key)">{{ reaction.label }}</button></div>
+                  <div v-if="game.mode === 'escape_from'" class="reaction-row"><button v-for="reaction in socialReactionsForMode()" :key="reaction.key" type="button" @click="sendPlayerReaction(player.id, reaction.key)">{{ reaction.label }}</button></div>
                 </div>
                 <span class="console-pawn">{{ player.face }}</span>
                 <div>

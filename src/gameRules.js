@@ -994,7 +994,9 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
   let landingResolution = null
   const landingResolutions = []
   const resolveSkillLanding = (landingPlayer, landingSpace) => {
-    if (!state.board.question_marks.includes(landingPlayer.space)) return
+    const isQuestion = state.board.question_marks.includes(landingPlayer.space)
+    const isLadderBottom = state.board.ladders.some(ladder => ladder.from === landingPlayer.space)
+    if (!isQuestion && !isLadderBottom) return
     resolveLanding(state, landingPlayer)
     const afterQuestions = state.lastQuestionChain.at(-1)?.destination ?? landingSpace
     const connectedLadder = state.board.ladders.find(item => item.from === afterQuestions)

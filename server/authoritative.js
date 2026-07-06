@@ -1137,7 +1137,6 @@ function closeEscapeBriefing(room, playerId) {
 }
 
 function sendPlayerEmote(room, playerId, emoji) {
-  if (room.game?.mode === 'escape_from') return
   const allowed = new Set(['😭', '😂', '😐', '😛', '😎'])
   const player = room.game?.players.find(item => item.id === playerId && !item.eliminated && !item.finished)
   if (!player || !allowed.has(emoji)) return
