@@ -2296,5 +2296,1453 @@
                 "difficulty": "hard"
             }
         ]
+    },
+    "history": {
+        "timer": {
+            "easy": 10,
+            "medium": 25,
+            "hard": 35
+        },
+        "questionnaire": [{
+            "id": 1,
+            "question": "Who was the first President of the United States?",
+            "answer": "George Washington",
+            "choices": [
+            "Abraham Lincoln",
+            "George Washington",
+            "Thomas Jefferson",
+            "John Adams"
+            ],
+            "difficulty": "easy"
+        },
+        {
+            "id": 2,
+            "question": "What ancient civilization built the pyramids at Giza?",
+            "answer": "Ancient Egyptians",
+            "choices": [
+                "Ancient Greeks",
+                "Ancient Egyptians",
+                "Romans",
+                "Mayans"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 3,
+                "question": "What country is famous for the Great Wall?",
+                "answer": "China",
+                "choices": [
+                "Japan",
+                "India",
+                "China",
+                "Egypt"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 4,
+                "question": "Who sailed across the Atlantic in 1492?",
+                "answer": "Christopher Columbus",
+                "choices": [
+                "Ferdinand Magellan",
+                "Christopher Columbus",
+                "Marco Polo",
+                "Vasco da Gama"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 5,
+                "question": "What ship sank after hitting an iceberg in 1912?",
+                "answer": "Titanic",
+                "choices": [
+                "Mayflower",
+                "Titanic",
+                "Santa Maria",
+                "Britannic"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 6,
+                "question": "Who gave the famous I Have a Dream speech?",
+                "answer": "Martin Luther King Jr.",
+                "choices": [
+                "Nelson Mandela",
+                "Martin Luther King Jr.",
+                "Mahatma Gandhi",
+                "Rosa Parks"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 7,
+                "question": "What ancient city was buried by Mount Vesuvius?",
+                "answer": "Pompeii",
+                "choices": [
+                "Athens",
+                "Pompeii",
+                "Rome",
+                "Carthage"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 8,
+                "question": "What period began when humans started farming?",
+                "answer": "Neolithic Revolution",
+                "choices": [
+                "Industrial Revolution",
+                "Neolithic Revolution",
+                "Renaissance",
+                "Bronze Age"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 9,
+                "question": "Which country gave the Statue of Liberty to the United States?",
+                "answer": "France",
+                "choices": [
+                "England",
+                "France",
+                "Spain",
+                "Italy"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 10,
+                "question": "Who was the famous queen of ancient Egypt?",
+                "answer": "Cleopatra",
+                "choices": [
+                "Hatshepsut",
+                "Cleopatra",
+                "Nefertiti",
+                "Isis"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 11,
+                "question": "What war was fought between the North and South in the United States?",
+                "answer": "American Civil War",
+                "choices": [
+                "World War I",
+                "American Civil War",
+                "Revolutionary War",
+                "War of 1812"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 12,
+                "question": "Who was known as the Lady with the Lamp?",
+                "answer": "Florence Nightingale",
+                "choices": [
+                "Marie Curie",
+                "Florence Nightingale",
+                "Clara Barton",
+                "Joan of Arc"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 13,
+                "question": "What civilization used hieroglyphics?",
+                "answer": "Ancient Egyptians",
+                "choices": [
+                "Vikings",
+                "Ancient Egyptians",
+                "Romans",
+                "Aztecs"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 14,
+                "question": "What U.S. holiday celebrates independence?",
+                "answer": "Fourth of July",
+                "choices": [
+                "Thanksgiving",
+                "Fourth of July",
+                "Memorial Day",
+                "Labor Day"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 15,
+                "question": "Who was the first person to walk on the Moon?",
+                "answer": "Neil Armstrong",
+                "choices": [
+                "Buzz Aldrin",
+                "Neil Armstrong",
+                "Yuri Gagarin",
+                "Michael Collins"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 16,
+                "question": "What ancient empire was ruled by Julius Caesar?",
+                "answer": "Roman Empire",
+                "choices": [
+                "Greek Empire",
+                "Roman Empire",
+                "Ottoman Empire",
+                "British Empire"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 17,
+                "question": "What famous U.S. document begins with We the People?",
+                "answer": "United States Constitution",
+                "choices": [
+                "Declaration of Independence",
+                "United States Constitution",
+                "Magna Carta",
+                "Bill of Rights"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 18,
+                "question": "What were medieval warriors in armor called?",
+                "answer": "Knights",
+                "choices": [
+                "Pharaohs",
+                "Knights",
+                "Samurai",
+                "Senators"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 19,
+                "question": "Which people are known for sailing longships from Scandinavia?",
+                "answer": "Vikings",
+                "choices": [
+                "Vikings",
+                "Romans",
+                "Mongols",
+                "Incas"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 20,
+                "question": "What famous bell is a symbol of American independence?",
+                "answer": "Liberty Bell",
+                "choices": [
+                "Freedom Bell",
+                "Liberty Bell",
+                "Victory Bell",
+                "Justice Bell"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 21,
+                "question": "Who led India’s nonviolent movement for independence?",
+                "answer": "Mahatma Gandhi",
+                "choices": [
+                "Mahatma Gandhi",
+                "Jawaharlal Nehru",
+                "Subhas Chandra Bose",
+                "Rabindranath Tagore"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 22,
+                "question": "What ancient civilization lived in city-states like Athens and Sparta?",
+                "answer": "Ancient Greeks",
+                "choices": [
+                "Ancient Greeks",
+                "Ancient Egyptians",
+                "Persians",
+                "Incas"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 23,
+                "question": "What ship brought the Pilgrims to North America in 1620?",
+                "answer": "Mayflower",
+                "choices": [
+                "Titanic",
+                "Mayflower",
+                "Santa Maria",
+                "Endeavour"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 24,
+                "question": "Who was the 16th President of the United States?",
+                "answer": "Abraham Lincoln",
+                "choices": [
+                "George Washington",
+                "Abraham Lincoln",
+                "Theodore Roosevelt",
+                "Franklin Roosevelt"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 25,
+                "question": "What plant did ancient Egyptians use to make paper-like sheets?",
+                "answer": "Papyrus",
+                "choices": [
+                "Silk",
+                "Papyrus",
+                "Clay",
+                "Bamboo"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 26,
+                "question": "Which country did the samurai come from?",
+                "answer": "Japan",
+                "choices": [
+                "China",
+                "Japan",
+                "Korea",
+                "Thailand"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 27,
+                "question": "What famous tower in France was completed in 1889?",
+                "answer": "Eiffel Tower",
+                "choices": [
+                "Leaning Tower of Pisa",
+                "Eiffel Tower",
+                "Big Ben",
+                "Tower of London"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 28,
+                "question": "What city was the capital of the Roman Empire?",
+                "answer": "Rome",
+                "choices": [
+                "Athens",
+                "Rome",
+                "Alexandria",
+                "Cairo"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 29,
+                "question": "Who was known as the Maid of Orleans?",
+                "answer": "Joan of Arc",
+                "choices": [
+                "Cleopatra",
+                "Joan of Arc",
+                "Queen Victoria",
+                "Marie Antoinette"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 30,
+                "question": "What was the first successful airplane of the Wright brothers called?",
+                "answer": "Flyer",
+                "choices": [
+                "Spirit",
+                "Flyer",
+                "Eagle",
+                "Pioneer"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 31,
+                "question": "Which country was ruled by pharaohs?",
+                "answer": "Egypt",
+                "choices": [
+                "Greece",
+                "Egypt",
+                "Rome",
+                "India"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 32,
+                "question": "What ancient people built Machu Picchu?",
+                "answer": "Inca",
+                "choices": [
+                "Aztec",
+                "Maya",
+                "Inca",
+                "Olmec"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 33,
+                "question": "What is a museum mainly used for?",
+                "answer": "Preserving and displaying historical objects",
+                "choices": [
+                "Selling food",
+                "Preserving and displaying historical objects",
+                "Building factories",
+                "Hosting sports games"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 34,
+                "question": "What famous wall divided Berlin during the Cold War?",
+                "answer": "Berlin Wall",
+                "choices": [
+                "Great Wall",
+                "Berlin Wall",
+                "Hadrian’s Wall",
+                "Western Wall"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 35,
+                "question": "What was the main job of scribes in ancient civilizations?",
+                "answer": "Writing and keeping records",
+                "choices": [
+                "Farming crops",
+                "Writing and keeping records",
+                "Building ships",
+                "Training soldiers"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 36,
+                "question": "Who painted the Mona Lisa?",
+                "answer": "Leonardo da Vinci",
+                "choices": [
+                "Michelangelo",
+                "Leonardo da Vinci",
+                "Pablo Picasso",
+                "Vincent van Gogh"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 37,
+                "question": "What invention helped books spread faster in Europe?",
+                "answer": "Printing press",
+                "choices": [
+                "Telescope",
+                "Printing press",
+                "Steam engine",
+                "Compass"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 38,
+                "question": "What ancient Roman structure was used for gladiator games?",
+                "answer": "Colosseum",
+                "choices": [
+                "Parthenon",
+                "Colosseum",
+                "Pyramid",
+                "Acropolis"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 39,
+                "question": "Which explorer led the first expedition to sail around the world?",
+                "answer": "Ferdinand Magellan",
+                "choices": [
+                "Christopher Columbus",
+                "Ferdinand Magellan",
+                "James Cook",
+                "Marco Polo"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 40,
+                "question": "What is history the study of?",
+                "answer": "The past",
+                "choices": [
+                "The future",
+                "The past",
+                "Outer space",
+                "Weather"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 41,
+                "question": "What year did World War II end?",
+                "answer": "1945",
+                "choices": [
+                "1918",
+                "1939",
+                "1945",
+                "1963"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 42,
+                "question": "Which treaty ended World War I?",
+                "answer": "Treaty of Versailles",
+                "choices": [
+                "Treaty of Paris",
+                "Treaty of Versailles",
+                "Treaty of Tordesillas",
+                "Treaty of Ghent"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 43,
+                "question": "Who was the British Prime Minister during much of World War II?",
+                "answer": "Winston Churchill",
+                "choices": [
+                "Neville Chamberlain",
+                "Winston Churchill",
+                "Tony Blair",
+                "Clement Attlee"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 44,
+                "question": "What was the main purpose of the Silk Road?",
+                "answer": "Trade between regions",
+                "choices": [
+                "Military conquest",
+                "Trade between regions",
+                "Religious ceremonies",
+                "Building castles"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 45,
+                "question": "Which empire was ruled by Genghis Khan?",
+                "answer": "Mongol Empire",
+                "choices": [
+                "Roman Empire",
+                "Mongol Empire",
+                "Ottoman Empire",
+                "Persian Empire"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 46,
+                "question": "What was the Renaissance known for?",
+                "answer": "A revival of art, learning, and culture",
+                "choices": [
+                "A period of only wars",
+                "A revival of art, learning, and culture",
+                "The end of farming",
+                "The invention of electricity"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 47,
+                "question": "Which document limited the power of the English king in 1215?",
+                "answer": "Magna Carta",
+                "choices": [
+                "Magna Carta",
+                "Bill of Rights",
+                "Code of Hammurabi",
+                "Federalist Papers"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 48,
+                "question": "What event began when the Bastille was stormed in 1789?",
+                "answer": "French Revolution",
+                "choices": [
+                "Russian Revolution",
+                "French Revolution",
+                "Industrial Revolution",
+                "American Revolution"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 49,
+                "question": "Who was the leader of the Soviet Union during World War II?",
+                "answer": "Joseph Stalin",
+                "choices": [
+                "Vladimir Lenin",
+                "Joseph Stalin",
+                "Nikita Khrushchev",
+                "Mikhail Gorbachev"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 50,
+                "question": "What was the Cold War mainly a conflict between?",
+                "answer": "United States and Soviet Union",
+                "choices": [
+                "Britain and France",
+                "United States and Soviet Union",
+                "China and Japan",
+                "Rome and Carthage"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 51,
+                "question": "What invention greatly increased factory production in the Industrial Revolution?",
+                "answer": "Steam engine",
+                "choices": [
+                "Steam engine",
+                "Compass",
+                "Telephone",
+                "Radio"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 52,
+                "question": "Who wrote the main draft of the Declaration of Independence?",
+                "answer": "Thomas Jefferson",
+                "choices": [
+                "George Washington",
+                "Thomas Jefferson",
+                "Benjamin Franklin",
+                "John Adams"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 53,
+                "question": "What was the Underground Railroad?",
+                "answer": "A network helping enslaved people escape",
+                "choices": [
+                "A subway system",
+                "A network helping enslaved people escape",
+                "A trade road",
+                "A railroad to California"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 54,
+                "question": "Which civilization created a famous calendar and built cities in Mesoamerica?",
+                "answer": "Maya",
+                "choices": [
+                "Maya",
+                "Vikings",
+                "Romans",
+                "Persians"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 55,
+                "question": "What was apartheid?",
+                "answer": "A system of racial segregation in South Africa",
+                "choices": [
+                "A farming method",
+                "A system of racial segregation in South Africa",
+                "A type of election",
+                "A trade agreement"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 56,
+                "question": "Who was the first emperor of China?",
+                "answer": "Qin Shi Huang",
+                "choices": [
+                "Kublai Khan",
+                "Qin Shi Huang",
+                "Sun Yat-sen",
+                "Confucius"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 57,
+                "question": "Which war ended with the surrender at Appomattox Court House?",
+                "answer": "American Civil War",
+                "choices": [
+                "American Civil War",
+                "World War I",
+                "Mexican-American War",
+                "Spanish-American War"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 58,
+                "question": "What was the Louisiana Purchase?",
+                "answer": "A large land purchase from France",
+                "choices": [
+                "Purchase of Alaska",
+                "A large land purchase from France",
+                "A treaty with Britain",
+                "A canal project"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 59,
+                "question": "What was the Reformation?",
+                "answer": "A movement to reform the Christian church",
+                "choices": [
+                "A Roman building project",
+                "A movement to reform the Christian church",
+                "A trade route",
+                "A farming revolution"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 60,
+                "question": "Who was the leader of Nazi Germany during World War II?",
+                "answer": "Adolf Hitler",
+                "choices": [
+                "Benito Mussolini",
+                "Adolf Hitler",
+                "Joseph Stalin",
+                "Francisco Franco"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 61,
+                "question": "Which civilization developed democracy in Athens?",
+                "answer": "Ancient Greeks",
+                "choices": [
+                "Ancient Greeks",
+                "Romans",
+                "Egyptians",
+                "Phoenicians"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 62,
+                "question": "What was the Boston Tea Party a protest against?",
+                "answer": "British taxes",
+                "choices": [
+                "French soldiers",
+                "British taxes",
+                "Spanish trade",
+                "Local elections"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 63,
+                "question": "Which empire captured Constantinople in 1453?",
+                "answer": "Ottoman Empire",
+                "choices": [
+                "Byzantine Empire",
+                "Ottoman Empire",
+                "Mongol Empire",
+                "Roman Empire"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 64,
+                "question": "What was the forced trade of enslaved Africans across the Atlantic called?",
+                "answer": "Transatlantic slave trade",
+                "choices": [
+                "Silk Road",
+                "Triangular migration",
+                "Transatlantic slave trade",
+                "Columbian mission"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 65,
+                "question": "What did the Emancipation Proclamation declare?",
+                "answer": "Enslaved people in Confederate states were free",
+                "choices": [
+                "All taxes ended",
+                "Enslaved people in Confederate states were free",
+                "The Civil War began",
+                "The Constitution was created"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 66,
+                "question": "Who was the first female Prime Minister of the United Kingdom?",
+                "answer": "Margaret Thatcher",
+                "choices": [
+                "Queen Elizabeth II",
+                "Margaret Thatcher",
+                "Theresa May",
+                "Indira Gandhi"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 67,
+                "question": "What was the U.S. project to build the atomic bomb called?",
+                "answer": "Manhattan Project",
+                "choices": [
+                "Apollo Program",
+                "Manhattan Project",
+                "Marshall Plan",
+                "New Deal"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 68,
+                "question": "Which plan helped rebuild Western Europe after World War II?",
+                "answer": "Marshall Plan",
+                "choices": [
+                "Marshall Plan",
+                "New Deal",
+                "Treaty of Paris",
+                "Great Society"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 69,
+                "question": "What was the main goal of the United Nations when founded?",
+                "answer": "To promote peace and cooperation",
+                "choices": [
+                "To create one world army",
+                "To promote peace and cooperation",
+                "To collect taxes",
+                "To rule colonies"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 70,
+                "question": "Who led the Haitian Revolution?",
+                "answer": "Toussaint Louverture",
+                "choices": [
+                "Simon Bolivar",
+                "Toussaint Louverture",
+                "Miguel Hidalgo",
+                "Jose Marti"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 71,
+                "question": "Which explorer sailed around the Cape of Good Hope to reach India?",
+                "answer": "Vasco da Gama",
+                "choices": [
+                "Marco Polo",
+                "Vasco da Gama",
+                "Henry Hudson",
+                "Amerigo Vespucci"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 72,
+                "question": "What was feudalism based on?",
+                "answer": "Land, loyalty, and service",
+                "choices": [
+                "Factories and wages",
+                "Land, loyalty, and service",
+                "Voting and parties",
+                "Banks and loans"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 73,
+                "question": "Who crowned himself emperor of France in 1804?",
+                "answer": "Napoleon Bonaparte",
+                "choices": [
+                "Louis XIV",
+                "Napoleon Bonaparte",
+                "Charlemagne",
+                "Robespierre"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 74,
+                "question": "What empire built roads and aqueducts across much of Europe?",
+                "answer": "Roman Empire",
+                "choices": [
+                "Roman Empire",
+                "Mali Empire",
+                "Aztec Empire",
+                "Mongol Empire"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 75,
+                "question": "What did the 19th Amendment grant in the United States?",
+                "answer": "Women’s right to vote",
+                "choices": [
+                "Freedom of speech",
+                "Women’s right to vote",
+                "End of slavery",
+                "Presidential term limits"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 76,
+                "question": "Which economic crisis began in 1929?",
+                "answer": "Great Depression",
+                "choices": [
+                "Great Depression",
+                "Great Recession",
+                "Oil Crisis",
+                "Panic of 1819"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 77,
+                "question": "What was Franklin D. Roosevelt’s recovery program called?",
+                "answer": "New Deal",
+                "choices": [
+                "New Deal",
+                "Fair Deal",
+                "Marshall Plan",
+                "Square Deal"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 78,
+                "question": "Who was imprisoned for 27 years before becoming president of South Africa?",
+                "answer": "Nelson Mandela",
+                "choices": [
+                "Nelson Mandela",
+                "Desmond Tutu",
+                "Julius Nyerere",
+                "Kwame Nkrumah"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 79,
+                "question": "What were the Crusades?",
+                "answer": "Religious wars involving Christians and Muslims",
+                "choices": [
+                "Scientific debates",
+                "Religious wars involving Christians and Muslims",
+                "Trade fairs",
+                "Peasant festivals"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 80,
+                "question": "Which ancient law code is associated with Babylon?",
+                "answer": "Code of Hammurabi",
+                "choices": [
+                "Ten Commandments",
+                "Code of Hammurabi",
+                "Magna Carta",
+                "Justinian Code"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 81,
+                "question": "What was the immediate cause of World War I?",
+                "answer": "Assassination of Archduke Franz Ferdinand",
+                "choices": [
+                "Sinking of the Lusitania",
+                "Assassination of Archduke Franz Ferdinand",
+                "Invasion of Poland",
+                "Treaty of Versailles"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 82,
+                "question": "Which 1648 treaty helped end the Thirty Years’ War?",
+                "answer": "Peace of Westphalia",
+                "choices": [
+                "Treaty of Utrecht",
+                "Peace of Westphalia",
+                "Treaty of Paris",
+                "Congress of Vienna"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 83,
+                "question": "What term describes the exchange between the Old and New Worlds after 1492?",
+                "answer": "Columbian Exchange",
+                "choices": [
+                "Industrial Exchange",
+                "Columbian Exchange",
+                "Atlantic Charter",
+                "Silk Exchange"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 84,
+                "question": "Which ancient empire was defeated by Alexander the Great?",
+                "answer": "Persian Empire",
+                "choices": [
+                "Persian Empire",
+                "Roman Empire",
+                "Mongol Empire",
+                "Aztec Empire"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 85,
+                "question": "What was the main purpose of the Congress of Vienna?",
+                "answer": "To restore balance of power in Europe after Napoleon",
+                "choices": [
+                "To start World War I",
+                "To restore balance of power in Europe after Napoleon",
+                "To divide Africa",
+                "To create the United Nations"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 86,
+                "question": "Which Chinese dynasty unified China under Qin Shi Huang?",
+                "answer": "Qin Dynasty",
+                "choices": [
+                "Han Dynasty",
+                "Qin Dynasty",
+                "Tang Dynasty",
+                "Ming Dynasty"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 87,
+                "question": "What was the policy of giving in to Hitler’s demands before World War II called?",
+                "answer": "Appeasement",
+                "choices": [
+                "Containment",
+                "Appeasement",
+                "Isolationism",
+                "Reconstruction"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 88,
+                "question": "Which event marked the beginning of the Great Depression in the United States?",
+                "answer": "Stock market crash of 1929",
+                "choices": [
+                "Dust Bowl",
+                "Stock market crash of 1929",
+                "Bank holiday of 1933",
+                "World War II"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 89,
+                "question": "Who was the Byzantine emperor associated with a major law code?",
+                "answer": "Justinian I",
+                "choices": [
+                "Constantine XI",
+                "Justinian I",
+                "Basil II",
+                "Heraclius"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 90,
+                "question": "What was the main goal of the Monroe Doctrine?",
+                "answer": "To warn European powers against colonizing the Americas",
+                "choices": [
+                "To free enslaved people",
+                "To warn European powers against colonizing the Americas",
+                "To create NATO",
+                "To purchase Louisiana"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 91,
+                "question": "Which revolution led to the rise of the Bolsheviks?",
+                "answer": "Russian Revolution",
+                "choices": [
+                "French Revolution",
+                "Russian Revolution",
+                "Glorious Revolution",
+                "Haitian Revolution"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 92,
+                "question": "What was the first written constitution of the United States?",
+                "answer": "Articles of Confederation",
+                "choices": [
+                "Bill of Rights",
+                "Articles of Confederation",
+                "Federalist Papers",
+                "Mayflower Compact"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 93,
+                "question": "Which battle is often considered the turning point of the American Civil War?",
+                "answer": "Battle of Gettysburg",
+                "choices": [
+                "Battle of Yorktown",
+                "Battle of Gettysburg",
+                "Battle of Bunker Hill",
+                "Battle of New Orleans"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 94,
+                "question": "What was the Scramble for Africa?",
+                "answer": "European competition to colonize Africa",
+                "choices": [
+                "African migration to Europe",
+                "European competition to colonize Africa",
+                "A trade route across Sahara",
+                "A peace treaty"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 95,
+                "question": "Who led the Chinese Communist Revolution in 1949?",
+                "answer": "Mao Zedong",
+                "choices": [
+                "Chiang Kai-shek",
+                "Mao Zedong",
+                "Sun Yat-sen",
+                "Deng Xiaoping"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 96,
+                "question": "Which U.S. Supreme Court case declared school segregation unconstitutional?",
+                "answer": "Brown v. Board of Education",
+                "choices": [
+                "Dred Scott v. Sandford",
+                "Brown v. Board of Education",
+                "Marbury v. Madison",
+                "Plessy v. Ferguson"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 97,
+                "question": "What was the main idea of manifest destiny?",
+                "answer": "The belief that the U.S. should expand westward",
+                "choices": [
+                "The belief that the U.S. should expand westward",
+                "The belief in ending all wars",
+                "The belief in royal rule",
+                "The belief in isolation from Europe"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 98,
+                "question": "Which empire was centered in present-day Turkey and lasted until after World War I?",
+                "answer": "Ottoman Empire",
+                "choices": [
+                "Ottoman Empire",
+                "Mali Empire",
+                "Aztec Empire",
+                "Gupta Empire"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 99,
+                "question": "What was the significance of the Battle of Hastings in 1066?",
+                "answer": "Norman conquest of England",
+                "choices": [
+                "End of the Roman Empire",
+                "Norman conquest of England",
+                "Start of the Crusades",
+                "Fall of Constantinople"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 100,
+                "question": "Which civilization used quipu for record keeping?",
+                "answer": "Inca",
+                "choices": [
+                "Maya",
+                "Inca",
+                "Aztec",
+                "Olmec"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 101,
+                "question": "What was the Balfour Declaration related to?",
+                "answer": "British support for a Jewish homeland in Palestine",
+                "choices": [
+                "Indian independence",
+                "British support for a Jewish homeland in Palestine",
+                "End of apartheid",
+                "Creation of NATO"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 102,
+                "question": "Which event involved the forced removal of Cherokee people in the 1830s?",
+                "answer": "Trail of Tears",
+                "choices": [
+                "Trail of Tears",
+                "Long March",
+                "Great Migration",
+                "Boston Massacre"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 103,
+                "question": "Who was the Prussian leader who helped unify Germany?",
+                "answer": "Otto von Bismarck",
+                "choices": [
+                "Otto von Bismarck",
+                "Kaiser Wilhelm II",
+                "Frederick Douglass",
+                "Giuseppe Garibaldi"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 104,
+                "question": "What was the main purpose of NATO when founded in 1949?",
+                "answer": "Collective defense against Soviet influence",
+                "choices": [
+                "Economic trade with Asia",
+                "Collective defense against Soviet influence",
+                "Colonial expansion",
+                "Space exploration"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 105,
+                "question": "Which event symbolically marked the end of the Cold War in 1989?",
+                "answer": "Fall of the Berlin Wall",
+                "choices": [
+                "Cuban Missile Crisis",
+                "Fall of the Berlin Wall",
+                "Korean War armistice",
+                "Vietnam War end"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 106,
+                "question": "What was the Meiji Restoration?",
+                "answer": "A period of modernization and imperial restoration in Japan",
+                "choices": [
+                "A Chinese rebellion",
+                "A period of modernization and imperial restoration in Japan",
+                "A European peace treaty",
+                "A Roman law reform"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 107,
+                "question": "Which movement fought for women’s voting rights?",
+                "answer": "Suffrage movement",
+                "choices": [
+                "Abolition movement",
+                "Suffrage movement",
+                "Temperance only",
+                "Populist movement"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 108,
+                "question": "What was the purpose of the Berlin Airlift?",
+                "answer": "To supply West Berlin during a Soviet blockade",
+                "choices": [
+                "To invade Germany",
+                "To supply West Berlin during a Soviet blockade",
+                "To evacuate Paris",
+                "To build the Berlin Wall"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 109,
+                "question": "Which agreement divided newly discovered lands between Spain and Portugal?",
+                "answer": "Treaty of Tordesillas",
+                "choices": [
+                "Treaty of Tordesillas",
+                "Treaty of Versailles",
+                "Treaty of Brest-Litovsk",
+                "Treaty of Ghent"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 110,
+                "question": "Which Mali ruler was famous for a wealthy pilgrimage to Mecca?",
+                "answer": "Mansa Musa",
+                "choices": [
+                "Sundiata Keita",
+                "Mansa Musa",
+                "Askia Muhammad",
+                "Shaka Zulu"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 111,
+                "question": "What was the Glorious Revolution of 1688?",
+                "answer": "A change in English monarchy that strengthened Parliament",
+                "choices": [
+                "A peasant revolt in France",
+                "A change in English monarchy that strengthened Parliament",
+                "A war between Rome and Carthage",
+                "A revolution in Russia"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 112,
+                "question": "Which document announced the American colonies’ separation from Britain?",
+                "answer": "Declaration of Independence",
+                "choices": [
+                "Constitution",
+                "Declaration of Independence",
+                "Magna Carta",
+                "Articles of Confederation"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 113,
+                "question": "What was the Dred Scott decision known for?",
+                "answer": "Ruling that enslaved people were not citizens",
+                "choices": [
+                "Ending slavery",
+                "Ruling that enslaved people were not citizens",
+                "Creating public schools",
+                "Giving women the vote"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 114,
+                "question": "What was the Long March associated with?",
+                "answer": "Chinese Communist retreat led by Mao’s forces",
+                "choices": [
+                "Roman military campaign",
+                "Chinese Communist retreat led by Mao’s forces",
+                "American westward migration",
+                "Napoleon’s exile"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 115,
+                "question": "Which ancient trade network crossed the Sahara Desert?",
+                "answer": "Trans-Saharan trade routes",
+                "choices": [
+                "Silk Road only",
+                "Trans-Saharan trade routes",
+                "Amber Road",
+                "Panama route"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 116,
+                "question": "What did the Treaty of Guadalupe Hidalgo end?",
+                "answer": "Mexican-American War",
+                "choices": [
+                "War of 1812",
+                "Mexican-American War",
+                "Spanish-American War",
+                "Civil War"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 117,
+                "question": "Which empire used runners called chasquis?",
+                "answer": "Inca Empire",
+                "choices": [
+                "Aztec Empire",
+                "Inca Empire",
+                "Roman Empire",
+                "Persian Empire"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 118,
+                "question": "What was the Enlightenment?",
+                "answer": "An intellectual movement emphasizing reason and rights",
+                "choices": [
+                "A medieval farming system",
+                "An intellectual movement emphasizing reason and rights",
+                "A period of global cooling",
+                "A type of religious war"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 119,
+                "question": "Which battle stopped Napoleon’s final attempt to regain power?",
+                "answer": "Battle of Waterloo",
+                "choices": [
+                    "Battle of Waterloo",
+                    "Battle of Trafalgar",
+                    "Battle of Austerlitz",
+                    "Battle of Leipzig"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 120,
+                "question": "What was the significance of Sputnik 1?",
+                "answer": "First artificial satellite launched into space",
+                "choices": [
+                    "First human on the Moon",
+                    "First artificial satellite launched into space",
+                    "First airplane flight",
+                    "First nuclear submarine"
+                ],
+                "difficulty": "hard"
+            }
+        ]
     }
 }

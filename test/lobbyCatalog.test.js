@@ -37,10 +37,13 @@ test('Quiet Mansion is available for Escape From', () => {
 test('Mathemagician is available for Guess What and uses centered Horizon grid positions', () => {
   const horizon = boards.find(board => board.name === 'Horizon')
   const mathemagician = boards.find(board => board.name === 'Mathemagician')
+  const reminiscing = boards.find(board => board.name === 'Reminiscing')
   assert.equal(boardIsAvailable(mathemagician), true)
+  assert.equal(boardIsAvailable(reminiscing), true)
   assert.deepEqual(boardIndicesForMode(boards, 'guess_what'), [
     boards.indexOf(horizon),
     boards.indexOf(mathemagician),
+    boards.indexOf(reminiscing),
   ])
   assert.deepEqual(getBoardSpacePosition(mathemagician, 1), getBoardSpacePosition(horizon, 1))
   assert.deepEqual(getBoardSpacePosition(mathemagician, 100), getBoardSpacePosition(horizon, 100))

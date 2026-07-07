@@ -327,6 +327,8 @@ input[type=range] { height:30px; }
 .guess-what-card header strong.urgent { color:#ff645b; animation:timer-pulse .45s ease-in-out infinite alternate; }
 .guess-answer-options { display:grid; gap:.65rem; }
 .guess-answer-options button { min-height:58px; font:1rem/1.2 'Luckiest Guy'; }
+.guess-what-card .math-exponent { display:inline-block; margin-left:.05em; font-size:1.3em; line-height:0; vertical-align:super; transform:translateY(-.04em); }
+.guess-answer-options button .math-exponent { font-size:1.45em; }
 .guess-answer-options button:hover:not(:disabled) { filter:brightness(1.12); transform:translateY(-2px); }
 .guess-answer-options button.selected:disabled { opacity:1; border-color:#70c8ff; background:#d8f2ff; box-shadow:0 0 22px #49aaff,0 6px 0 #080d19; transform:scale(1.025); }
 .guess-what-card header strong.answer-locked { color:#8fd6ff; }

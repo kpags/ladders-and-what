@@ -60,6 +60,41 @@ function createClientId() {
   return `client-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 }
 
+const superscriptCharacters = new Set('⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁽⁾ⁿ')
+
+function notationParts(value) {
+  const text = String(value ?? '')
+  const parts = []
+  let index = 0
+
+  while (index < text.length) {
+    const character = text[index]
+    if (character === '^' && index + 1 < text.length) {
+      let end = index + 1
+      while (end < text.length && /[A-Za-z0-9+\-()]/.test(text[end])) end += 1
+      if (end > index + 1) {
+        parts.push({ text: text.slice(index + 1, end), exponent: true })
+        index = end
+        continue
+      }
+    }
+    if (superscriptCharacters.has(character)) {
+      let end = index + 1
+      while (end < text.length && superscriptCharacters.has(text[end])) end += 1
+      parts.push({ text: text.slice(index, end), exponent: true })
+      index = end
+      continue
+    }
+
+    let end = index + 1
+    while (end < text.length && text[end] !== '^' && !superscriptCharacters.has(text[end])) end += 1
+    parts.push({ text: text.slice(index, end), exponent: false })
+    index = end
+  }
+
+  return parts.length ? parts : [{ text: '', exponent: false }]
+}
+
 const page = ref('home')
 const sfx = ref(70)
 const music = ref(40)
@@ -1018,8 +1053,8 @@ function tokenPosition(space, playerIndex) {
   const ghostTown = game.value?.board?.name === 'Ghost Town'
   const quietMansion = game.value?.board?.name === 'Quiet Mansion'
   const deadForest = game.value?.board?.name === 'Dead Forest'
-  const horizon = game.value?.board?.name === 'Horizon'
-  const offsetScale = volcano ? 0.72 : ghostTown ? 0.55 : horizon ? 0.45 : (quietMansion || deadForest) ? 0.35 : 1
+  const guessWhat = game.value?.mode === 'guess_what'
+  const offsetScale = volcano ? 0.72 : ghostTown ? 0.55 : guessWhat ? 0.45 : (quietMansion || deadForest) ? 0.35 : 1
   const [rawOffsetX, rawOffsetY] = offsets[playerIndex % offsets.length]
   const offsetX = rawOffsetX * offsetScale
   const offsetY = rawOffsetY * offsetScale
@@ -1623,7 +1658,12 @@ onUnmounted(() => {
               <strong v-if="!guessWhatQuestion.locked" :class="{ urgent: guessWhatSeconds <= 3 }">{{ guessWhatSeconds }}s</strong>
               <strong v-else class="answer-locked">Locked</strong>
             </header>
-            <h2 id="guess-question-title">{{ guessWhatQuestion.question }}</h2>
+            <h2 id="guess-question-title">
+              <template
+                v-for="(part, index) in notationParts(guessWhatQuestion.question)"
+                :key="`${part.text}-${index}`"
+              ><span :class="{ 'math-exponent': part.exponent }">{{ part.text }}</span></template>
+            </h2>
             <div class="guess-answer-options">
               <button
                 v-for="choice in guessWhatQuestion.choices"
@@ -1632,7 +1672,12 @@ onUnmounted(() => {
                 :class="{ selected: guessWhatQuestion.locked && guessWhatQuestion.selectedAnswer === choice }"
                 :disabled="guessWhatQuestion.playerId !== clientId || guessWhatQuestion.locked"
                 @click="answerGuessWhat(choice)"
-              >{{ choice }}</button>
+              >
+                <template
+                  v-for="(part, index) in notationParts(choice)"
+                  :key="`${choice}-${index}`"
+                ><span :class="{ 'math-exponent': part.exponent }">{{ part.text }}</span></template>
+              </button>
             </div>
             <small v-if="guessWhatQuestion.locked">
               {{ guessWhatQuestion.timedOut ? `${guessWhatQuestion.playerName} did not answer.` : `${guessWhatQuestion.playerName} chose “${guessWhatQuestion.selectedAnswer}”.` }}
