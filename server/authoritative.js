@@ -26,8 +26,32 @@ const sockets = new Map()
 const ESCAPE_ROLL_MS = 10_000
 const ESCAPE_DIRECTION_MS = 10_000
 const ESCAPE_SOCIAL_SOUND_MS = 3_200
-const GUESS_WHAT_TIMERS = { easy: 5_000, medium: 10_000, hard: 15_000 }
+const GUESS_WHAT_TIMERS = { easy: 7_000, medium: 10_000, hard: 15_000 }
 const GUESS_WHAT_BASE_MOVES = { easy: 3, medium: 5, hard: 7 }
+const GUESS_WHAT_WRONG_MOVES = { easy: -4, medium: -3, hard: -2 }
+
+function questionnaireSet(board) {
+  const set = questionnaires[board?.questionnaire]
+  if (Array.isArray(set)) return { timer: {}, questionnaire: set }
+  return {
+    timer: set?.timer || {},
+    questionnaire: Array.isArray(set?.questionnaire) ? set.questionnaire : [],
+  }
+}
+
+function guessWhatTimerMs(game, difficulty) {
+  const seconds = Number(questionnaireSet(game?.board).timer?.[difficulty])
+  return Number.isFinite(seconds) && seconds > 0
+    ? seconds * 1000
+    : GUESS_WHAT_TIMERS[difficulty]
+}
+
+function guessWhatTimerSeconds(game) {
+  return Object.fromEntries(['easy', 'medium', 'hard'].map(difficulty => [
+    difficulty,
+    Math.round(guessWhatTimerMs(game, difficulty) / 1000),
+  ]))
+}
 
 function firstBoardIndex(modeKey) {
   return boardIndicesForMode(boards, modeKey)[0] ?? -1
@@ -822,6 +846,7 @@ function openGuessWhatDifficulty(room, player, token) {
     playerId: player.id,
     playerName: player.name,
     counts,
+    timers: guessWhatTimerSeconds(room.game),
   }, 86_400_000)
   if (player.isAI) {
     room.guessWhatTimer = setTimeout(() => {
@@ -880,18 +905,18 @@ function chooseGuessWhatDifficulty(room, requesterId, requestedDifficulty) {
     return reject(sockets.get(requesterId), 'There is no difficulty choice for this player.')
   }
   const ids = room.game.remainingQuestionIds?.[difficulty] || []
-  if (!GUESS_WHAT_TIMERS[difficulty] || !ids.length) {
+  const duration = guessWhatTimerMs(room.game, difficulty)
+  if (!duration || !ids.length) {
     return reject(sockets.get(requesterId), 'That difficulty has no questions available.')
   }
   clearTimer(room.guessWhatTimer)
-  const source = questionnaires[room.game.board.questionnaire] || []
+  const source = questionnaireSet(room.game.board).questionnaire
   const questionId = ids[Math.floor(Math.random() * ids.length)]
   const question = source.find(item => item.id === questionId && item.difficulty === difficulty)
   if (!question) return reject(sockets.get(requesterId), 'The selected question is unavailable.')
   const wrong = question.choices.filter(choice => choice !== question.answer)
   const choices = [question.answer, ...wrong.sort(() => Math.random() - 0.5).slice(0, 2)]
     .sort(() => Math.random() - 0.5)
-  const duration = GUESS_WHAT_TIMERS[difficulty]
   const expiresAt = Date.now() + duration
   room.pendingGuessWhat = {
     stage: 'question',
@@ -937,11 +962,13 @@ function answerGuessWhatQuestion(room, requesterId, selectedAnswer, timedOut = f
   clearTimer(room.guessWhatTimer)
   room.guessWhatTimer = null
   const correct = !timedOut && pending.choices.includes(selectedAnswer) && selectedAnswer === pending.answer
-  const total = GUESS_WHAT_TIMERS[pending.difficulty]
+  const total = guessWhatTimerMs(room.game, pending.difficulty)
   const remaining = Math.max(0, pending.expiresAt - Date.now())
   const percentage = (remaining / total) * 100
   const speedBonus = percentage >= 80 ? 3 : percentage >= 50 ? 2 : percentage >= 30 ? 1 : 0
-  const movement = correct ? GUESS_WHAT_BASE_MOVES[pending.difficulty] + speedBonus : -2
+  const movement = correct
+    ? GUESS_WHAT_BASE_MOVES[pending.difficulty] + speedBonus
+    : GUESS_WHAT_WRONG_MOVES[pending.difficulty]
   const token = pending.token
   room.pendingGuessWhat = { ...pending, stage: 'resolving', selectedAnswer, timedOut }
   emitEvent(room, 'guess_what_answer_selected', {
@@ -969,7 +996,7 @@ function answerGuessWhatQuestion(room, requesterId, selectedAnswer, timedOut = f
       correct,
       timedOut,
       selectedAnswer,
-      correctAnswer: pending.answer,
+      correctAnswer: correct ? pending.answer : null,
       difficulty: pending.difficulty,
       movement,
       speedBonus,
@@ -1648,7 +1675,7 @@ function startGame(room, requesterId) {
   })
   room.game = createGameState(board, definitions, Date.now(), {
     exactMoveFor100: room.exactMoveFor100,
-    questionnaire: questionnaires[board.questionnaire] || [],
+    questionnaire: questionnaireSet(board).questionnaire,
   })
   room.phase = 'playing'
   room.escapeBriefing = room.game.mode === 'escape_from'

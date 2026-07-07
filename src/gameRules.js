@@ -25,6 +25,9 @@ function prepareBoard(board) {
 
 export function createGameState(board, players, startedAt = Date.now(), options = {}) {
   const preparedBoard = prepareBoard(board)
+  const questionnaire = Array.isArray(options.questionnaire)
+    ? options.questionnaire
+    : options.questionnaire?.questionnaire || []
   const state = {
     mode: preparedBoard.type || 'standard',
     board: preparedBoard,
@@ -75,7 +78,7 @@ export function createGameState(board, players, startedAt = Date.now(), options 
     remainingQuestionIds: preparedBoard.type === 'guess_what'
       ? Object.fromEntries(['easy', 'medium', 'hard'].map(difficulty => [
           difficulty,
-          (options.questionnaire || []).filter(question => question.difficulty === difficulty).map(question => question.id),
+          questionnaire.filter(question => question.difficulty === difficulty).map(question => question.id),
         ]))
       : null,
   }
@@ -960,7 +963,7 @@ export function resolveGuessWhatAnswer(state, playerId, {
   const needsQuestion = !player.finished && state.board.question_marks.includes(player.space)
   addLog(state, correct
     ? `${player.name} answered correctly and moved forward ${movement} space(s) to space ${player.space}.`
-    : `${player.name} answered incorrectly and moved back 2 spaces to space ${player.space}.`)
+    : `${player.name} answered incorrectly and moved back ${Math.abs(Number(movement || 0))} spaces to space ${player.space}.`)
   if (!needsQuestion && !state.gameOver) advanceTurn(state)
   return {
     player,

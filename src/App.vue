@@ -1611,7 +1611,7 @@ onUnmounted(() => {
               >
                 <strong>{{ difficulty }}</strong>
                 <span>{{ guessWhatDifficulty.counts[difficulty] }} available</span>
-                <small>{{ difficulty === 'easy' ? '5s · 3+' : difficulty === 'medium' ? '10s · 5+' : '15s · 7+' }} moves</small>
+                <small>{{ guessWhatDifficulty.timers?.[difficulty] || (difficulty === 'easy' ? 7 : difficulty === 'medium' ? 10 : 15) }}s · {{ difficulty === 'easy' ? '3+' : difficulty === 'medium' ? '5+' : '7+' }} moves</small>
               </button>
             </div>
           </section>
@@ -1643,7 +1643,7 @@ onUnmounted(() => {
         <div v-if="guessWhatResult" class="guess-what-result" :class="{ correct: guessWhatResult.correct, wrong: !guessWhatResult.correct }" role="status">
           <strong>{{ guessWhatResult.correct ? 'Correct!' : guessWhatResult.timedOut ? 'Time’s up!' : 'Wrong answer!' }}</strong>
           <span v-if="guessWhatResult.correct">Move forward {{ guessWhatResult.movement }} spaces</span>
-          <span v-else>The answer was {{ guessWhatResult.correctAnswer }} · Move back 2 spaces</span>
+          <span v-else>Move back {{ Math.abs(guessWhatResult.movement) }} spaces</span>
         </div>
         <div v-if="sighOverlay" class="sigh-overlay" role="status">
           <strong>*Sigh*</strong>

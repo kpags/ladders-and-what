@@ -35,7 +35,7 @@ export function getBoardSpacePosition(board, space) {
   const volcano = board?.name === 'Volcano'
   const atlantic = board?.name === 'Atlantic'
   const ghostTown = board?.name === 'Ghost Town'
-  const horizon = board?.name === 'Horizon'
+  const horizon = ['Horizon', 'Mathemagician'].includes(board?.name)
   const quietMansion = board?.name === 'Quiet Mansion'
   const deadForest = board?.name === 'Dead Forest'
   const runAway = board?.type === 'run_away'

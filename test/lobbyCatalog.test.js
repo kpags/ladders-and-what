@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
-import { getBoardSpaceBounds } from '../src/boardLayout.js'
+import { getBoardSpaceBounds, getBoardSpacePosition } from '../src/boardLayout.js'
 
 const root = resolve(import.meta.dirname, '..')
 const characters = JSON.parse(readFileSync(resolve(root, 'data/characters.json'), 'utf8'))
@@ -32,6 +32,18 @@ test('Quiet Mansion is available for Escape From', () => {
     boards.indexOf(quietMansion),
     boards.indexOf(deadForest),
   ])
+})
+
+test('Mathemagician is available for Guess What and uses centered Horizon grid positions', () => {
+  const horizon = boards.find(board => board.name === 'Horizon')
+  const mathemagician = boards.find(board => board.name === 'Mathemagician')
+  assert.equal(boardIsAvailable(mathemagician), true)
+  assert.deepEqual(boardIndicesForMode(boards, 'guess_what'), [
+    boards.indexOf(horizon),
+    boards.indexOf(mathemagician),
+  ])
+  assert.deepEqual(getBoardSpacePosition(mathemagician, 1), getBoardSpacePosition(horizon, 1))
+  assert.deepEqual(getBoardSpacePosition(mathemagician, 100), getBoardSpacePosition(horizon, 100))
 })
 
 test('Dead Forest exposes its Square 100 bounds for the fog reveal', () => {

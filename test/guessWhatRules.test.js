@@ -5,6 +5,7 @@ import questions from '../data/guess_what_questions.json' with { type: 'json' }
 import { createGameState, resolveGuessWhatAnswer, takeGuessWhatTurn } from '../src/gameRules.js'
 
 const horizon = boards.find(board => board.name === 'Horizon')
+const mathemagician = boards.find(board => board.name === 'Mathemagician')
 const players = [
   { id: 'one', name: 'One', color: '#fff' },
   { id: 'two', name: 'Two', color: '#000' },
@@ -23,6 +24,18 @@ test('Horizon preserves its authored question squares and initializes 40 questio
   assert.equal(state.exactMoveFor100, false)
 })
 
+test('Mathemagician initializes the math questionnaire from the nested questionnaire object', () => {
+  const state = createGameState(mathemagician, players, 0, {
+    questionnaire: questions.math,
+  })
+  assert.equal(state.board.questionnaire, 'math')
+  assert.deepEqual(state.board.question_marks, mathemagician.question_marks)
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(state.remainingQuestionIds).map(([key, ids]) => [key, ids.length])),
+    { easy: 40, medium: 40, hard: 40 },
+  )
+})
+
 test('Guess What rolls use faces 1 through 6 and pause on a question square', () => {
   const state = createGameState(horizon, players, 0, { questionnaire: questions.space })
   state.players[0].space = 3
@@ -35,11 +48,11 @@ test('Guess What rolls use faces 1 through 6 and pause on a question square', ()
 
 test('a wrong answer landing on another question square starts another question', () => {
   const state = createGameState(horizon, players, 0, { questionnaire: questions.space })
-  state.players[0].space = 6
+  state.players[0].space = 8
   const result = resolveGuessWhatAnswer(state, 'one', {
     questionId: 1,
     correct: false,
-    movement: -2,
+    movement: -4,
   })
 
   assert.equal(result.destination, 4)
@@ -64,9 +77,9 @@ test('correct questions are removed while wrong questions remain available', () 
   const wrong = resolveGuessWhatAnswer(wrongState, 'one', {
     questionId: 1,
     correct: false,
-    movement: -2,
+    movement: -4,
   })
-  assert.equal(wrong.destination, 2)
+  assert.equal(wrong.destination, 1)
   assert.equal(wrongState.remainingQuestionIds.easy.includes(1), true)
 })
 

@@ -679,5 +679,15 @@
         "question_marks": [
             4, 7, 11, 15, 20, 23, 24, 29, 33, 36,40, 42, 43, 48, 50, 51, 55, 59, 63, 69, 72, 75, 78, 82, 85, 86, 91, 92, 94, 98
         ]
+    },
+    {
+        "name": "Mathemagician",
+        "type": "guess_what",
+        "picture": "assets/boards/mathemagician/template.png",
+        "music": "mathemagician",
+        "questionnaire": "math",
+        "question_marks": [
+            4, 7, 11, 15, 20, 23, 24, 29, 33, 36, 40, 42, 43, 48, 50, 51, 54, 56, 59, 63, 65, 69, 72, 73, 75, 78, 82, 85, 86, 88, 91, 92, 94, 97, 98
+        ]
     }
 ]
