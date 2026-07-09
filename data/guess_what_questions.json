@@ -3744,5 +3744,1454 @@
                 "difficulty": "hard"
             }
         ]
+    },
+    "ph_history": {
+        "timer": {
+            "easy": 8,
+            "medium": 12,
+            "hard": 15
+        },
+        "questionnaire": [
+            {
+                "id": 1,
+                "question": "Who is known as the national hero of the Philippines?",
+                "answer": "Jose Rizal",
+                "choices": [
+                    "Andres Bonifacio",
+                    "Jose Rizal",
+                    "Emilio Aguinaldo",
+                    "Apolinario Mabini"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 2,
+                "question": "What is the capital city of the Philippines?",
+                "answer": "Manila",
+                "choices": [
+                    "Cebu",
+                    "Davao",
+                    "Manila",
+                    "Baguio"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 3,
+                "question": "What country colonized the Philippines for more than 300 years?",
+                "answer": "Spain",
+                "choices": [
+                    "Japan",
+                    "Spain",
+                    "China",
+                    "France"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 4,
+                "question": "What is the name of the Philippine flag’s sun symbol?",
+                "answer": "Sun",
+                "choices": [
+                    "Moon",
+                    "Star",
+                    "Sun",
+                    "Cloud"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 5,
+                "question": "How many stars are on the Philippine flag?",
+                "answer": "Three",
+                "choices": [
+                    "One",
+                    "Two",
+                    "Three",
+                    "Four"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 6,
+                "question": "What Philippine holiday is celebrated every June 12?",
+                "answer": "Independence Day",
+                "choices": [
+                    "Bonifacio Day",
+                    "Independence Day",
+                    "Rizal Day",
+                    "Labor Day"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 7,
+                "question": "Who was the first president of the First Philippine Republic?",
+                "answer": "Emilio Aguinaldo",
+                "choices": [
+                    "Manuel Quezon",
+                    "Emilio Aguinaldo",
+                    "Jose Rizal",
+                    "Ferdinand Marcos"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 8,
+                "question": "What is the oldest city in the Philippines?",
+                "answer": "Cebu City",
+                "choices": [
+                    "Manila",
+                    "Cebu City",
+                    "Vigan",
+                    "Iloilo City"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 9,
+                "question": "Who wrote the novel Noli Me Tangere?",
+                "answer": "Jose Rizal",
+                "choices": [
+                    "Jose Rizal",
+                    "Marcelo H. del Pilar",
+                    "Graciano Lopez Jaena",
+                    "Andres Bonifacio"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 10,
+                "question": "What group did Andres Bonifacio help establish to fight Spanish rule?",
+                "answer": "Katipunan",
+                "choices": [
+                    "Katipunan",
+                    "La Liga Filipina",
+                    "Kilusang Bagong Lipunan",
+                    "Propaganda Movement"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 11,
+                "question": "What is the common nickname of Andres Bonifacio?",
+                "answer": "The Father of the Philippine Revolution",
+                "choices": [
+                    "The Brain of the Revolution",
+                    "The Father of the Philippine Revolution",
+                    "The Sublime Paralytic",
+                    "The Great Plebeian"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 12,
+                "question": "What is the name of the first book printed in the Philippines?",
+                "answer": "Doctrina Christiana",
+                "choices": [
+                    "Florante at Laura",
+                    "Doctrina Christiana",
+                    "Noli Me Tangere",
+                    "El Filibusterismo"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 13,
+                "question": "Who is called the Mother of the Philippine Red Cross?",
+                "answer": "Aurora Quezon",
+                "choices": [
+                    "Melchora Aquino",
+                    "Aurora Quezon",
+                    "Gabriela Silang",
+                    "Corazon Aquino"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 14,
+                "question": "What city is known for the historic walled area called Intramuros?",
+                "answer": "Manila",
+                "choices": [
+                    "Cebu",
+                    "Manila",
+                    "Bacolod",
+                    "Dumaguete"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 15,
+                "question": "Who was the first woman president of the Philippines?",
+                "answer": "Corazon Aquino",
+                "choices": [
+                    "Gloria Macapagal Arroyo",
+                    "Corazon Aquino",
+                    "Imelda Marcos",
+                    "Leni Robredo"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 16,
+                "question": "What famous battle in 1521 involved Lapu-Lapu and Ferdinand Magellan?",
+                "answer": "Battle of Mactan",
+                "choices": [
+                    "Battle of Manila",
+                    "Battle of Mactan",
+                    "Battle of Tirad Pass",
+                    "Battle of Bataan"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 17,
+                "question": "Who led the Filipino forces against Magellan in Mactan?",
+                "answer": "Lapu-Lapu",
+                "choices": [
+                    "Rajah Humabon",
+                    "Lapu-Lapu",
+                    "Diego Silang",
+                    "Emilio Aguinaldo"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 18,
+                "question": "What was the name of Jose Rizal’s second famous novel?",
+                "answer": "El Filibusterismo",
+                "choices": [
+                    "El Filibusterismo",
+                    "Florante at Laura",
+                    "Ibong Adarna",
+                    "Mi Ultimo Adios"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 19,
+                "question": "What day is Rizal Day observed in the Philippines?",
+                "answer": "December 30",
+                "choices": [
+                    "June 12",
+                    "August 21",
+                    "November 30",
+                    "December 30"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 20,
+                "question": "Who is known as the Brains of the Katipunan?",
+                "answer": "Emilio Jacinto",
+                "choices": [
+                    "Emilio Jacinto",
+                    "Apolinario Mabini",
+                    "Antonio Luna",
+                    "Marcelo H. del Pilar"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 21,
+                "question": "What is the name of the Filipino revolutionary society founded in 1892?",
+                "answer": "Katipunan",
+                "choices": [
+                    "Katipunan",
+                    "La Solidaridad",
+                    "Malolos Congress",
+                    "Biak-na-Bato"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 22,
+                "question": "What color on the Philippine flag represents patriotism and valor?",
+                "answer": "Red",
+                "choices": [
+                    "Blue",
+                    "White",
+                    "Red",
+                    "Yellow"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 23,
+                "question": "What color forms the triangle on the Philippine flag?",
+                "answer": "White",
+                "choices": [
+                    "Red",
+                    "Blue",
+                    "White",
+                    "Yellow"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 24,
+                "question": "What province is strongly associated with Jose Rizal’s birthplace?",
+                "answer": "Laguna",
+                "choices": [
+                    "Cavite",
+                    "Laguna",
+                    "Bulacan",
+                    "Batangas"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 25,
+                "question": "In what town was Jose Rizal born?",
+                "answer": "Calamba",
+                "choices": [
+                    "Kawit",
+                    "Calamba",
+                    "Taal",
+                    "Malolos"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 26,
+                "question": "Who was Jose Rizal’s mother?",
+                "answer": "Teodora Alonso",
+                "choices": [
+                    "Teodora Alonso",
+                    "Marcela Agoncillo",
+                    "Gregoria de Jesus",
+                    "Trinidad Tecson"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 27,
+                "question": "Who was Jose Rizal’s father?",
+                "answer": "Francisco Mercado",
+                "choices": [
+                    "Francisco Mercado",
+                    "Mariano Ponce",
+                    "Pedro Paterno",
+                    "Jose Burgos"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 28,
+                "question": "What is the name of the Philippines’ national anthem?",
+                "answer": "Lupang Hinirang",
+                "choices": [
+                    "Bayan Ko",
+                    "Lupang Hinirang",
+                    "Pilipinas Kong Mahal",
+                    "Ako ay Pilipino"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 29,
+                "question": "Who wrote the music of Lupang Hinirang?",
+                "answer": "Julian Felipe",
+                "choices": [
+                    "Julian Felipe",
+                    "Jose Palma",
+                    "Levi Celerio",
+                    "Ryan Cayabyab"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 30,
+                "question": "Who wrote the lyrics of the Spanish poem that became the basis of Lupang Hinirang?",
+                "answer": "Jose Palma",
+                "choices": [
+                    "Jose Palma",
+                    "Jose Rizal",
+                    "Andres Bonifacio",
+                    "Apolinario Mabini"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 31,
+                "question": "What is the old name of Luneta Park?",
+                "answer": "Bagumbayan",
+                "choices": [
+                    "Bagumbayan",
+                    "Intramuros",
+                    "Tondo",
+                    "Binondo"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 32,
+                "question": "Where was Jose Rizal executed?",
+                "answer": "Bagumbayan",
+                "choices": [
+                    "Mactan",
+                    "Bagumbayan",
+                    "Kawit",
+                    "Malolos"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 33,
+                "question": "What historical document declared Philippine independence in 1898?",
+                "answer": "Act of the Declaration of Philippine Independence",
+                "choices": [
+                    "Malolos Constitution",
+                    "Act of the Declaration of Philippine Independence",
+                    "Treaty of Paris",
+                    "Jones Law"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 34,
+                "question": "In what town was Philippine independence declared in 1898?",
+                "answer": "Kawit",
+                "choices": [
+                    "Kawit",
+                    "Malolos",
+                    "Cebu",
+                    "Vigan"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 35,
+                "question": "What province is Kawit located in?",
+                "answer": "Cavite",
+                "choices": [
+                    "Laguna",
+                    "Cavite",
+                    "Bulacan",
+                    "Pampanga"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 36,
+                "question": "Who is known as the Sublime Paralytic?",
+                "answer": "Apolinario Mabini",
+                "choices": [
+                    "Apolinario Mabini",
+                    "Antonio Luna",
+                    "Emilio Jacinto",
+                    "Jose Rizal"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 37,
+                "question": "Who is known as the Mother of the Katipunan?",
+                "answer": "Melchora Aquino",
+                "choices": [
+                    "Gabriela Silang",
+                    "Melchora Aquino",
+                    "Marcela Agoncillo",
+                    "Tandang Sora"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 38,
+                "question": "What is Melchora Aquino’s more popular name?",
+                "answer": "Tandang Sora",
+                "choices": [
+                    "Tandang Sora",
+                    "Inang Bayan",
+                    "Lakambini",
+                    "Henerala"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 39,
+                "question": "Who is known as the Father of the Philippine Army?",
+                "answer": "Antonio Luna",
+                "choices": [
+                    "Antonio Luna",
+                    "Emilio Aguinaldo",
+                    "Gregorio del Pilar",
+                    "Artemio Ricarte"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 40,
+                "question": "Which historical city in Ilocos Sur is famous for Spanish colonial houses?",
+                "answer": "Vigan",
+                "choices": [
+                    "Vigan",
+                    "Tagaytay",
+                    "General Santos",
+                    "Puerto Princesa"
+                ],
+                "difficulty": "easy"
+            },
+            {
+                "id": 41,
+                "question": "What Spanish expedition first reached the Philippines in 1521?",
+                "answer": "Magellan expedition",
+                "choices": [
+                    "Legazpi expedition",
+                    "Magellan expedition",
+                    "Villalobos expedition",
+                    "Urdaneta expedition"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 42,
+                "question": "Who named the islands Las Islas Filipinas after King Philip II of Spain?",
+                "answer": "Ruy Lopez de Villalobos",
+                "choices": [
+                    "Ferdinand Magellan",
+                    "Ruy Lopez de Villalobos",
+                    "Miguel Lopez de Legazpi",
+                    "Juan de Salcedo"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 43,
+                "question": "Who established Spanish settlement in Cebu in 1565?",
+                "answer": "Miguel Lopez de Legazpi",
+                "choices": [
+                    "Miguel Lopez de Legazpi",
+                    "Ferdinand Magellan",
+                    "Juan Luna",
+                    "Diego Silang"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 44,
+                "question": "What was the first Spanish settlement in the Philippines?",
+                "answer": "Cebu",
+                "choices": [
+                    "Manila",
+                    "Cebu",
+                    "Vigan",
+                    "Iloilo"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 45,
+                "question": "Who transferred the Spanish colonial capital to Manila in 1571?",
+                "answer": "Miguel Lopez de Legazpi",
+                "choices": [
+                    "Miguel Lopez de Legazpi",
+                    "Ruy Lopez de Villalobos",
+                    "Simon de Anda",
+                    "Jose Basco"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 46,
+                "question": "What was the Spanish colonial system where Filipinos were forced to work?",
+                "answer": "Polo y servicios",
+                "choices": [
+                    "Bandala",
+                    "Polo y servicios",
+                    "Encomienda",
+                    "Reduccion"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 47,
+                "question": "What was the tribute system during Spanish rule?",
+                "answer": "A tax paid by native Filipinos",
+                "choices": [
+                    "A free school system",
+                    "A tax paid by native Filipinos",
+                    "A military rank",
+                    "A voting method"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 48,
+                "question": "What was the encomienda system mainly about?",
+                "answer": "Control and collection of tribute from communities",
+                "choices": [
+                    "Free elections",
+                    "Control and collection of tribute from communities",
+                    "Public transportation",
+                    "Newspapers"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 49,
+                "question": "What Spanish policy gathered scattered communities into town centers?",
+                "answer": "Reduccion",
+                "choices": [
+                    "Reduccion",
+                    "Polo",
+                    "Bandala",
+                    "Galleon Trade"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 50,
+                "question": "What trade route connected Manila and Acapulco during Spanish rule?",
+                "answer": "Manila-Acapulco Galleon Trade",
+                "choices": [
+                    "Silk Road",
+                    "Manila-Acapulco Galleon Trade",
+                    "Spice Route",
+                    "Suez Trade"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 51,
+                "question": "Which Filipino priests were executed in 1872 and inspired nationalist movements?",
+                "answer": "Gomburza",
+                "choices": [
+                    "Gomburza",
+                    "Katipunan",
+                    "Ilustrados",
+                    "Magdalo"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 52,
+                "question": "What does Gomburza stand for?",
+                "answer": "Gomez, Burgos, and Zamora",
+                "choices": [
+                    "Gomez, Burgos, and Zamora",
+                    "Gregorio, Bonifacio, and Zamora",
+                    "Gomez, Bonifacio, and Zulueta",
+                    "Guerrero, Burgos, and Zaide"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 53,
+                "question": "What reformist newspaper was published by Filipino propagandists in Spain?",
+                "answer": "La Solidaridad",
+                "choices": [
+                    "La Solidaridad",
+                    "Kalayaan",
+                    "El Renacimiento",
+                    "La Independencia"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 54,
+                "question": "Who was the first editor of La Solidaridad?",
+                "answer": "Graciano Lopez Jaena",
+                "choices": [
+                    "Jose Rizal",
+                    "Graciano Lopez Jaena",
+                    "Marcelo H. del Pilar",
+                    "Mariano Ponce"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 55,
+                "question": "What organization did Jose Rizal found in 1892?",
+                "answer": "La Liga Filipina",
+                "choices": [
+                    "La Liga Filipina",
+                    "Katipunan",
+                    "Malolos Congress",
+                    "Magdalo"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 56,
+                "question": "What secret society was founded after Rizal’s arrest in 1892?",
+                "answer": "Katipunan",
+                "choices": [
+                    "Katipunan",
+                    "La Liga Filipina",
+                    "La Solidaridad",
+                    "Philippine Assembly"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 57,
+                "question": "Who was known as the Lakambini of the Katipunan?",
+                "answer": "Gregoria de Jesus",
+                "choices": [
+                    "Gregoria de Jesus",
+                    "Melchora Aquino",
+                    "Marcela Agoncillo",
+                    "Trinidad Tecson"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 58,
+                "question": "What was the official newspaper of the Katipunan?",
+                "answer": "Kalayaan",
+                "choices": [
+                    "Kalayaan",
+                    "La Solidaridad",
+                    "El Filibusterismo",
+                    "La Independencia"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 59,
+                "question": "What event in 1896 revealed the existence of the Katipunan?",
+                "answer": "Discovery of the Katipunan",
+                "choices": [
+                    "Cry of Pugad Lawin",
+                    "Discovery of the Katipunan",
+                    "Treaty of Paris",
+                    "Battle of Tirad Pass"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 60,
+                "question": "What event is associated with tearing cedulas as a sign of revolt?",
+                "answer": "Cry of Pugad Lawin",
+                "choices": [
+                    "Cry of Pugad Lawin",
+                    "Pact of Biak-na-Bato",
+                    "Cavite Mutiny",
+                    "Malolos Congress"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 61,
+                "question": "What was the agreement that temporarily ended the Philippine Revolution in 1897?",
+                "answer": "Pact of Biak-na-Bato",
+                "choices": [
+                    "Treaty of Paris",
+                    "Pact of Biak-na-Bato",
+                    "Jones Law",
+                    "Tydings-McDuffie Act"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 62,
+                "question": "Where did Emilio Aguinaldo go into exile after the Pact of Biak-na-Bato?",
+                "answer": "Hong Kong",
+                "choices": [
+                    "Spain",
+                    "Hong Kong",
+                    "Japan",
+                    "Guam"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 63,
+                "question": "What battle marked a major American naval victory in Manila Bay in 1898?",
+                "answer": "Battle of Manila Bay",
+                "choices": [
+                    "Battle of Mactan",
+                    "Battle of Manila Bay",
+                    "Battle of Bataan",
+                    "Battle of Tirad Pass"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 64,
+                "question": "Who commanded the American fleet at the Battle of Manila Bay?",
+                "answer": "George Dewey",
+                "choices": [
+                    "Douglas MacArthur",
+                    "George Dewey",
+                    "William Taft",
+                    "Arthur MacArthur"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 65,
+                "question": "What treaty ended the Spanish-American War and transferred the Philippines to the United States?",
+                "answer": "Treaty of Paris of 1898",
+                "choices": [
+                    "Treaty of Paris of 1898",
+                    "Pact of Biak-na-Bato",
+                    "Jones Law",
+                    "Treaty of Manila"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 66,
+                "question": "What republic was established in Malolos in 1899?",
+                "answer": "First Philippine Republic",
+                "choices": [
+                    "Second Philippine Republic",
+                    "First Philippine Republic",
+                    "Commonwealth",
+                    "Third Republic"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 67,
+                "question": "What constitution established the First Philippine Republic?",
+                "answer": "Malolos Constitution",
+                "choices": [
+                    "Malolos Constitution",
+                    "1935 Constitution",
+                    "1973 Constitution",
+                    "Biak-na-Bato Constitution"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 68,
+                "question": "Who was the president of the Malolos Congress?",
+                "answer": "Pedro Paterno",
+                "choices": [
+                    "Pedro Paterno",
+                    "Apolinario Mabini",
+                    "Antonio Luna",
+                    "Felipe Calderon"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 69,
+                "question": "Who is often called the Father of the Malolos Constitution?",
+                "answer": "Felipe Calderon",
+                "choices": [
+                    "Felipe Calderon",
+                    "Pedro Paterno",
+                    "Emilio Aguinaldo",
+                    "Jose Palma"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 70,
+                "question": "What war began between Filipino forces and American forces in 1899?",
+                "answer": "Philippine-American War",
+                "choices": [
+                    "Spanish-American War",
+                    "Philippine-American War",
+                    "World War I",
+                    "Pacific War"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 71,
+                "question": "Who was the young general killed at Tirad Pass?",
+                "answer": "Gregorio del Pilar",
+                "choices": [
+                    "Gregorio del Pilar",
+                    "Antonio Luna",
+                    "Macario Sakay",
+                    "Miguel Malvar"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 72,
+                "question": "Which general was assassinated in Cabanatuan in 1899?",
+                "answer": "Antonio Luna",
+                "choices": [
+                    "Antonio Luna",
+                    "Gregorio del Pilar",
+                    "Emilio Jacinto",
+                    "Artemio Ricarte"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 73,
+                "question": "Who is considered the last Filipino general to surrender to the Americans in the Philippine-American War?",
+                "answer": "Miguel Malvar",
+                "choices": [
+                    "Miguel Malvar",
+                    "Macario Sakay",
+                    "Gregorio del Pilar",
+                    "Antonio Luna"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 74,
+                "question": "What law created the Philippine Assembly in 1907?",
+                "answer": "Philippine Organic Act of 1902",
+                "choices": [
+                    "Jones Law",
+                    "Philippine Organic Act of 1902",
+                    "Tydings-McDuffie Act",
+                    "Hare-Hawes-Cutting Act"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 75,
+                "question": "Who became the first Speaker of the Philippine Assembly?",
+                "answer": "Sergio Osmena",
+                "choices": [
+                    "Sergio Osmena",
+                    "Manuel Quezon",
+                    "Manuel Roxas",
+                    "Claro M. Recto"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 76,
+                "question": "What law promised eventual Philippine independence and created a bicameral legislature?",
+                "answer": "Jones Law of 1916",
+                "choices": [
+                    "Jones Law of 1916",
+                    "Payne-Aldrich Act",
+                    "Bell Trade Act",
+                    "Parity Rights Act"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 77,
+                "question": "What law provided for the creation of the Philippine Commonwealth?",
+                "answer": "Tydings-McDuffie Act",
+                "choices": [
+                    "Jones Law",
+                    "Tydings-McDuffie Act",
+                    "Bell Trade Act",
+                    "Philippine Bill of 1902"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 78,
+                "question": "Who was the first president of the Philippine Commonwealth?",
+                "answer": "Manuel L. Quezon",
+                "choices": [
+                    "Manuel L. Quezon",
+                    "Sergio Osmena",
+                    "Manuel Roxas",
+                    "Jose Laurel"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 79,
+                "question": "What language did Manuel L. Quezon help promote as the national language?",
+                "answer": "Filipino",
+                "choices": [
+                    "Spanish",
+                    "Filipino",
+                    "English",
+                    "Japanese"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 80,
+                "question": "What event started the Japanese occupation of the Philippines during World War II?",
+                "answer": "Japanese invasion in 1941",
+                "choices": [
+                    "Japanese invasion in 1941",
+                    "Battle of Mactan",
+                    "Cavite Mutiny",
+                    "EDSA Revolution"
+                ],
+                "difficulty": "medium"
+            },
+            {
+                "id": 81,
+                "question": "What was the Cavite Mutiny of 1872?",
+                "answer": "A revolt by Filipino workers and soldiers at the Cavite arsenal",
+                "choices": [
+                    "A revolt by Filipino workers and soldiers at the Cavite arsenal",
+                    "A battle against Japan",
+                    "A meeting of the Katipunan",
+                    "A law passed by Spain"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 82,
+                "question": "Why was the execution of Gomburza important to Philippine nationalism?",
+                "answer": "It inspired many Filipinos to seek reforms and freedom",
+                "choices": [
+                    "It ended Spanish rule immediately",
+                    "It inspired many Filipinos to seek reforms and freedom",
+                    "It created the Commonwealth",
+                    "It started Japanese occupation"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 83,
+                "question": "What social class included educated Filipinos who pushed for reforms during Spanish rule?",
+                "answer": "Ilustrados",
+                "choices": [
+                    "Principalia",
+                    "Ilustrados",
+                    "Peninsulares",
+                    "Insulares"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 84,
+                "question": "What was the Propaganda Movement’s main goal?",
+                "answer": "Reforms and equal rights for Filipinos under Spain",
+                "choices": [
+                    "Immediate Japanese independence",
+                    "Reforms and equal rights for Filipinos under Spain",
+                    "American statehood",
+                    "Creation of barangays"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 85,
+                "question": "Who was the editor of La Solidaridad after Graciano Lopez Jaena?",
+                "answer": "Marcelo H. del Pilar",
+                "choices": [
+                    "Marcelo H. del Pilar",
+                    "Andres Bonifacio",
+                    "Apolinario Mabini",
+                    "Emilio Aguinaldo"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 86,
+                "question": "What pen name did Marcelo H. del Pilar use?",
+                "answer": "Plaridel",
+                "choices": [
+                    "Laong Laan",
+                    "Plaridel",
+                    "Dimasalang",
+                    "Taga-Ilog"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 87,
+                "question": "What pen name did Jose Rizal use in some writings?",
+                "answer": "Laong Laan",
+                "choices": [
+                    "Plaridel",
+                    "Laong Laan",
+                    "Agapito Bagumbayan",
+                    "Tikbalang"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 88,
+                "question": "Who wrote Fray Botod, a satirical work against abusive friars?",
+                "answer": "Graciano Lopez Jaena",
+                "choices": [
+                    "Graciano Lopez Jaena",
+                    "Jose Rizal",
+                    "Antonio Luna",
+                    "Juan Luna"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 89,
+                "question": "What was the main issue behind the secularization movement in the Philippines?",
+                "answer": "Filipino priests wanted equal rights to serve in parishes",
+                "choices": [
+                    "Farmers wanted new crops",
+                    "Filipino priests wanted equal rights to serve in parishes",
+                    "Soldiers wanted foreign weapons",
+                    "Students wanted free uniforms"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 90,
+                "question": "Who was the Spanish governor-general during the execution of Gomburza?",
+                "answer": "Rafael de Izquierdo",
+                "choices": [
+                    "Rafael de Izquierdo",
+                    "Carlos Maria de la Torre",
+                    "Miguel Lopez de Legazpi",
+                    "Basilio Augustin"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 91,
+                "question": "What did the Pact of Biak-na-Bato provide for?",
+                "answer": "A truce, exile of revolutionary leaders, and promised reforms",
+                "choices": [
+                    "A truce, exile of revolutionary leaders, and promised reforms",
+                    "Immediate independence from Japan",
+                    "A new American constitution",
+                    "The start of the galleon trade"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 92,
+                "question": "What was the Hong Kong Junta?",
+                "answer": "A group of Filipino exiles who continued revolutionary work abroad",
+                "choices": [
+                    "A group of Filipino exiles who continued revolutionary work abroad",
+                    "A Spanish court in Manila",
+                    "A Japanese military council",
+                    "An American school board"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 93,
+                "question": "What was the significance of the Malolos Constitution?",
+                "answer": "It established Asia’s first republican constitution",
+                "choices": [
+                    "It established Asia’s first republican constitution",
+                    "It made the Philippines a U.S. state",
+                    "It created the Katipunan",
+                    "It ended World War II"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 94,
+                "question": "Who served as prime minister and adviser in the First Philippine Republic?",
+                "answer": "Apolinario Mabini",
+                "choices": [
+                    "Apolinario Mabini",
+                    "Pedro Paterno",
+                    "Felipe Calderon",
+                    "Julian Felipe"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 95,
+                "question": "What did Apolinario Mabini write that explained revolutionary principles?",
+                "answer": "True Decalogue",
+                "choices": [
+                    "True Decalogue",
+                    "Kartilya ng Katipunan",
+                    "Mi Ultimo Adios",
+                    "Noli Me Tangere"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 96,
+                "question": "Who wrote the Kartilya ng Katipunan?",
+                "answer": "Emilio Jacinto",
+                "choices": [
+                    "Emilio Jacinto",
+                    "Andres Bonifacio",
+                    "Jose Rizal",
+                    "Antonio Luna"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 97,
+                "question": "What was the Tejeros Convention mainly about?",
+                "answer": "Choosing leaders for a revolutionary government",
+                "choices": [
+                    "Choosing leaders for a revolutionary government",
+                    "Declaring war on Japan",
+                    "Writing the 1987 Constitution",
+                    "Starting the galleon trade"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 98,
+                "question": "Who was elected president at the Tejeros Convention?",
+                "answer": "Emilio Aguinaldo",
+                "choices": [
+                    "Emilio Aguinaldo",
+                    "Andres Bonifacio",
+                    "Jose Rizal",
+                    "Apolinario Mabini"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 99,
+                "question": "What position was Andres Bonifacio elected to at the Tejeros Convention?",
+                "answer": "Director of the Interior",
+                "choices": [
+                    "President",
+                    "Vice President",
+                    "Director of the Interior",
+                    "Secretary of War"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 100,
+                "question": "What document did Bonifacio and his supporters sign after rejecting the Tejeros results?",
+                "answer": "Acta de Tejeros",
+                "choices": [
+                    "Acta de Tejeros",
+                    "Treaty of Paris",
+                    "Jones Law",
+                    "Kalayaan"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 101,
+                "question": "What was the Naic Military Agreement?",
+                "answer": "Bonifacio’s attempt to form a separate revolutionary authority",
+                "choices": [
+                    "Bonifacio’s attempt to form a separate revolutionary authority",
+                    "A treaty with Spain",
+                    "A Japanese surrender agreement",
+                    "A Commonwealth law"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 102,
+                "question": "Where was Emilio Aguinaldo captured by American forces in 1901?",
+                "answer": "Palanan, Isabela",
+                "choices": [
+                    "Corregidor",
+                    "Palanan, Isabela",
+                    "Mactan",
+                    "Jolo"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 103,
+                "question": "Who led the American operation that captured Emilio Aguinaldo?",
+                "answer": "Frederick Funston",
+                "choices": [
+                    "Frederick Funston",
+                    "George Dewey",
+                    "Douglas MacArthur",
+                    "William Taft"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 104,
+                "question": "What policy used by American forces involved concentrating civilians in controlled zones during the Philippine-American War?",
+                "answer": "Reconcentration",
+                "choices": [
+                    "Reconcentration",
+                    "Reduccion",
+                    "Polo",
+                    "Bandala"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 105,
+                "question": "What was the Balangiga event of 1901?",
+                "answer": "A clash in Samar where Filipino fighters attacked U.S. troops",
+                "choices": [
+                    "A clash in Samar where Filipino fighters attacked U.S. troops",
+                    "A Spanish religious festival",
+                    "The first Philippine election",
+                    "A Japanese landing"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 106,
+                "question": "Who led the resistance in Samar connected to the Balangiga conflict?",
+                "answer": "Vicente Lukban",
+                "choices": [
+                    "Vicente Lukban",
+                    "Macario Sakay",
+                    "Miguel Malvar",
+                    "Artemio Ricarte"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 107,
+                "question": "Who continued resistance and declared the Tagalog Republic after the main Philippine-American War period?",
+                "answer": "Macario Sakay",
+                "choices": [
+                    "Macario Sakay",
+                    "Manuel Quezon",
+                    "Jose Laurel",
+                    "Sergio Osmena"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 108,
+                "question": "What was the purpose of the Schurman Commission?",
+                "answer": "To investigate conditions in the Philippines for the United States",
+                "choices": [
+                    "To investigate conditions in the Philippines for the United States",
+                    "To write the Malolos Constitution",
+                    "To end Japanese occupation",
+                    "To build Intramuros"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 109,
+                "question": "What was the Taft Commission responsible for?",
+                "answer": "Establishing civil government under American rule",
+                "choices": [
+                    "Establishing civil government under American rule",
+                    "Leading the Katipunan",
+                    "Declaring independence in Kawit",
+                    "Commanding Japanese forces"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 110,
+                "question": "Who was the first American civil governor of the Philippines?",
+                "answer": "William Howard Taft",
+                "choices": [
+                    "William Howard Taft",
+                    "George Dewey",
+                    "Arthur MacArthur",
+                    "Frank Murphy"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 111,
+                "question": "What was the Pensionado Program?",
+                "answer": "A scholarship program that sent Filipinos to study in the United States",
+                "choices": [
+                    "A scholarship program that sent Filipinos to study in the United States",
+                    "A military training program in Spain",
+                    "A tax system during Spanish rule",
+                    "A Japanese rationing program"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 112,
+                "question": "What was the Thomasites’ role in Philippine history?",
+                "answer": "They were American teachers who helped establish public education",
+                "choices": [
+                    "They were American teachers who helped establish public education",
+                    "They were Spanish missionaries",
+                    "They were Japanese soldiers",
+                    "They were Filipino revolutionaries"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 113,
+                "question": "What was the Hare-Hawes-Cutting Act?",
+                "answer": "A proposed independence law rejected by the Philippine Senate",
+                "choices": [
+                    "A proposed independence law rejected by the Philippine Senate",
+                    "A law creating the Katipunan",
+                    "A treaty with Japan",
+                    "A Spanish tax law"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 114,
+                "question": "Why did Manuel Quezon oppose the Hare-Hawes-Cutting Act?",
+                "answer": "He objected to some provisions and worked for a different independence law",
+                "choices": [
+                    "He objected to some provisions and worked for a different independence law",
+                    "He wanted Spain to return",
+                    "He wanted to stop elections forever",
+                    "He opposed all public schools"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 115,
+                "question": "What constitution governed the Philippine Commonwealth?",
+                "answer": "1935 Constitution",
+                "choices": [
+                    "1899 Constitution",
+                    "1935 Constitution",
+                    "1973 Constitution",
+                    "1987 Constitution"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 116,
+                "question": "Who succeeded Manuel L. Quezon as Commonwealth president after Quezon’s death?",
+                "answer": "Sergio Osmena",
+                "choices": [
+                    "Sergio Osmena",
+                    "Manuel Roxas",
+                    "Jose Laurel",
+                    "Elpidio Quirino"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 117,
+                "question": "What was the Second Philippine Republic?",
+                "answer": "A Japanese-sponsored government during World War II",
+                "choices": [
+                    "A Japanese-sponsored government during World War II",
+                    "The government created by Jose Rizal",
+                    "The first government in Malolos",
+                    "The post-EDSA government"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 118,
+                "question": "Who was president of the Second Philippine Republic?",
+                "answer": "Jose P. Laurel",
+                "choices": [
+                    "Jose P. Laurel",
+                    "Manuel Roxas",
+                    "Ferdinand Marcos",
+                    "Carlos Garcia"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 119,
+                "question": "What was the Bataan Death March?",
+                "answer": "Forced march of Filipino and American prisoners by Japanese forces",
+                "choices": [
+                    "Forced march of Filipino and American prisoners by Japanese forces",
+                    "A parade for independence",
+                    "A Spanish religious procession",
+                    "A march during EDSA"
+                ],
+                "difficulty": "hard"
+            },
+            {
+                "id": 120,
+                "question": "What island fortress fell after Bataan during World War II?",
+                "answer": "Corregidor",
+                "choices": [
+                    "Corregidor",
+                    "Mactan",
+                    "Leyte",
+                    "Panay"
+                ],
+                "difficulty": "hard"
+            }
+        ]
     }
 }

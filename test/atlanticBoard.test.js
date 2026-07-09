@@ -57,6 +57,16 @@ test('Reminiscing uses its measured serpentine cell centers', () => {
   assert.deepEqual(getBoardSpacePosition(reminiscing, 100), { left: '6.17%', top: '6.16%' })
 })
 
+test('Throwback PH uses its measured serpentine cell centers', () => {
+  const throwbackPh = boards.find(board => board.name === 'Throwback PH')
+
+  assert.deepEqual(getBoardSpacePosition(throwbackPh, 1), { left: '8.054%', top: '92.963%' })
+  assert.deepEqual(getBoardSpacePosition(throwbackPh, 10), { left: '91.946%', top: '92.963%' })
+  assert.deepEqual(getBoardSpacePosition(throwbackPh, 11), { left: '91.946%', top: '83.991%' })
+  assert.deepEqual(getBoardSpacePosition(throwbackPh, 20), { left: '8.054%', top: '83.991%' })
+  assert.deepEqual(getBoardSpacePosition(throwbackPh, 100), { left: '8.054%', top: '7.337%' })
+})
+
 test('Quiet Mansion uses exact ten-by-ten cell centers', () => {
   const quietMansion = boards.find(board => board.name === 'Quiet Mansion')
 

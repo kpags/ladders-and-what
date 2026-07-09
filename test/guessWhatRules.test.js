@@ -7,6 +7,7 @@ import { createGameState, resolveGuessWhatAnswer, takeGuessWhatTurn } from '../s
 const horizon = boards.find(board => board.name === 'Horizon')
 const mathemagician = boards.find(board => board.name === 'Mathemagician')
 const reminiscing = boards.find(board => board.name === 'Reminiscing')
+const throwbackPh = boards.find(board => board.name === 'Throwback PH')
 const players = [
   { id: 'one', name: 'One', color: '#fff' },
   { id: 'two', name: 'Two', color: '#000' },
@@ -43,6 +44,18 @@ test('Reminiscing initializes the history questionnaire from the nested question
   })
   assert.equal(state.board.questionnaire, 'history')
   assert.deepEqual(state.board.question_marks, reminiscing.question_marks)
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(state.remainingQuestionIds).map(([key, ids]) => [key, ids.length])),
+    { easy: 40, medium: 40, hard: 40 },
+  )
+})
+
+test('Throwback PH initializes the Philippine history questionnaire from the nested questionnaire object', () => {
+  const state = createGameState(throwbackPh, players, 0, {
+    questionnaire: questions.ph_history,
+  })
+  assert.equal(state.board.questionnaire, 'ph_history')
+  assert.deepEqual(state.board.question_marks, throwbackPh.question_marks)
   assert.deepEqual(
     Object.fromEntries(Object.entries(state.remainingQuestionIds).map(([key, ids]) => [key, ids.length])),
     { easy: 40, medium: 40, hard: 40 },

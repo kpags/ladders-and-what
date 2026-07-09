@@ -34,19 +34,24 @@ test('Quiet Mansion is available for Escape From', () => {
   ])
 })
 
-test('Mathemagician is available for Guess What and uses centered Horizon grid positions', () => {
+test('Guess What boards are available and use their centered grid positions', () => {
   const horizon = boards.find(board => board.name === 'Horizon')
   const mathemagician = boards.find(board => board.name === 'Mathemagician')
   const reminiscing = boards.find(board => board.name === 'Reminiscing')
+  const throwbackPh = boards.find(board => board.name === 'Throwback PH')
   assert.equal(boardIsAvailable(mathemagician), true)
   assert.equal(boardIsAvailable(reminiscing), true)
+  assert.equal(boardIsAvailable(throwbackPh), true)
   assert.deepEqual(boardIndicesForMode(boards, 'guess_what'), [
     boards.indexOf(horizon),
     boards.indexOf(mathemagician),
     boards.indexOf(reminiscing),
+    boards.indexOf(throwbackPh),
   ])
   assert.deepEqual(getBoardSpacePosition(mathemagician, 1), getBoardSpacePosition(horizon, 1))
   assert.deepEqual(getBoardSpacePosition(mathemagician, 100), getBoardSpacePosition(horizon, 100))
+  assert.deepEqual(getBoardSpacePosition(throwbackPh, 1), { left: '8.054%', top: '92.963%' })
+  assert.deepEqual(getBoardSpacePosition(throwbackPh, 100), { left: '8.054%', top: '7.337%' })
 })
 
 test('Dead Forest exposes its Square 100 bounds for the fog reveal', () => {
