@@ -772,6 +772,7 @@
             },
             {
                 "name": "Glock 17",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/glock_17.gif",
                 "class": "pistol",
                 "drop_chance": 90,
                 "max_capacity": 18,
@@ -794,6 +795,7 @@
             },
             {
                 "name": "Desert Eagle",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/desert_eagle.gif",
                 "class": "pistol",
                 "drop_chance": 70,
                 "max_capacity": 7,
