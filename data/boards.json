@@ -707,5 +707,227 @@
         "music": "throwback_ph",
         "questionnaire": "ph_history",
         "question_marks": [2, 5, 8, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 43, 46, 49, 51, 54, 57, 60, 62, 65, 68, 72, 75, 78, 81, 84, 87, 90, 93, 96]
+    },
+    {
+        "name": "No Man's Land",
+        "type": "clash_with",
+        "picture": "assets/boards/no_mans_land/template.png",
+        "music": "no_mans_land",
+        "items": [
+            {
+                "name": "Medkit",
+                "effect": "heal",
+                "heal_amount": 50,
+                "drop_chance": 75,
+                "max_capacity": 1,
+                "description": "A medkit that restores 50 health points when used."
+            },
+            {
+                "name": "Bandage",
+                "effect": "heal",
+                "heal_amount": 15,
+                "drop_chance": 90,
+                "max_capacity": 2,
+                "description": "A bandage that restores 15 health points when used."
+            },
+            {
+                "name": "Frag Grenade",
+                "effect": "damage",
+                "damage_amount": 25,
+                "drop_chance": 50,
+                "max_capacity": 1
+            },
+            {
+                "name": "Stun Grenade",
+                "effect": "stun",
+                "stun_duration_in_sec": 2,
+                "drop_chance": 80,
+                "max_capacity": 1
+            },
+            {
+                "name": "Molotov",
+                "effect": "damage_over_time",
+                "damage_per_global_turn": 5,
+                "duration_in_global_turns": 5,
+                "drop_chance": 60,
+                "max_capacity": 1
+            }
+        ],
+        "weapons": [
+            {
+                "name": "Combat Knife",
+                "class": "melee",
+                "drop_chance": 100,
+                "max_capacity": 2,
+                "damage_per_attack": 20,
+                "modes": [
+                    {
+                        "name": "Single Attack",
+                        "attacks_per_fire": 1,
+                        "accuracy": 100,
+                        "description": "Performs a single attack if enemy is 1 space away."
+                    }
+                ],
+                "description": "Default Weapon upon landing on the battlefield."
+            },
+            {
+                "name": "Glock 17",
+                "class": "pistol",
+                "drop_chance": 90,
+                "max_capacity": 18,
+                "damage_per_bullet": 5,
+                "modes": [
+                    {
+                        "name": "Single Shot",
+                        "bullets_per_fire": 1,
+                        "accuracy": 75,
+                        "description": "Fires a single bullet per fire."
+                    },
+                    {
+                        "name": "Burst Fire",
+                        "bullets_per_fire": 3,
+                        "accuracy": 60,
+                        "description": "Fires a burst of 3 bullets per fire."
+                    }
+                ],
+                "description": "A semi-automatic pistol with a magazine capacity of 18 rounds. It deals 5 damage per bullet."
+            },
+            {
+                "name": "Desert Eagle",
+                "class": "pistol",
+                "drop_chance": 70,
+                "max_capacity": 7,
+                "damage_per_bullet": 15,
+                "modes": [
+                    {
+                        "name": "Single Shot",
+                        "bullets_per_fire": 1,
+                        "accuracy": 70,
+                        "description": "Fires a single bullet per fire."
+                    }
+                ],
+                "description": "A powerful semi-automatic pistol with a magazine capacity of 7 rounds. It deals 15 damage per bullet."
+            },
+            {
+                "name": "Uzi",
+                "class": "smg",
+                "drop_chance": 70,
+                "max_capacity": 40,
+                "damage_per_bullet": 3,
+                "modes": [
+                    {
+                        "name": "Single Shot",
+                        "bullets_per_fire": 1,
+                        "accuracy": 70,
+                        "description": "Fires a single bullet per fire."
+                    },
+                    {
+                        "name": "Full Auto",
+                        "bullets_per_fire": 20,
+                        "accuracy": 40,
+                        "description": "Fires a burst of 20 bullets per fire."
+                    }
+                ],
+                "description": "A compact submachine gun with a magazine capacity of 40 rounds. It deals 3 damage per bullet."
+            },
+            {
+                "name": "MP5",
+                "class": "smg",
+                "drop_chance": 70,
+                "max_capacity": 30,
+                "damage_per_bullet": 4,
+                "modes": [
+                    {
+                        "name": "Single Shot",
+                        "bullets_per_fire": 1,
+                        "accuracy": 85,
+                        "description": "Fires a single bullet per fire."
+                    },
+                    {
+                        "name": "Full Auto",
+                        "bullets_per_fire": 15,
+                        "accuracy": 50,
+                        "description": "Fires a burst of 15 bullets per fire."
+                    }
+                ],
+                "description": "A popular submachine gun with a magazine capacity of 30 rounds. It deals 4 damage per bullet."
+            },
+            {
+                "name": "AK-47",
+                "class": "assault_rifle",
+                "drop_chance": 50,
+                "max_capacity": 30,
+                "damage_per_bullet": 8,
+                "modes": [
+                    {
+                        "name": "Single Shot",
+                        "bullets_per_fire": 1,
+                        "accuracy": 80,
+                        "description": "Fires a single bullet per fire."
+                    },
+                    {
+                        "name": "Full Auto",
+                        "bullets_per_fire": 10,
+                        "accuracy": 35,
+                        "description": "Fires a burst of 10 bullets per fire."
+                    }
+                ],
+                "description": "A widely used assault rifle with a magazine capacity of 30 rounds. It deals 6 damage per bullet."
+            },
+            {
+                "name": "M4A1",
+                "class": "assault_rifle",
+                "drop_chance": 50,
+                "max_capacity": 25,
+                "damage_per_bullet": 6,
+                "modes": [
+                    {
+                        "name": "Single Shot",
+                        "bullets_per_fire": 1,
+                        "accuracy": 90,
+                        "description": "Fires a single bullet per fire."
+                    },
+                    {
+                        "name": "Full Auto",
+                        "bullets_per_fire": 15,
+                        "accuracy": 75,
+                        "description": "Fires a burst of 15 bullets per fire."
+                    }
+                ],
+                "description": "A popular assault rifle with a magazine capacity of 25 rounds. It deals 6 damage per bullet."
+            },
+            {
+                "name": "Hunting Rifle",
+                "class": "sniper",
+                "drop_chance": 35,
+                "max_capacity": 5,
+                "damage_per_bullet": 20,
+                "modes": [
+                    {
+                        "name": "Single Shot",
+                        "bullets_per_fire": 1,
+                        "accuracy": 95,
+                        "description": "Fires a single bullet per fire."
+                    }
+                ],
+                "description": "A bolt-action hunting rifle with a magazine capacity of 5 rounds. It deals 20 damage per bullet."
+            },
+            {
+                "name": "Barret M82",
+                "class": "sniper",
+                "drop_chance": 10,
+                "max_capacity": 2,
+                "damage_per_bullet": 100,
+                "modes": [
+                    {
+                        "name": "Single Shot",
+                        "bullets_per_fire": 1,
+                        "accuracy": 95,
+                        "description": "Fires a single bullet per fire."
+                    }
+                ],
+                "description": "A powerful sniper rifle with a magazine capacity of 2 rounds. It deals 100 damage per bullet."
+            }
+        ]
     }
 ]
