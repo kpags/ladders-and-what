@@ -14,6 +14,7 @@ import { chooseAiReactions } from './aiReactions.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const RECONNECT_GRACE_MS = 10_000
+const MAX_SPECTATORS = 6
 const TURN_MS = 15_000
 const boards = JSON.parse(readFileSync(new URL('../data/boards.json', import.meta.url), 'utf8'))
 const gameModes = JSON.parse(readFileSync(new URL('../data/game_modes.json', import.meta.url), 'utf8'))
@@ -123,8 +124,10 @@ function roomView(room) {
     modeKey: room.modeKey,
     boardIndex: room.boardIndex,
     exactMoveFor100: Boolean(room.exactMoveFor100),
+    privateRoom: Boolean(room.privateRoom),
     players: room.players,
     spectatorCount: room.spectators?.size || 0,
+    maxSpectators: MAX_SPECTATORS,
   }
 }
 
@@ -144,6 +147,7 @@ function hasConnectedHumanPlayer(room) {
 }
 
 function isRoomListVisible(room) {
+  if (room.privateRoom) return false
   if (!hasConnectedHumanPlayer(room)) return false
   if (room.phase === 'lobby') return true
   return room.phase === 'playing' && !room.game?.gameOver
@@ -165,8 +169,9 @@ function roomListView() {
         maxPlayers,
         full: room.players.length >= maxPlayers,
         canJoin: room.phase === 'lobby' && room.players.length < maxPlayers,
-        canSpectate: room.phase === 'playing',
+        canSpectate: room.phase === 'playing' && (room.spectators?.size || 0) < MAX_SPECTATORS,
         spectatorCount: room.spectators?.size || 0,
+        maxSpectators: MAX_SPECTATORS,
       }
     })
 }
@@ -1167,8 +1172,9 @@ function stopRoll(room, requesterId, automatic = false) {
   }
   const startSpace = current.space
   if (specialRoll) {
-    const faces = [7, 8, 9, 10, ...parkourSpecialWhats]
-    const face = faces[Math.floor(Math.random() * faces.length)]
+    const face = Math.random() < 0.7
+      ? Math.floor(Math.random() * 4) + 7
+      : parkourSpecialWhats[Math.floor(Math.random() * parkourSpecialWhats.length)]
     if (typeof face === 'object') {
       const what = structuredClone(face)
       if (what.name === 'Misdirect') {
@@ -1548,6 +1554,27 @@ function sendPlayerReaction(room, playerId, reaction) {
   }
 }
 
+function sendLobbyMessage(room, playerId, targetId, text) {
+  if (room.phase !== 'lobby') return
+  if (!room.players.some(player => player.id === playerId && !player.isAI)) return
+  const target = room.players.find(player => player.id === targetId)
+  if (!target) return
+  const message = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 50)
+  if (!message) return
+  room.lobbyMessageId = (room.lobbyMessageId || 0) + 1
+  const startedAt = Date.now()
+  broadcast(room, {
+    type: 'lobby_message',
+    playerId: target.id,
+    senderId: playerId,
+    text: message,
+    duration: 5000,
+    messageId: room.lobbyMessageId,
+    startedAt,
+    serverNow: startedAt,
+  })
+}
+
 function triggerEscapeAiSocial(room, reaction, excludedPlayerId = null) {
   if (room.game?.mode !== 'escape_from') return
   const labels = { lets_go: "Let's Go!", im_coming: "I'm Coming!", careful: 'Careful!' }
@@ -1886,6 +1913,7 @@ wss.on('connection', socket => {
         modeKey: gameModes[0]?.key || 'standard',
         boardIndex: firstBoardIndex(gameModes[0]?.key || 'standard'),
         exactMoveFor100: false,
+        privateRoom: false,
         players: [],
         revision: 0,
         eventId: 0,
@@ -1939,6 +1967,7 @@ wss.on('connection', socket => {
       const previousSpectating = spectatorRoomForClient(clientId)
       if (previousSpectating) previousSpectating.spectators.delete(clientId)
       room.spectators ||= new Set()
+      if (room.spectators.size >= MAX_SPECTATORS) return reject(socket, 'This game already has the maximum number of spectators.')
       room.spectators.add(clientId)
       broadcastGame(room, 'game_started')
       return
@@ -1956,6 +1985,7 @@ wss.on('connection', socket => {
       const spectating = spectatorRoomForClient(clientId)
       if (spectating && message.type === 'leave_room') {
         spectating.spectators.delete(clientId)
+        if (spectating.phase === 'playing' && spectating.game) broadcastGame(spectating)
         send(socket, { type: 'room_closed', reason: 'You stopped spectating.' })
         return
       }
@@ -2014,6 +2044,12 @@ wss.on('connection', socket => {
         room.exactMoveFor100 = Boolean(message.enabled)
         broadcastRoom(room)
       } else if (room.phase === 'lobby') reject(socket, 'Exact Move for S100 is unavailable in this game mode.')
+    } else if (message.type === 'private_room') {
+      if (room.hostId !== clientId) reject(socket, 'Only the host can change game settings.')
+      else if (room.phase === 'lobby') {
+        room.privateRoom = Boolean(message.privateRoom ?? message.enabled)
+        broadcastRoom(room)
+      } else reject(socket, 'Room privacy can only be changed in the lobby.')
     } else if (message.type === 'board') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can select the board.')
       else if (room.phase === 'lobby') {
@@ -2090,6 +2126,7 @@ wss.on('connection', socket => {
     }
     else if (message.type === 'player_emote') sendPlayerEmote(room, clientId, message.emoji)
     else if (message.type === 'player_reaction') sendPlayerReaction(room, clientId, message.reaction)
+    else if (message.type === 'lobby_message') sendLobbyMessage(room, clientId, message.playerId, message.text)
   })
 
   socket.on('close', () => {
@@ -2098,7 +2135,10 @@ wss.on('connection', socket => {
     const room = roomForClient(clientId)
     if (room) markDisconnected(room, clientId)
     const spectating = spectatorRoomForClient(clientId)
-    if (spectating) spectating.spectators.delete(clientId)
+    if (spectating) {
+      spectating.spectators.delete(clientId)
+      if (spectating.phase === 'playing' && spectating.game) broadcastGame(spectating)
+    }
   })
 })
 

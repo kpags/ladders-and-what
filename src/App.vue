@@ -113,6 +113,7 @@ const onlineRoom = ref(null)
 const onlineError = ref('')
 const onlineStatus = ref('offline')
 const playNowPrompt = ref(false)
+const roomExitConfirm = ref(false)
 const roomList = ref([])
 const roomListLoading = ref(false)
 const isSpectating = ref(false)
@@ -155,6 +156,10 @@ const emojiPickerPlayerId = ref(null)
 const emojiPickerPlacement = ref('board')
 const activeEmojis = ref({})
 const activeReactions = ref({})
+const activeLobbyMessages = ref({})
+const lobbyMessageTargetId = ref(null)
+const lobbyMessageDraft = ref('')
+const lobbyMessageTimeouts = new Map()
 const turnDeadline = ref(null)
 const penaltyOverlay = ref(null)
 const destructionOverlay = ref(null)
@@ -212,6 +217,7 @@ const lobbyPlayers = computed(() => (onlineRoom.value?.players || []).map(player
 })))
 const lobbySlotCount = computed(() => selectedMode.value === 'escape_from' ? 4 : 6)
 const lobbyMaxPlayers = computed(() => lobbySlotCount.value)
+const exactMoveSettingAvailable = computed(() => selectedMode.value === 'standard' || selectedMode.value === 'run_away')
 const availableRoomList = computed(() => roomList.value.filter(room => room.phase === 'lobby'))
 const inGameRoomList = computed(() => roomList.value.filter(room => room.phase === 'playing'))
 const rollSeconds = computed(() => rollDeadline.value ? Math.max(0, Math.ceil((rollDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
@@ -335,6 +341,11 @@ function clearGamePresentation() {
   emojiPickerPlacement.value = 'board'
   activeEmojis.value = {}
   activeReactions.value = {}
+  activeLobbyMessages.value = {}
+  lobbyMessageTimeouts.forEach(timeoutId => window.clearTimeout(timeoutId))
+  lobbyMessageTimeouts.clear()
+  lobbyMessageTargetId.value = null
+  lobbyMessageDraft.value = ''
   skipOverlay.value = null
   penaltyOverlay.value = null
   destructionOverlay.value = null
@@ -784,6 +795,19 @@ function handleSocketMessage(event) {
     }, expiresIn)
     return
   }
+  if (message.type === 'lobby_message') {
+    const messageId = message.messageId ?? `${message.startedAt}-${message.senderId || ''}`
+    const previousTimeout = lobbyMessageTimeouts.get(message.playerId)
+    if (previousTimeout) window.clearTimeout(previousTimeout)
+    activeLobbyMessages.value[message.playerId] = { text: message.text, startedAt: message.startedAt, messageId }
+    const expiresIn = Math.max(0, message.duration - ((Date.now() + serverClockOffset) - message.startedAt))
+    const timeoutId = window.setTimeout(() => {
+      if (activeLobbyMessages.value[message.playerId]?.messageId === messageId) delete activeLobbyMessages.value[message.playerId]
+      lobbyMessageTimeouts.delete(message.playerId)
+    }, expiresIn)
+    lobbyMessageTimeouts.set(message.playerId, timeoutId)
+    return
+  }
   if (message.type === 'escape_key_collected') {
     audioManager.escapeKeyCollected(message.characterId)
     return
@@ -1032,6 +1056,11 @@ function changeExactMoveFor100(event) {
   sendLobby({ type: 'exact_move_for_100', enabled: event.target.checked })
 }
 
+function changePrivateRoom(event) {
+  if (!isLobbyHost.value) return
+  sendLobby({ type: 'private_room', privateRoom: event.target.checked })
+}
+
 function toggleDestructionSkip(event) {
   sendLobby({ type: 'destruction_skip', checked: event.target.checked })
 }
@@ -1056,9 +1085,22 @@ function requestStartGame() {
   sendLobby({ type: 'start_game' })
 }
 
-function leaveOnlineRoom() {
+function leaveOnlineRoom(skipConfirmation = false) {
+  if (!skipConfirmation) {
+    roomExitConfirm.value = true
+    return
+  }
   sendLobby({ type: 'leave_room' })
   resetOnlineRoom('You left the room.')
+}
+
+function cancelRoomExit() {
+  roomExitConfirm.value = false
+}
+
+function confirmRoomExit() {
+  roomExitConfirm.value = false
+  leaveOnlineRoom(true)
 }
 
 function goSettings(from = page.value) {
@@ -1248,6 +1290,24 @@ function sendPlayerReaction(playerId, reaction) {
   sendLobby({ type: 'player_reaction', reaction })
 }
 
+function toggleLobbyMessageBox(playerId) {
+  if (lobbyMessageTargetId.value === playerId) {
+    lobbyMessageTargetId.value = null
+    lobbyMessageDraft.value = ''
+    return
+  }
+  lobbyMessageTargetId.value = playerId
+  lobbyMessageDraft.value = ''
+}
+
+function submitLobbyMessage(playerId) {
+  const text = lobbyMessageDraft.value.trim().slice(0, 50)
+  if (!text) return
+  sendLobby({ type: 'lobby_message', playerId, text })
+  lobbyMessageTargetId.value = null
+  lobbyMessageDraft.value = ''
+}
+
 function socialReactionsForMode() {
   return game.value?.mode === 'escape_from'
     ? [
@@ -1415,6 +1475,8 @@ onUnmounted(() => {
   window.clearInterval(diceTimer)
   window.clearInterval(operatorTimer)
   window.clearTimeout(reconnectTimer)
+  lobbyMessageTimeouts.forEach(timeoutId => window.clearTimeout(timeoutId))
+  lobbyMessageTimeouts.clear()
   lobbySocket?.close()
   window.removeEventListener('keydown', handleGameKey)
   document.removeEventListener('pointerover', handleButtonHover)
@@ -1428,6 +1490,30 @@ onUnmounted(() => {
 <template>
   <main class="app" :class="`page-${page}`">
     <div class="grain"></div>
+    <div
+      v-if="roomExitConfirm"
+      class="confirm-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="room-exit-title"
+      aria-describedby="room-exit-message"
+      tabindex="-1"
+      @click.self="cancelRoomExit"
+      @keydown.esc.prevent="cancelRoomExit"
+    >
+      <section class="confirm-card">
+        <button class="confirm-close" type="button" aria-label="Close confirmation" @click="cancelRoomExit">×</button>
+        <h2 id="room-exit-title">Confirmation</h2>
+        <div class="confirm-message">
+          <span class="confirm-icon" aria-hidden="true">!</span>
+          <p id="room-exit-message">This will exit the room. Continue?</p>
+        </div>
+        <div class="confirm-actions">
+          <button class="confirm-cancel" type="button" @click="cancelRoomExit">No</button>
+          <button class="confirm-save" type="button" autofocus @click="confirmRoomExit">Yes</button>
+        </div>
+      </section>
+    </div>
 
     <template v-if="page === 'home'">
       <section class="home-screen">
@@ -1470,7 +1556,7 @@ onUnmounted(() => {
     <template v-else-if="page === 'lobby'">
       <section class="lobby-screen">
         <header class="lobby-topbar">
-          <button class="lobby-back" @click="page = 'home'" aria-label="Back to home">←</button>
+          <button class="lobby-back" @click="leaveOnlineRoom()" aria-label="Exit room">←</button>
           <div class="brand brand-lobby">
             <span class="crown">♛</span>
             <span class="brand-top">LADDERS...</span>
@@ -1499,6 +1585,35 @@ onUnmounted(() => {
                 :style="lobbyPlayers[slot - 1] ? { '--player-color': lobbyPlayers[slot - 1].character.color } : null"
               >
                 <template v-if="lobbyPlayers[slot - 1]">
+                  <span v-if="activeLobbyMessages[lobbyPlayers[slot - 1].id]" class="lobby-message-bubble">
+                    {{ activeLobbyMessages[lobbyPlayers[slot - 1].id].text }}
+                  </span>
+                  <button
+                    type="button"
+                    class="lobby-message-toggle"
+                    :class="{ open: lobbyMessageTargetId === lobbyPlayers[slot - 1].id }"
+                    @click.stop="toggleLobbyMessageBox(lobbyPlayers[slot - 1].id)"
+                    :aria-expanded="lobbyMessageTargetId === lobbyPlayers[slot - 1].id"
+                    :aria-controls="`lobby-message-box-${slot}`"
+                    :aria-label="`Send message above ${lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name}`"
+                  ><span></span></button>
+                  <form
+                    v-if="lobbyMessageTargetId === lobbyPlayers[slot - 1].id"
+                    :id="`lobby-message-box-${slot}`"
+                    class="lobby-message-box"
+                    @submit.prevent="submitLobbyMessage(lobbyPlayers[slot - 1].id)"
+                  >
+                    <textarea
+                      v-model="lobbyMessageDraft"
+                      maxlength="50"
+                      rows="3"
+                      placeholder="Say something..."
+                      @click.stop
+                      @keydown.stop
+                    ></textarea>
+                    <small>{{ lobbyMessageDraft.length }}/50</small>
+                    <button type="submit" :disabled="!lobbyMessageDraft.trim()">Send</button>
+                  </form>
                   <button v-if="lobbyPlayers[slot - 1].isAI && isLobbyHost" type="button" class="remove-ai" @click.stop="removeAiPlayer(lobbyPlayers[slot - 1].id)" aria-label="Remove AI player">×</button>
                   <button
                     v-if="isLobbyHost && !lobbyPlayers[slot - 1].isAI && lobbyPlayers[slot - 1].id !== clientId"
@@ -1564,7 +1679,7 @@ onUnmounted(() => {
             <div class="room-actions">
               <button class="game-button purple" @click="shareInvite">♟ Invite</button>
               <button class="game-button ai-button" :disabled="!isLobbyHost || lobbyPlayers.length >= lobbyMaxPlayers || !lobbyCharacterIndices.length" @click="addAiPlayer">＋ Add AI</button>
-              <button class="game-button exit" @click="leaveOnlineRoom">↪ Exit room</button>
+              <button class="game-button exit" @click="leaveOnlineRoom()">↪ Exit room</button>
               <button class="game-button green" :disabled="!isLobbyHost || lobbyPlayers.length < 2 || lobbyPlayers.length > lobbyMaxPlayers || !selectedLobbyBoard" @click="requestStartGame">▶ Start game</button>
             </div>
           </section>
@@ -1576,18 +1691,29 @@ onUnmounted(() => {
                 <option v-for="mode in gameModes" :key="mode.key" :value="mode.key">{{ mode.name }}</option>
               </select>
             </label>
-            <label
-              v-if="selectedMode === 'standard' || selectedMode === 'run_away'"
-              class="exact-move-setting"
-            >
-              <input
-                type="checkbox"
-                :checked="Boolean(onlineRoom?.exactMoveFor100)"
-                :disabled="!isLobbyHost"
-                @change="changeExactMoveFor100"
+            <div class="room-settings-row">
+              <label
+                v-if="exactMoveSettingAvailable"
+                class="exact-move-setting"
               >
-              <span>Exact Move for S100</span>
-            </label>
+                <input
+                  type="checkbox"
+                  :checked="Boolean(onlineRoom?.exactMoveFor100)"
+                  :disabled="!isLobbyHost"
+                  @change="changeExactMoveFor100"
+                >
+                <span>Exact Move for S100</span>
+              </label>
+              <label class="exact-move-setting private-room-setting">
+                <input
+                  type="checkbox"
+                  :checked="Boolean(onlineRoom?.privateRoom)"
+                  :disabled="!isLobbyHost"
+                  @change="changePrivateRoom"
+                >
+                <span>Private Room</span>
+              </label>
+            </div>
             <div v-if="selectedLobbyBoard" class="board-carousel">
               <button
                 type="button"
@@ -1650,7 +1776,6 @@ onUnmounted(() => {
             <article v-for="room in availableRoomList" :key="room.code" class="room-list-card">
               <div>
                 <small>{{ room.modeName }} · {{ room.boardName }}</small>
-                <strong>{{ room.code }}</strong>
                 <span>{{ room.playerCount }}/{{ room.maxPlayers }} players</span>
               </div>
               <button v-if="room.canJoin" type="button" @click="joinListedRoom(room.code)">Join</button>
@@ -1663,10 +1788,10 @@ onUnmounted(() => {
             <article v-for="room in inGameRoomList" :key="room.code" class="room-list-card">
               <div>
                 <small>{{ room.modeName }} · {{ room.boardName }}</small>
-                <strong>{{ room.code }}</strong>
-                <span>{{ room.playerCount }}/{{ room.maxPlayers }} players · {{ room.spectatorCount }} watching</span>
+                <span>{{ room.playerCount }}/{{ room.maxPlayers }} players · {{ room.spectatorCount }}/{{ room.maxSpectators }} watching</span>
               </div>
-              <button type="button" @click="spectateRoom(room.code)">Spectate</button>
+              <button v-if="room.canSpectate" type="button" @click="spectateRoom(room.code)">Spectate</button>
+              <b v-else>Full</b>
             </article>
           </section>
         </div>
@@ -1922,7 +2047,7 @@ onUnmounted(() => {
           <p><b>{{ whatOverlay.playerName }}</b>: {{ whatOverlay.displayDescription }}</p>
         </div>
         <header class="game-hud" :class="{ 'escape-hud': game.mode === 'escape_from' }">
-          <button class="game-exit" @click="leaveOnlineRoom">← {{ isSpectating ? 'Stop watching' : 'Exit' }}</button>
+          <button class="game-exit" @click="leaveOnlineRoom()">← {{ isSpectating ? 'Stop watching' : 'Exit' }}</button>
           <div class="board-status">
             <small>Board</small>
             <strong>{{ game.board.name }}</strong>
@@ -1961,7 +2086,7 @@ onUnmounted(() => {
                   : `${game.players[game.currentPlayerIndex].name}'s turn`
               }}
             </button>
-            <button v-else class="game-button green" @click="leaveOnlineRoom">Exit game</button>
+            <button v-else class="game-button green" @click="leaveOnlineRoom()">Exit game</button>
           </div>
         </header>
 

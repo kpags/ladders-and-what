@@ -756,6 +756,8 @@
         "weapons": [
             {
                 "name": "Combat Knife",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/combat_knife/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/weapons/combat_knife/image",
                 "class": "melee",
                 "drop_chance": 100,
                 "max_capacity": 2,
@@ -772,7 +774,8 @@
             },
             {
                 "name": "Glock 17",
-                "gif": "assets/gifs/clash_with/no_mans_land/weapons/glock_17.gif",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/glock_17/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/weapons/glock_17/image",
                 "class": "pistol",
                 "drop_chance": 90,
                 "max_capacity": 18,
@@ -795,7 +798,8 @@
             },
             {
                 "name": "Desert Eagle",
-                "gif": "assets/gifs/clash_with/no_mans_land/weapons/desert_eagle.gif",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/desert_eagle/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/weapons/desert_eagle/image",
                 "class": "pistol",
                 "drop_chance": 70,
                 "max_capacity": 7,
@@ -812,6 +816,8 @@
             },
             {
                 "name": "Uzi",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/uzi/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/weapons/uzi/image",
                 "class": "smg",
                 "drop_chance": 70,
                 "max_capacity": 40,
@@ -834,6 +840,8 @@
             },
             {
                 "name": "MP5",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/mp5/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/weapons/mp5/image",
                 "class": "smg",
                 "drop_chance": 70,
                 "max_capacity": 30,
@@ -855,7 +863,9 @@
                 "description": "A popular submachine gun with a magazine capacity of 30 rounds. It deals 4 damage per bullet."
             },
             {
-                "name": "AK-47",
+                "name": "AKS-74U",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/aks_74u/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/weapons/aks_74u/image",
                 "class": "assault_rifle",
                 "drop_chance": 50,
                 "max_capacity": 30,
@@ -874,10 +884,12 @@
                         "description": "Fires a burst of 10 bullets per fire."
                     }
                 ],
-                "description": "A widely used assault rifle with a magazine capacity of 30 rounds. It deals 6 damage per bullet."
+                "description": "A widely used assault rifle with a magazine capacity of 30 rounds. It deals 8 damage per bullet."
             },
             {
-                "name": "M4A1",
+                "name": "SIG Rattler",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/sig_rattler/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/weapons/sig_rattler/image",
                 "class": "assault_rifle",
                 "drop_chance": 50,
                 "max_capacity": 25,
@@ -900,6 +912,8 @@
             },
             {
                 "name": "Hunting Rifle",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/hunting_rifle/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/weapons/hunting_rifle/image",
                 "class": "sniper",
                 "drop_chance": 35,
                 "max_capacity": 5,
@@ -916,6 +930,8 @@
             },
             {
                 "name": "Barret M82",
+                "gif": "assets/gifs/clash_with/no_mans_land/weapons/barrett_m82/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/weapons/barrett_m82/image",
                 "class": "sniper",
                 "drop_chance": 10,
                 "max_capacity": 2,
