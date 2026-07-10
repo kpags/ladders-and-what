@@ -40,6 +40,7 @@ export function createGameState(board, players, startedAt = Date.now(), options 
       skillBlockedTurns: 0,
       skillCooldownUntil: startedAt + SKILL_COOLDOWN_MS,
       skillRefreshPending: false,
+      delayedSkillCooldownStartTurn: null,
       skillArmed: null,
       rerollPending: false,
       specialRollPending: false,
@@ -755,6 +756,10 @@ export function applyWhatEffects(state, player, what, now = Date.now()) {
     }
     else if (effect.effect === 'lose_skill') player.skillBlockedTurns = Math.max(player.skillBlockedTurns, effect.spaces || effect.turns || 1)
     else if (effect.effect === 'activate_skill' && player.skillCooldownUntil > now) player.skillRefreshPending = true
+    else if (effect.effect === 'delay_skill_cooldown') {
+      player.delayedSkillCooldownStartTurn = state.turn + (effect.turns || 2)
+      player.skillCooldownUntil = 0
+    }
 
     steps.push({
       definition: { ...effect },
@@ -899,6 +904,15 @@ function advanceTurn(state, now = Date.now()) {
       }
     }
     spawnEscapePickups(state)
+  }
+  if (state.turn !== previousTurn) {
+    for (const player of state.players) {
+      if (player.delayedSkillCooldownStartTurn != null && state.turn >= player.delayedSkillCooldownStartTurn) {
+        player.delayedSkillCooldownStartTurn = null
+        player.skillCooldownUntil = now + SKILL_COOLDOWN_MS
+        addLog(state, `${player.name}'s weakened Parkour cooldown has started.`)
+      }
+    }
   }
   const nextPlayer = state.players[nextIndex]
   if (nextPlayer.skillRefreshPending) {
@@ -1133,6 +1147,7 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
   if (state.gameOver) return { ok: false, message: 'The game is over.' }
   const player = state.players[state.currentPlayerIndex]
   if (player.skillBlockedTurns > 0) return { ok: false, message: `Skill blocked for ${player.skillBlockedTurns} more turn(s).` }
+  if (player.delayedSkillCooldownStartTurn != null) return { ok: false, message: `Skill cooldown starts on turn ${player.delayedSkillCooldownStartTurn}.` }
   if (player.skillCooldownUntil > now) return { ok: false, message: 'Skill is still cooling down.' }
 
   const skill = player.specialSkill?.name

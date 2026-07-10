@@ -21,6 +21,29 @@ const characters = JSON.parse(readFileSync(new URL('../data/characters.json', im
 const questionnaires = JSON.parse(readFileSync(new URL('../data/guess_what_questions.json', import.meta.url), 'utf8'))
 const parkourWhats = boards.find(board => board.name === 'Nature')?.whats
   .filter(what => ['Bee Swarm', 'Dung'].includes(what.name)) || []
+const parkourSpecialWhats = [
+  ...parkourWhats,
+  {
+    name: 'Misdirect',
+    icon: '↯',
+    effects: [{
+      type: 'move',
+      effect: 'move_back',
+      spaces: 0,
+      description: 'Misdirected momentum! You stay on your current square.',
+    }],
+  },
+  {
+    name: 'Weakened',
+    icon: '🦵',
+    effects: [{
+      type: 'skill',
+      effect: 'delay_skill_cooldown',
+      turns: 2,
+      description: 'You feel weakened. Your Parkour cooldown will only start after 2 global turns.',
+    }],
+  },
+]
 const rooms = new Map()
 const sockets = new Map()
 const ESCAPE_ROLL_MS = 10_000
@@ -88,6 +111,10 @@ function roomForClient(clientId) {
   return [...rooms.values()].find(room => room.players.some(player => player.id === clientId))
 }
 
+function spectatorRoomForClient(clientId) {
+  return [...rooms.values()].find(room => room.spectators?.has(clientId))
+}
+
 function roomView(room) {
   return {
     code: room.code,
@@ -97,11 +124,41 @@ function roomView(room) {
     boardIndex: room.boardIndex,
     exactMoveFor100: Boolean(room.exactMoveFor100),
     players: room.players,
+    spectatorCount: room.spectators?.size || 0,
   }
 }
 
 function recipients(room) {
+  return [
+    ...room.players.map(player => sockets.get(player.id)),
+    ...[...(room.spectators || [])].map(id => sockets.get(id)),
+  ].filter(Boolean)
+}
+
+function playerRecipients(room) {
   return room.players.map(player => sockets.get(player.id)).filter(Boolean)
+}
+
+function roomListView() {
+  return [...rooms.values()]
+    .filter(room => room.phase === 'lobby' || room.phase === 'playing')
+    .map(room => {
+      const board = boards[room.boardIndex] || room.game?.board
+      const maxPlayers = roomMaxPlayers(room)
+      return {
+        code: room.code,
+        phase: room.phase,
+        modeKey: room.modeKey,
+        modeName: gameModes.find(mode => mode.key === room.modeKey)?.name || room.modeKey,
+        boardName: board?.name || 'Unknown',
+        playerCount: room.players.length,
+        maxPlayers,
+        full: room.players.length >= maxPlayers,
+        canJoin: room.phase === 'lobby' && room.players.length < maxPlayers,
+        canSpectate: room.phase === 'playing',
+        spectatorCount: room.spectators?.size || 0,
+      }
+    })
 }
 
 function broadcast(room, payload) {
@@ -114,7 +171,8 @@ function revise(room) {
 }
 
 function broadcastRoom(room) {
-  broadcast(room, { type: 'room_state', revision: revise(room), room: roomView(room) })
+  const payload = { type: 'room_state', revision: revise(room), room: roomView(room) }
+  for (const socket of playerRecipients(room)) send(socket, payload)
 }
 
 function broadcastGame(room, type = 'game_state') {
@@ -132,6 +190,21 @@ function broadcastGame(room, type = 'game_state') {
       turnDeadline: room.turnDeadline,
       currentEvent: room.currentEvent,
       escapeBriefing: escapeBriefingView(room.escapeBriefing),
+      serverNow: Date.now(),
+    })
+  }
+  for (const spectatorId of room.spectators || []) {
+    const socket = sockets.get(spectatorId)
+    if (!socket) continue
+    send(socket, {
+      type,
+      revision,
+      room: roomView(room),
+      game: structuredClone(room.game),
+      turnDeadline: room.turnDeadline,
+      currentEvent: room.currentEvent,
+      escapeBriefing: escapeBriefingView(room.escapeBriefing),
+      spectator: true,
       serverNow: Date.now(),
     })
   }
@@ -210,6 +283,10 @@ function closeRoom(room, reason) {
   room.phase = 'closed'
   broadcast(room, { type: 'room_closed', reason })
   rooms.delete(room.code)
+}
+
+function sendRoomList(socket) {
+  send(socket, { type: 'room_list', rooms: roomListView(), serverNow: Date.now() })
 }
 
 function wait(room, milliseconds, token) {
@@ -749,7 +826,7 @@ async function runParkourWhatSequence(room, result, token) {
   const icon = result.what.name === 'Bee Swarm' ? '🐝' : '💩'
   emitEvent(room, 'dice_stopped', {
     playerId: player.id,
-    result: icon,
+    result: result.what.icon || icon,
     resultLabel: result.what.name,
     specialRoll: true,
   }, 2000)
@@ -1072,18 +1149,32 @@ function stopRoll(room, requesterId, automatic = false) {
     runAwayRollSequence(room, current, startSpace, dice, token)
     return
   }
-  if (specialRoll && parkourWhats.length && Math.random() < 0.15) {
-    const what = parkourWhats[Math.floor(Math.random() * parkourWhats.length)]
+  const startSpace = current.space
+  if (specialRoll) {
+    const faces = [7, 8, 9, 10, ...parkourSpecialWhats]
+    const face = faces[Math.floor(Math.random() * faces.length)]
+    if (typeof face === 'object') {
+      const what = structuredClone(face)
+      if (what.name === 'Misdirect') {
+        const spaces = Math.floor(Math.random() * 4)
+        what.effects[0].spaces = spaces
+        what.effects[0].description = spaces
+          ? `Misdirected momentum! Move back ${spaces} ${spaces === 1 ? 'space' : 'spaces'}.`
+          : 'Misdirected momentum! Stay on your current square.'
+      }
+      room.rolling = null
+      const result = takeParkourWhat(room.game, what)
+      const token = ++room.sequenceToken
+      runParkourWhatSequence(room, result, token)
+      return
+    }
     room.rolling = null
-    const result = takeParkourWhat(room.game, what)
+    takeTurn(room.game, face)
     const token = ++room.sequenceToken
-    runParkourWhatSequence(room, result, token)
+    runTurnSequence(room, current, startSpace, face, token, true)
     return
   }
-  const roll = specialRoll
-    ? Math.floor(Math.random() * 4) + 7
-    : Math.floor(Math.random() * 6) + 1
-  const startSpace = current.space
+  const roll = Math.floor(Math.random() * 6) + 1
   room.rolling = null
   takeTurn(room.game, roll)
   const token = ++room.sequenceToken
@@ -1184,7 +1275,7 @@ function startRoll(room, requesterId, automatic = false, continuingSequence = fa
     max: specialRoll ? 10 : dualRoll ? 4 : 6,
     specialRoll,
     dual: dualRoll,
-    faces: specialRoll ? [7, 8, 9, 10, '🐝', '💩'] : dualRoll ? [1, 2, 3, 4] : [1, 2, 3, 4, 5, 6],
+    faces: specialRoll ? [7, 8, 9, 10, '🐝', '💩', '↯', '🦵'] : dualRoll ? [1, 2, 3, 4] : [1, 2, 3, 4, 5, 6],
   }, rollDuration)
   room.rollTimer = setTimeout(() => stopRoll(room, current.id, true), rollDuration)
 }
@@ -1518,6 +1609,7 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
   if (automatic && !current.isAI) return
   if (!automatic && current.isAI) return reject(sockets.get(requesterId), 'AI skills are controlled by the server.')
   if (current.skillBlockedTurns > 0) return reject(sockets.get(requesterId), `Skill blocked for ${current.skillBlockedTurns} turn(s).`)
+  if (current.delayedSkillCooldownStartTurn != null) return reject(sockets.get(requesterId), `Skill cooldown starts on turn ${current.delayedSkillCooldownStartTurn}.`)
   if (current.skillCooldownUntil > Date.now()) return reject(sockets.get(requesterId), 'Skill is still cooling down.')
   const turnKey = `${room.game.turn}:${room.game.currentPlayerIndex}`
   if (room.skillUsedTurnKey === turnKey) return reject(sockets.get(requesterId), 'Skill can only be used once per turn.')
@@ -1766,6 +1858,8 @@ wss.on('connection', socket => {
           forfeitDisconnected(existing, clientId)
         }
       }
+      const spectating = spectatorRoomForClient(clientId)
+      if (spectating) spectating.spectators.delete(clientId)
       const room = {
         code: createCode(),
         phase: 'lobby',
@@ -1783,6 +1877,7 @@ wss.on('connection', socket => {
         turnDeadline: null,
         busy: false,
         memorialShown: false,
+        spectators: new Set(),
       }
       room.players.push({
         id: clientId,
@@ -1798,6 +1893,8 @@ wss.on('connection', socket => {
     if (message.type === 'join') {
       const room = rooms.get(String(message.code || '').toUpperCase())
       if (!room) return reject(socket, 'Room not found.')
+      const spectating = spectatorRoomForClient(clientId)
+      if (spectating) spectating.spectators.delete(clientId)
       const existing = room.players.find(player => player.id === clientId)
       if (existing) return reconnect(room, clientId, socket)
       if (room.phase !== 'lobby') return reject(socket, 'The game has already started.')
@@ -1809,6 +1906,25 @@ wss.on('connection', socket => {
       return
     }
 
+    if (message.type === 'list_rooms') {
+      sendRoomList(socket)
+      return
+    }
+
+    if (message.type === 'spectate') {
+      const room = rooms.get(String(message.code || '').toUpperCase())
+      if (!room) return reject(socket, 'Room not found.')
+      if (room.phase !== 'playing' || !room.game) return reject(socket, 'That room is not in game yet.')
+      const existing = roomForClient(clientId)
+      if (existing) return reject(socket, 'Leave your current room before spectating.')
+      const previousSpectating = spectatorRoomForClient(clientId)
+      if (previousSpectating) previousSpectating.spectators.delete(clientId)
+      room.spectators ||= new Set()
+      room.spectators.add(clientId)
+      broadcastGame(room, 'game_started')
+      return
+    }
+
     if (message.type === 'reconnect') {
       const room = rooms.get(String(message.code || '').toUpperCase())
       if (!room) return reject(socket, 'Room no longer exists.')
@@ -1817,7 +1933,15 @@ wss.on('connection', socket => {
     }
 
     const room = roomForClient(clientId)
-    if (!room) return reject(socket, 'You are not in a room.')
+    if (!room) {
+      const spectating = spectatorRoomForClient(clientId)
+      if (spectating && message.type === 'leave_room') {
+        spectating.spectators.delete(clientId)
+        send(socket, { type: 'room_closed', reason: 'You stopped spectating.' })
+        return
+      }
+      return reject(socket, 'You are not in a room.')
+    }
 
     if (message.type === 'leave_room') {
       if (clientId === room.hostId) closeRoom(room, 'The host left the room.')
@@ -1954,6 +2078,8 @@ wss.on('connection', socket => {
     sockets.delete(clientId)
     const room = roomForClient(clientId)
     if (room) markDisconnected(room, clientId)
+    const spectating = spectatorRoomForClient(clientId)
+    if (spectating) spectating.spectators.delete(clientId)
   })
 })
 

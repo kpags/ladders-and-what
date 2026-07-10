@@ -95,6 +95,9 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Converted all Medkit and Light Source GIF frames from baked checkerboard backgrounds to real transparency while preserving their 12-frame animation.
 - Continuation validation passed all 79 automated tests, server/client syntax checks, `git diff --check`, and a production build routed to the system temp folder.
 - The bundled browser runner rendered the home screen but its sandbox denied the local WebSocket; the in-app browser was not attached, so a live synchronized pickup screenshot remains the only outstanding manual QA item.
+- Added Parkour Joe's Misdirect and Weakened special-die outcomes, including randomized 0-3 square Misdirect movement and a two-global-turn delayed cooldown start for Weakened.
+- Added the Room List page, Play Now create/list chooser, spectator room wiring for in-game rooms, player-only lobby broadcasts, and lobby-aware Settings back navigation.
+- Validation passed server syntax, all 94 automated tests, `git diff --check`, a production build, bundled home/popup browser smoke, and a focused Room List route screenshot with no console errors.
 
 ## TODO
 

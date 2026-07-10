@@ -112,6 +112,11 @@ const joinCode = ref('')
 const onlineRoom = ref(null)
 const onlineError = ref('')
 const onlineStatus = ref('offline')
+const playNowPrompt = ref(false)
+const roomList = ref([])
+const roomListLoading = ref(false)
+const isSpectating = ref(false)
+const settingsReturnPage = ref('home')
 let lobbySocket
 let reconnectTimer
 let reconnectAttempts = 0
@@ -207,6 +212,8 @@ const lobbyPlayers = computed(() => (onlineRoom.value?.players || []).map(player
 })))
 const lobbySlotCount = computed(() => selectedMode.value === 'escape_from' ? 4 : 6)
 const lobbyMaxPlayers = computed(() => lobbySlotCount.value)
+const availableRoomList = computed(() => roomList.value.filter(room => room.phase === 'lobby'))
+const inGameRoomList = computed(() => roomList.value.filter(room => room.phase === 'playing'))
 const rollSeconds = computed(() => rollDeadline.value ? Math.max(0, Math.ceil((rollDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
 const directionSeconds = computed(() => directionChoice.value ? Math.max(0, Math.ceil((directionChoice.value.expiresAt - (now.value + serverClockOffset)) / 1000)) : 0)
 const escapeMoveSeconds = computed(() => escapeMoveChoice.value ? Math.max(0, Math.ceil((escapeMoveChoice.value.expiresAt - (now.value + serverClockOffset)) / 1000)) : 0)
@@ -376,7 +383,7 @@ async function handleServerEvent(event) {
     diceDual.value = Boolean(event.data.dual)
     diceResultLabel.value = ''
     rollDeadline.value = event.data.autoStopAt || (event.startedAt + event.duration)
-    const faces = event.data.faces || [1, 2, 3, 4, 5, 6]
+    const faces = event.data.specialRoll ? [7, 8, 9, 10, '🐝', '💩', '↯', '🦵'] : event.data.faces || [1, 2, 3, 4, 5, 6]
     window.clearInterval(diceTimer)
     diceTimer = window.setInterval(() => {
       if (diceDual.value) {
@@ -748,6 +755,7 @@ function resetOnlineRoom(reason = '') {
   lastRevision = 0
   seenEvents.clear()
   onlineError.value = reason
+  isSpectating.value = false
   page.value = 'home'
 }
 
@@ -823,11 +831,17 @@ function handleSocketMessage(event) {
     }
     return
   }
+  if (message.type === 'room_list') {
+    roomList.value = message.rooms || []
+    roomListLoading.value = false
+    return
+  }
 
   if (message.revision && message.revision < lastRevision) return
   if (message.revision) lastRevision = message.revision
 
   if (message.type === 'room_state') {
+    isSpectating.value = false
     onlineRoom.value = message.room
     roomCode.value = message.room.code
     localStorage.setItem('ladders-room-code', message.room.code)
@@ -843,6 +857,7 @@ function handleSocketMessage(event) {
     if (message.room.phase === 'lobby') page.value = 'lobby'
     onlineError.value = ''
   } else if (message.type === 'game_started' || message.type === 'game_state') {
+    isSpectating.value = Boolean(message.spectator)
     applyGameSnapshot(message)
   } else if (message.type === 'game_event') {
     handleServerEvent(message.event)
@@ -905,6 +920,8 @@ function sendLobby(payload) {
 }
 
 async function createOnlineLobby() {
+  playNowPrompt.value = false
+  isSpectating.value = false
   if (onlineRoom.value) {
     page.value = 'lobby'
     return
@@ -916,6 +933,39 @@ async function createOnlineLobby() {
     await connectLobby()
     sendLobby({ type: 'create', characterIndex: playerCharacter.value })
   } catch {}
+}
+
+async function openRoomListPage() {
+  playNowPrompt.value = false
+  page.value = 'room-list'
+  await refreshRoomList()
+}
+
+async function refreshRoomList() {
+  roomListLoading.value = true
+  onlineError.value = ''
+  try {
+    await connectLobby()
+    sendLobby({ type: 'list_rooms' })
+  } catch {
+    roomListLoading.value = false
+  }
+}
+
+async function joinListedRoom(code) {
+  joinCode.value = code
+  await joinOnlineLobby()
+}
+
+async function spectateRoom(code) {
+  onlineError.value = ''
+  isSpectating.value = true
+  try {
+    await connectLobby()
+    sendLobby({ type: 'spectate', code })
+  } catch {
+    isSpectating.value = false
+  }
 }
 
 async function joinOnlineLobby() {
@@ -1011,6 +1061,15 @@ function leaveOnlineRoom() {
   resetOnlineRoom('You left the room.')
 }
 
+function goSettings(from = page.value) {
+  settingsReturnPage.value = from
+  page.value = 'settings'
+}
+
+function leaveSettings() {
+  page.value = settingsReturnPage.value === 'lobby' && onlineRoom.value?.phase === 'lobby' ? 'lobby' : 'home'
+}
+
 function boardSpacePosition(space) {
   return getBoardSpacePosition(game.value?.board, space)
 }
@@ -1099,6 +1158,7 @@ async function animateSpaceBySpace(playerId, from, to) {
 }
 
 function skillCooldown(player) {
+  if (player.delayedSkillCooldownStartTurn != null) return 1
   return Math.max(0, Math.ceil((player.skillCooldownUntil - (now.value + serverClockOffset)) / 1000))
 }
 
@@ -1286,7 +1346,7 @@ onMounted(() => {
   document.addEventListener('click', handleButtonClick)
   window.render_game_to_text = () => JSON.stringify({
     page: page.value,
-    room: onlineRoom.value ? {
+      room: onlineRoom.value ? {
       code: onlineRoom.value.code,
       mode: selectedMode.value,
       board: selectedLobbyBoard.value?.name || null,
@@ -1328,7 +1388,9 @@ onMounted(() => {
       winner: game.value.winner?.name || null,
       loser: game.value.loser?.name || null,
       gameOver: game.value.gameOver,
+      spectating: isSpectating.value,
     } : null,
+    roomList: page.value === 'room-list' ? roomList.value : undefined,
     coordinates: 'Board squares ascend from 1 to 100 in alternating left-to-right and right-to-left rows.',
   })
   window.advanceTime = milliseconds => {
@@ -1380,10 +1442,19 @@ onUnmounted(() => {
         </header>
         <p class="tagline">Because life is full of surprises. <b>Duh.</b></p>
         <nav class="home-actions" aria-label="Main menu">
-          <button class="game-button yellow" @click="createOnlineLobby"><span class="icon">▶</span> Play now</button>
+          <button class="game-button yellow" @click="playNowPrompt = true"><span class="icon">▶</span> Play now</button>
           <button class="game-button green" @click="page = 'characters'"><span class="icon">♟</span> Characters</button>
-          <button class="game-button blue" @click="page = 'settings'"><span class="icon">⚙</span> Settings</button>
+          <button class="game-button blue" @click="goSettings('home')"><span class="icon">⚙</span> Settings</button>
         </nav>
+        <div v-if="playNowPrompt" class="play-now-modal" role="dialog" aria-modal="true" aria-labelledby="play-now-title">
+          <section>
+            <button class="modal-close" type="button" @click="playNowPrompt = false" aria-label="Close">×</button>
+            <small>Choose your chaos</small>
+            <h2 id="play-now-title">Play Now</h2>
+            <button class="game-button yellow" type="button" @click="createOnlineLobby"><span class="icon">＋</span> Create Room</button>
+            <button class="game-button blue" type="button" @click="openRoomListPage"><span class="icon">☰</span> Room List</button>
+          </section>
+        </div>
         <div class="join-room">
           <input v-model="joinCode" maxlength="5" placeholder="ROOM CODE" @keyup.enter="joinOnlineLobby">
           <button @click="joinOnlineLobby">Join room</button>
@@ -1407,7 +1478,7 @@ onUnmounted(() => {
           </div>
           <div class="lobby-title">Lobby</div>
           <div class="lobby-tools">
-            <button @click="page = 'settings'">⚙ <span>Settings</span></button>
+            <button @click="goSettings('lobby')">⚙ <span>Settings</span></button>
           </div>
         </header>
 
@@ -1550,6 +1621,51 @@ onUnmounted(() => {
             <div class="board-tip">{{ selectedGameMode.description }}</div>
           </section>
         </div>
+      </section>
+    </template>
+
+    <template v-else-if="page === 'room-list'">
+      <section class="room-list-screen">
+        <header class="room-list-topbar">
+          <button class="lobby-back" @click="page = 'home'" aria-label="Back to home">←</button>
+          <div class="brand brand-lobby">
+            <span class="crown">♛</span>
+            <span class="brand-top">LADDERS...</span>
+            <span class="brand-bottom"><i>AND</i> WHAT?!</span>
+          </div>
+          <div class="lobby-title">Room List</div>
+          <button class="refresh-rooms" type="button" :disabled="roomListLoading" @click="refreshRoomList">
+            {{ roomListLoading ? 'Loading...' : 'Refresh' }}
+          </button>
+        </header>
+        <div class="room-list-grid">
+          <section class="room-list-panel">
+            <h2>Available Rooms</h2>
+            <article v-if="!availableRoomList.length" class="room-list-empty">No available rooms</article>
+            <article v-for="room in availableRoomList" :key="room.code" class="room-list-card">
+              <div>
+                <small>{{ room.modeName }} · {{ room.boardName }}</small>
+                <strong>{{ room.code }}</strong>
+                <span>{{ room.playerCount }}/{{ room.maxPlayers }} players</span>
+              </div>
+              <button v-if="room.canJoin" type="button" @click="joinListedRoom(room.code)">Join</button>
+              <b v-else>Full</b>
+            </article>
+          </section>
+          <section class="room-list-panel in-game">
+            <h2>In Game</h2>
+            <article v-if="!inGameRoomList.length" class="room-list-empty">No games yet</article>
+            <article v-for="room in inGameRoomList" :key="room.code" class="room-list-card">
+              <div>
+                <small>{{ room.modeName }} · {{ room.boardName }}</small>
+                <strong>{{ room.code }}</strong>
+                <span>{{ room.playerCount }}/{{ room.maxPlayers }} players · {{ room.spectatorCount }} watching</span>
+              </div>
+              <button type="button" @click="spectateRoom(room.code)">Spectate</button>
+            </article>
+          </section>
+        </div>
+        <p v-if="onlineError" class="room-list-error">{{ onlineError }}</p>
       </section>
     </template>
 
@@ -1801,7 +1917,7 @@ onUnmounted(() => {
           <p><b>{{ whatOverlay.playerName }}</b>: {{ whatOverlay.displayDescription }}</p>
         </div>
         <header class="game-hud" :class="{ 'escape-hud': game.mode === 'escape_from' }">
-          <button class="game-exit" @click="leaveOnlineRoom">← Exit</button>
+          <button class="game-exit" @click="leaveOnlineRoom">← {{ isSpectating ? 'Stop watching' : 'Exit' }}</button>
           <div class="board-status">
             <small>Board</small>
             <strong>{{ game.board.name }}</strong>
@@ -2109,6 +2225,9 @@ onUnmounted(() => {
                 <template v-else-if="controlledGamePlayer.skillBlockedTurns">
                   Blocked for {{ controlledGamePlayer.skillBlockedTurns }} turn(s)
                 </template>
+                <template v-else-if="controlledGamePlayer.delayedSkillCooldownStartTurn != null">
+                  Cooldown starts turn {{ controlledGamePlayer.delayedSkillCooldownStartTurn }}
+                </template>
                 <template v-else-if="skillCooldown(controlledGamePlayer)">
                   Cooldown {{ skillCooldown(controlledGamePlayer) }}s
                 </template>
@@ -2145,13 +2264,13 @@ onUnmounted(() => {
           <nav class="side-actions">
             <button class="game-button blue" @click="createOnlineLobby"><span class="icon">▶</span> Play now</button>
             <button class="game-button purple" :class="{ active: page === 'characters' }" @click="page = 'characters'"><span class="icon">♟</span> Characters</button>
-            <button class="game-button yellow" :class="{ active: page === 'settings' }" @click="page = 'settings'"><span class="icon">⚙</span> Settings</button>
+            <button class="game-button yellow" :class="{ active: page === 'settings' }" @click="goSettings(page)"><span class="icon">⚙</span> Settings</button>
           </nav>
           <div class="note">MORE CHAOS<br>COMING SOON...<br><b>MAYBE.</b></div>
         </aside>
 
         <section class="content">
-          <button class="back" @click="page = 'home'">← BACK</button>
+          <button class="back" @click="page === 'settings' ? leaveSettings() : page = 'home'">← BACK</button>
 
           <template v-if="page === 'characters'">
             <div class="ribbon">Characters</div>

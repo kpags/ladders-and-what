@@ -11,6 +11,7 @@ import {
   hiddenMineOptions,
   minePushDestination,
   planRunAwayDestruction,
+  takeParkourWhat,
   takeTurn,
 } from '../src/gameRules.js'
 
@@ -520,6 +521,69 @@ test('Water Well does nothing when the skill is already ready', () => {
 
   assert.equal(state.players[0].skillRefreshPending, false)
   assert.equal(state.players[0].skillCooldownUntil, 0)
+})
+
+test('Parkour Misdirect moves back zero to three spaces', () => {
+  for (const spaces of [0, 1, 2, 3]) {
+    const state = createState([20, 40])
+    state.nextExplosionTurn = 99
+    state.players[0].specialRollPending = true
+    const result = takeParkourWhat(state, {
+      name: 'Misdirect',
+      effects: [{
+        type: 'move',
+        effect: 'move_back',
+        spaces,
+        description: spaces ? `Back ${spaces}.` : 'Stay.',
+      }],
+    })
+
+    assert.equal(result.from, 20)
+    assert.equal(result.directDestination, 20 - spaces)
+    assert.equal(state.players[0].space, 20 - spaces)
+    assert.equal(state.players[0].specialRollPending, false)
+  }
+})
+
+test('Parkour Weakened delays the cooldown start by two global turns', () => {
+  const state = createState([10, 20])
+  state.nextExplosionTurn = 99
+  state.players[0].specialRollPending = true
+  state.players[0].skillCooldownUntil = 120_000
+
+  takeParkourWhat(state, {
+    name: 'Weakened',
+    effects: [{
+      type: 'skill',
+      effect: 'delay_skill_cooldown',
+      turns: 2,
+      description: 'Delayed.',
+    }],
+  })
+
+  assert.equal(state.players[0].skillCooldownUntil, 0)
+  assert.equal(state.players[0].delayedSkillCooldownStartTurn, 3)
+  state.currentPlayerIndex = 0
+  assert.equal(activateSkill(state, 1).ok, false)
+  state.currentPlayerIndex = 1
+
+  takeTurn(state, 0)
+
+  assert.equal(state.turn, 2)
+  assert.equal(state.players[0].delayedSkillCooldownStartTurn, 3)
+  assert.equal(state.players[0].skillCooldownUntil, 0)
+
+  takeTurn(state, 0)
+
+  assert.equal(state.turn, 2)
+  assert.equal(state.players[0].delayedSkillCooldownStartTurn, 3)
+  assert.equal(state.players[0].skillCooldownUntil, 0)
+
+  takeTurn(state, 0)
+
+  assert.equal(state.turn, 3)
+  assert.equal(state.players[0].delayedSkillCooldownStartTurn, null)
+  assert.ok(state.players[0].skillCooldownUntil > 0)
 })
 
 test('WHAT effects are applied and recorded in array order', () => {
