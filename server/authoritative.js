@@ -139,9 +139,19 @@ function playerRecipients(room) {
   return room.players.map(player => sockets.get(player.id)).filter(Boolean)
 }
 
+function hasConnectedHumanPlayer(room) {
+  return room.players.some(player => !player.isAI && player.connected)
+}
+
+function isRoomListVisible(room) {
+  if (!hasConnectedHumanPlayer(room)) return false
+  if (room.phase === 'lobby') return true
+  return room.phase === 'playing' && !room.game?.gameOver
+}
+
 function roomListView() {
   return [...rooms.values()]
-    .filter(room => room.phase === 'lobby' || room.phase === 'playing')
+    .filter(isRoomListVisible)
     .map(room => {
       const board = boards[room.boardIndex] || room.game?.board
       const maxPlayers = roomMaxPlayers(room)
@@ -283,6 +293,12 @@ function closeRoom(room, reason) {
   room.phase = 'closed'
   broadcast(room, { type: 'room_closed', reason })
   rooms.delete(room.code)
+}
+
+function closeRoomIfNoConnectedHumans(room, reason = 'All players left the room.') {
+  if (!rooms.has(room.code) || hasConnectedHumanPlayer(room)) return false
+  closeRoom(room, reason)
+  return true
 }
 
 function sendRoomList(socket) {
@@ -1803,12 +1819,14 @@ function forfeitDisconnected(room, clientId) {
     }
     const forfeited = forfeitPlayer(room.game, clientId)
     room.players = room.players.filter(player => player.id !== clientId)
+    if (closeRoomIfNoConnectedHumans(room)) return
     if (syncEscapeBriefingPlayers(room.escapeBriefing, room.players)) room.busy = false
     broadcast(room, { type: 'player_forfeited', revision: revise(room), playerId: clientId, playerName: forfeited?.name })
     broadcastGame(room)
     if (interruptsTurn || !room.busy) beginTurn(room)
   } else {
     room.players = room.players.filter(player => player.id !== clientId)
+    if (closeRoomIfNoConnectedHumans(room)) return
     broadcastRoom(room)
   }
 }
@@ -1817,6 +1835,7 @@ function markDisconnected(room, clientId) {
   const player = room.players.find(item => item.id === clientId)
   if (!player || player.isAI) return
   player.connected = false
+  if (closeRoomIfNoConnectedHumans(room)) return
   broadcastRoom(room)
   clearTimer(room.disconnectTimers.get(clientId))
   room.disconnectTimers.set(clientId, setTimeout(() => forfeitDisconnected(room, clientId), RECONNECT_GRACE_MS))

@@ -1634,9 +1634,14 @@ onUnmounted(() => {
             <span class="brand-bottom"><i>AND</i> WHAT?!</span>
           </div>
           <div class="lobby-title">Room List</div>
-          <button class="refresh-rooms" type="button" :disabled="roomListLoading" @click="refreshRoomList">
-            {{ roomListLoading ? 'Loading...' : 'Refresh' }}
-          </button>
+          <div class="room-list-controls">
+            <button class="create-room-list" type="button" @click="createOnlineLobby">
+              Create Room
+            </button>
+            <button class="refresh-rooms" type="button" :disabled="roomListLoading" @click="refreshRoomList">
+              {{ roomListLoading ? 'Loading...' : 'Refresh' }}
+            </button>
+          </div>
         </header>
         <div class="room-list-grid">
           <section class="room-list-panel">

@@ -98,6 +98,8 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Added Parkour Joe's Misdirect and Weakened special-die outcomes, including randomized 0-3 square Misdirect movement and a two-global-turn delayed cooldown start for Weakened.
 - Added the Room List page, Play Now create/list chooser, spectator room wiring for in-game rooms, player-only lobby broadcasts, and lobby-aware Settings back navigation.
 - Validation passed server syntax, all 94 automated tests, `git diff --check`, a production build, bundled home/popup browser smoke, and a focused Room List route screenshot with no console errors.
+- Cleaned up Room List visibility so rooms require at least one connected human and finished games no longer appear; rooms with only AI/stale disconnected players are closed. Added a top-right Room List Create Room button beside Refresh and verified the create-room flow from that page.
+- Validation passed server syntax, all 94 automated tests, `git diff --check`, a production build, WebSocket room-list cleanup smoke, and a focused browser Room List/Create Room smoke.
 
 ## TODO
 

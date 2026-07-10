@@ -210,7 +210,10 @@ input[type=range] { height:30px; }
 .page-room-list::before { background:linear-gradient(#051326d8,#061329d5),url('../assets/pages/room_list.png') center/cover; }
 .room-list-screen { min-height:100vh; padding:1.3rem 2rem 2rem; color:#f8f0df; }
 .room-list-topbar { min-height:110px; display:grid; grid-template-columns:auto 270px 1fr auto; align-items:center; gap:1.5rem; border-bottom:4px solid #030b17; }
+.room-list-controls { display:flex; justify-content:flex-end; align-items:center; gap:.75rem; flex-wrap:wrap; }
+.create-room-list,
 .refresh-rooms { min-height:58px; padding:.55rem 1.1rem; border:3px solid #111727; border-radius:13px; background:linear-gradient(#ffc928,#dc8d0b); box-shadow:0 7px 0 #07101e; color:#19130b; font:1.35rem 'Luckiest Guy'; text-transform:uppercase; }
+.create-room-list { background:linear-gradient(#58d533,#1f8c0a); color:#fff; text-shadow:0 2px 0 #0d4004; }
 .refresh-rooms:disabled { filter:grayscale(.6); cursor:wait; }
 .room-list-grid { display:grid; grid-template-columns:1fr 1fr; gap:1.4rem; max-width:1180px; margin:2rem auto 0; }
 .room-list-panel { min-height:520px; padding:1.2rem; border:4px solid #101827; border-radius:24px; background:#07101ddd; box-shadow:0 10px 0 #02050a; }
@@ -633,6 +636,7 @@ input[type=range] { height:30px; }
   .lobby-grid { grid-template-columns:1fr; }
   .room-list-topbar { grid-template-columns:auto 1fr auto; }
   .room-list-topbar .brand-lobby { display:none; }
+  .room-list-controls { gap:.55rem; }
   .room-list-grid { grid-template-columns:1fr; }
   .game-layout { grid-template-columns:1fr; }
   .game-hud { grid-template-columns:90px 1fr 1fr 80px; }
@@ -671,6 +675,8 @@ input[type=range] { height:30px; }
   .lobby-tools span { display:none; }
   .room-list-screen { padding:1rem; }
   .room-list-topbar { min-height:80px; gap:.7rem; }
+  .room-list-controls { justify-content:flex-end; gap:.45rem; }
+  .create-room-list,
   .refresh-rooms { min-height:48px; padding:.45rem .7rem; font-size:1rem; }
   .room-list-panel { min-height:0; padding:.75rem; }
   .room-list-panel h2 { font-size:1.45rem; }
