@@ -1,5 +1,10 @@
 export const SKILL_COOLDOWN_MS = 120_000
 export const WEAPON_COOLDOWN_MS = 60_000
+export const CLASH_MAX_HEALTH = 100
+export const CLASH_TURN_MS = 20_000
+export const CLASH_BOARD_COLUMNS = 15
+export const CLASH_BOARD_SPACES = CLASH_BOARD_COLUMNS * CLASH_BOARD_COLUMNS
+export const CLASH_PLAYER_SPAWN_SPACES = [1, 15, 106, 120, 211, 225]
 
 function randomInteger(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min
@@ -48,13 +53,16 @@ export function createGameState(board, players, startedAt = Date.now(), options 
       eliminated: false,
       won: false,
       rank: null,
-      health: preparedBoard.type === 'escape_from' ? (preparedBoard.max_player_lives || 5) : null,
+      health: preparedBoard.type === 'escape_from' ? (preparedBoard.max_player_lives || 5) : preparedBoard.type === 'clash_with' ? CLASH_MAX_HEALTH : null,
       heldKeys: [],
       weaponCooldownUntil: 0,
       weaponPendingPenaltyMs: 0,
       weaponProtectFromTurn: null,
       weaponProtectThroughTurn: null,
       visionBoostThroughTurn: null,
+      clashStunnedThroughTurn: null,
+      clashDotEffects: [],
+      clashMeleeCooldownUntil: 0,
     })),
     currentPlayerIndex: 0,
     winners: [],
@@ -84,6 +92,7 @@ export function createGameState(board, players, startedAt = Date.now(), options 
       : null,
   }
   if (state.mode === 'escape_from') initializeEscapeState(state)
+  if (state.mode === 'clash_with') initializeClashState(state)
   return state
 }
 
@@ -102,6 +111,448 @@ function shuffled(items, rng = Math.random) {
     ;[result[index], result[swap]] = [result[swap], result[index]]
   }
   return result
+}
+
+function spaceToGrid(space) {
+  const row = Math.floor((space - 1) / 10)
+  const position = (space - 1) % 10
+  const column = row % 2 === 0 ? position : 9 - position
+  return { row, column }
+}
+
+function gridToSpace(row, column) {
+  if (row < 0 || row > 9 || column < 0 || column > 9) return null
+  const position = row % 2 === 0 ? column : 9 - column
+  return row * 10 + position + 1
+}
+
+function clashSpaceToGrid(space) {
+  const row = Math.floor((space - 1) / CLASH_BOARD_COLUMNS)
+  const position = (space - 1) % CLASH_BOARD_COLUMNS
+  const column = row % 2 === 0 ? position : CLASH_BOARD_COLUMNS - 1 - position
+  return { row, column }
+}
+
+function clashGridToSpace(row, column) {
+  if (row < 0 || row >= CLASH_BOARD_COLUMNS || column < 0 || column >= CLASH_BOARD_COLUMNS) return null
+  const position = row % 2 === 0 ? column : CLASH_BOARD_COLUMNS - 1 - column
+  return row * CLASH_BOARD_COLUMNS + position + 1
+}
+
+export function spacesWithinChebyshev(space, distance = 2) {
+  const { row, column } = spaceToGrid(space)
+  const spaces = []
+  for (let rowOffset = -distance; rowOffset <= distance; rowOffset++) {
+    for (let columnOffset = -distance; columnOffset <= distance; columnOffset++) {
+      if (!rowOffset && !columnOffset) continue
+      if (Math.max(Math.abs(rowOffset), Math.abs(columnOffset)) > distance) continue
+      const next = gridToSpace(row + rowOffset, column + columnOffset)
+      if (next != null) spaces.push(next)
+    }
+  }
+  return spaces
+}
+
+function clashSpacesWithinChebyshev(space, distance = 2) {
+  const { row, column } = clashSpaceToGrid(space)
+  const spaces = []
+  for (let rowOffset = -distance; rowOffset <= distance; rowOffset++) {
+    for (let columnOffset = -distance; columnOffset <= distance; columnOffset++) {
+      if (!rowOffset && !columnOffset) continue
+      if (Math.max(Math.abs(rowOffset), Math.abs(columnOffset)) > distance) continue
+      const next = clashGridToSpace(row + rowOffset, column + columnOffset)
+      if (next != null) spaces.push(next)
+    }
+  }
+  return spaces
+}
+
+function clashAffectedPlayers(state, sourceSpace, radius, ownerId) {
+  const affectedSpaces = new Set([sourceSpace, ...clashSpacesWithinChebyshev(sourceSpace, radius)])
+  return activePlayers(state).filter(player => player.id !== ownerId && affectedSpaces.has(player.space))
+}
+
+function clashMeleeDestination(attackerSpace, targetSpace) {
+  const attacker = clashSpaceToGrid(attackerSpace)
+  const target = clashSpaceToGrid(targetSpace)
+  const rowDirection = Math.sign(target.row - attacker.row)
+  const columnDirection = Math.sign(target.column - attacker.column)
+  if (!rowDirection && !columnDirection) return null
+  return clashGridToSpace(target.row - rowDirection, target.column - columnDirection)
+}
+
+function itemId(item) {
+  return String(item.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+}
+
+function weaponDamage(weapon, mode, rng = Math.random) {
+  const requested = mode.bullets_per_fire ?? mode.attacks_per_fire ?? 1
+  const available = weapon.class === 'melee' ? requested : Math.max(0, Math.min(requested, Number(weapon.ammoRemaining ?? weapon.max_capacity ?? requested)))
+  const base = weapon.damage_per_bullet ?? weapon.damage_per_attack ?? 0
+  let hits = 0
+  for (let index = 0; index < available; index++) {
+    if (rng() * 100 < Number(mode.accuracy ?? 100)) hits++
+  }
+  return { hits, attempts: available, damage: hits * base }
+}
+
+function clashWeaponSlot(weapon) {
+  if (weapon.class === 'melee') return 'melee'
+  if (weapon.class === 'pistol') return 'pistol'
+  return 'primary'
+}
+
+function prepareClashWeapon(weapon) {
+  const prepared = structuredClone(weapon)
+  if (prepared.class !== 'melee') prepared.ammoRemaining = Number(prepared.ammoRemaining ?? prepared.max_capacity ?? 0)
+  return prepared
+}
+
+function clashAvailableDropSpaces(state) {
+  const blocked = new Set()
+  for (const player of state.players) if (!player.eliminated) blocked.add(player.space)
+  for (const drop of state.clashDrops || []) blocked.add(drop.space)
+  return Array.from({ length: CLASH_BOARD_SPACES }, (_, index) => index + 1).filter(space => !blocked.has(space))
+}
+
+function chooseWeightedByChance(definitions, rng = Math.random) {
+  const weighted = definitions.filter(item => rng() * 100 < Number(item.drop_chance ?? 100))
+  const source = weighted.length ? weighted : definitions
+  return structuredClone(source[Math.floor(rng() * source.length)])
+}
+
+function spawnClashDrops(state, { pistols = 0, weapons = 0, items = 0 } = {}, rng = Math.random) {
+  const spaces = shuffled(clashAvailableDropSpaces(state), rng)
+  const drops = []
+  const addDrop = (kind, definition) => {
+    const space = spaces.shift()
+    if (!space || !definition) return
+    drops.push({
+      id: `clash-drop-${state.turn}-${state.clashDropSerial++}`,
+      kind,
+      definition,
+      space,
+    })
+  }
+  const pistolDefinitions = (state.board.weapons || []).filter(weapon => weapon.class === 'pistol')
+  const weaponDefinitions = (state.board.weapons || []).filter(weapon => weapon.class !== 'melee')
+  for (let index = 0; index < pistols; index++) addDrop('weapon', chooseWeightedByChance(pistolDefinitions, rng))
+  for (let index = 0; index < weapons; index++) addDrop('weapon', chooseWeightedByChance(weaponDefinitions, rng))
+  for (let index = 0; index < items; index++) addDrop('item', chooseWeightedByChance(state.board.items || [], rng))
+  state.clashDrops.push(...drops)
+  if (drops.length) {
+    state.lastClashDrop = { turn: state.turn, count: drops.length }
+    addLog(state, `${drops.length} Clash supply drop(s) landed on the board.`)
+  }
+  return drops
+}
+
+function clashInventorySnapshot(player) {
+  return {
+    weapons: player.clashInventory.weapons.map(weapon => weapon.name),
+    items: player.clashInventory.items.map(item => ({ name: item.name, count: item.count })),
+  }
+}
+
+export function initializeClashState(state, rng = Math.random) {
+  const spawnSpaces = shuffled(CLASH_PLAYER_SPAWN_SPACES, rng)
+  const fallbackSpaces = shuffled(
+    Array.from({ length: CLASH_BOARD_SPACES }, (_, index) => index + 1)
+      .filter(space => !CLASH_PLAYER_SPAWN_SPACES.includes(space)),
+    rng,
+  )
+  const knife = prepareClashWeapon((state.board.weapons || []).find(weapon => weapon.class === 'melee') || {
+    name: 'Combat Knife',
+    class: 'melee',
+    damage_per_attack: 20,
+    modes: [{ name: 'Single Attack', attacks_per_fire: 1, accuracy: 100 }],
+  })
+  state.players.forEach((player, index) => {
+    player.space = spawnSpaces[index] || fallbackSpaces[index - CLASH_PLAYER_SPAWN_SPACES.length] || index + 1
+    player.health = CLASH_MAX_HEALTH
+    player.clashInventory = {
+      weapons: [prepareClashWeapon(knife)],
+      items: [],
+    }
+    player.clashPendingPickup = null
+  })
+  state.clashDrops = []
+  state.clashDropSerial = 1
+  state.clashEffects = []
+  state.lastClashAction = null
+  state.nextClashDropTurn = 5
+  spawnClashDrops(state, { pistols: 7, weapons: 3, items: 6 }, rng)
+  state.log = ['Clash begins. Loot fast, stay hidden, and be the last one standing.']
+  state.lastEvent = state.log[0]
+}
+
+export function clashVisibleSpaces(player) {
+  return new Set([player.space, ...clashSpacesWithinChebyshev(player.space, 2)])
+}
+
+export function clashMoveOptions(state, player = state.players[state.currentPlayerIndex]) {
+  if (state.mode !== 'clash_with' || !player || player.eliminated || player.finished) return []
+  return clashSpacesWithinChebyshev(player.space, 2)
+}
+
+export function clashGhostMoveOptions(player) {
+  if (!player) return []
+  return clashSpacesWithinChebyshev(player.space, 1)
+}
+
+function canCarryClashItem(player, item) {
+  const id = itemId(item)
+  const existing = player.clashInventory.items.find(entry => entry.id === id)
+  const throwables = player.clashInventory.items
+    .filter(entry => ['damage', 'damage_over_time', 'stun'].includes(entry.effect))
+    .reduce((sum, entry) => sum + entry.count, 0)
+  if (['damage', 'damage_over_time', 'stun'].includes(item.effect) && throwables >= 2) return false
+  if (item.effect === 'heal' && id.includes('medkit') && (existing?.count || 0) >= 1) return false
+  if (item.effect === 'heal' && id.includes('bandage') && (existing?.count || 0) >= 2) return false
+  return (existing?.count || 0) < Number(item.max_capacity || 1)
+}
+
+function pickupClashDrop(state, player, rng = Math.random) {
+  const drop = state.clashDrops.find(item => item.space === player.space)
+  if (!drop) return null
+  if (drop.kind === 'weapon') {
+    const slot = clashWeaponSlot(drop.definition)
+    if (slot === 'melee') return null
+    const existingIndex = player.clashInventory.weapons.findIndex(weapon => clashWeaponSlot(weapon) === slot)
+    if (existingIndex >= 0) {
+      player.clashPendingPickup = { dropId: drop.id, weapon: drop.definition, slot }
+      addLog(state, `${player.name} found ${drop.definition.name}. Choose whether to replace your ${slot === 'pistol' ? 'pistol' : 'primary weapon'}.`)
+      return { kind: 'weapon_pending', drop }
+    }
+    player.clashInventory.weapons.push(prepareClashWeapon(drop.definition))
+    state.clashDrops = state.clashDrops.filter(item => item.id !== drop.id)
+    addLog(state, `${player.name} picked up ${drop.definition.name}.`)
+    return { kind: 'weapon', drop }
+  }
+  if (!canCarryClashItem(player, drop.definition)) {
+    addLog(state, `${player.name} found ${drop.definition.name}, but cannot carry more.`)
+    return { kind: 'full', drop }
+  }
+  const id = itemId(drop.definition)
+  const existing = player.clashInventory.items.find(entry => entry.id === id)
+  if (existing) existing.count++
+  else player.clashInventory.items.push({ id, ...structuredClone(drop.definition), count: 1 })
+  state.clashDrops = state.clashDrops.filter(item => item.id !== drop.id)
+  addLog(state, `${player.name} picked up ${drop.definition.name}.`)
+  return { kind: 'item', drop }
+}
+
+export function resolveClashPickup(state, playerId, replace) {
+  if (state.mode !== 'clash_with') return null
+  const player = state.players.find(item => item.id === playerId)
+  const pending = player?.clashPendingPickup
+  if (!player || !pending) return null
+  const drop = state.clashDrops.find(item => item.id === pending.dropId)
+  player.clashPendingPickup = null
+  if (!drop) return null
+  if (!replace) {
+    addLog(state, `${player.name} left ${drop.definition.name} on the ground.`)
+    return { player, picked: false, drop }
+  }
+  const existingIndex = player.clashInventory.weapons.findIndex(weapon => clashWeaponSlot(weapon) === pending.slot)
+  if (existingIndex >= 0) player.clashInventory.weapons.splice(existingIndex, 1, prepareClashWeapon(drop.definition))
+  else player.clashInventory.weapons.push(prepareClashWeapon(drop.definition))
+  state.clashDrops = state.clashDrops.filter(item => item.id !== drop.id)
+  addLog(state, `${player.name} equipped ${drop.definition.name}.`)
+  return { player, picked: true, drop }
+}
+
+function concludeClashIfOneRemains(state) {
+  const alive = activePlayers(state)
+  if (state.mode === 'clash_with' && alive.length <= 1) {
+    const winner = alive[0] || null
+    if (winner) {
+      winner.won = true
+      winner.finished = true
+      state.winner = winner
+      state.winners = [winner]
+      addLog(state, `${winner.name} is the last one standing!`)
+    }
+    state.gameOver = true
+  }
+}
+
+function applyClashDamage(state, target, amount, sourceText) {
+  const before = target.health
+  target.health = Math.max(0, target.health - amount)
+  if (target.health <= 0) {
+    target.eliminated = true
+    target.finished = true
+    target.rank = null
+    addLog(state, `${target.name} was eliminated by ${sourceText}.`)
+  }
+  concludeClashIfOneRemains(state)
+  return { before, after: target.health, eliminated: target.eliminated }
+}
+
+export function takeClashMove(state, playerId, destination) {
+  if (state.gameOver || state.mode !== 'clash_with') return { ok: false, message: 'Clash is unavailable.' }
+  const player = state.players[state.currentPlayerIndex]
+  if (!player || player.id !== playerId) return { ok: false, message: 'It is not your turn.' }
+  if (player.clashStunnedThroughTurn != null && state.turn <= player.clashStunnedThroughTurn) return { ok: false, message: 'You are stunned and cannot move.' }
+  const targetSpace = Number(destination)
+  if (!clashMoveOptions(state, player).includes(targetSpace)) return { ok: false, message: 'That space is outside your movement range.' }
+  const from = player.space
+  player.space = targetSpace
+  const pickup = pickupClashDrop(state, player)
+  state.lastClashAction = { type: 'move', playerId, from, to: targetSpace, pickup }
+  addLog(state, `${player.name} moved from ${from} to ${targetSpace}.`)
+  advanceTurn(state)
+  return { ok: true, player, from, to: targetSpace, pickup }
+}
+
+export function takeClashAttack(state, playerId, targetId, weaponName, modeName, rng = Math.random, now = Date.now()) {
+  if (state.gameOver || state.mode !== 'clash_with') return { ok: false, message: 'Clash is unavailable.' }
+  const player = state.players[state.currentPlayerIndex]
+  if (!player || player.id !== playerId) return { ok: false, message: 'It is not your turn.' }
+  if (player.clashStunnedThroughTurn != null && state.turn <= player.clashStunnedThroughTurn) return { ok: false, message: 'You are stunned and cannot act.' }
+  const target = state.players.find(item => item.id === targetId && !item.eliminated && !item.finished && item.id !== player.id)
+  if (!target) return { ok: false, message: 'Target unavailable.' }
+  if (!clashVisibleSpaces(player).has(target.space)) return { ok: false, message: 'Target is not visible.' }
+  const weapon = player.clashInventory.weapons.find(item => item.name === weaponName) || (!weaponName ? player.clashInventory.weapons[0] : null)
+  const mode = weapon?.modes?.find(item => item.name === modeName) || weapon?.modes?.[0]
+  if (!weapon || !mode) return { ok: false, message: 'Weapon mode unavailable.' }
+  const attackerFrom = player.space
+  if (weapon.class === 'melee' && Number(player.clashMeleeCooldownUntil || 0) > now) {
+    return { ok: false, message: 'Melee weapon is cooling down.' }
+  }
+  if (weapon.class !== 'melee' && Number(weapon.ammoRemaining ?? 0) <= 0) return { ok: false, message: `${weapon.name} is out of ammo.` }
+  const result = weaponDamage(weapon, mode, rng)
+  if (result.attempts <= 0) return { ok: false, message: `${weapon.name} is out of ammo.` }
+  if (weapon.class !== 'melee') {
+    weapon.ammoRemaining = Math.max(0, Number(weapon.ammoRemaining ?? weapon.max_capacity ?? 0) - result.attempts)
+  }
+  const damage = applyClashDamage(state, target, result.damage, weapon.name)
+  const kills = damage.eliminated
+    ? [{ killerId: player.id, killerName: player.name, targetId: target.id, targetName: target.name, sourceName: weapon.name }]
+    : []
+  const weaponSpent = weapon.class !== 'melee' && weapon.ammoRemaining <= 0
+  if (weaponSpent) player.clashInventory.weapons = player.clashInventory.weapons.filter(item => item !== weapon)
+  const attackerTo = weapon.class === 'melee' ? clashMeleeDestination(attackerFrom, target.space) : null
+  if (attackerTo != null) player.space = attackerTo
+  if (weapon.class === 'melee') player.clashMeleeCooldownUntil = now + 30_000
+  state.lastClashAction = { type: 'attack', playerId, targetId, weaponName: weapon.name, modeName: mode.name, weaponSpent, attackerFrom, attackerTo, kills, ...result, ...damage }
+  addLog(state, `${player.name} attacked ${target.name} with ${weapon.name}: ${result.hits}/${result.attempts} hit for ${result.damage} damage.`)
+  if (!state.gameOver) advanceTurn(state)
+  return { ok: true, player, target, weapon, mode, attackerFrom, attackerTo, kills, ...result, ...damage }
+}
+
+export function takeClashItem(state, playerId, itemIdValue, targetSpace = null) {
+  if (state.gameOver || state.mode !== 'clash_with') return { ok: false, message: 'Clash is unavailable.' }
+  const player = state.players[state.currentPlayerIndex]
+  if (!player || player.id !== playerId) return { ok: false, message: 'It is not your turn.' }
+  if (player.clashStunnedThroughTurn != null && state.turn <= player.clashStunnedThroughTurn) return { ok: false, message: 'You are stunned and cannot act.' }
+  const item = player.clashInventory.items.find(entry => entry.id === itemIdValue)
+  if (!item || item.count <= 0) return { ok: false, message: 'Item unavailable.' }
+  const affected = []
+  if (item.effect === 'heal') {
+    if (player.health >= CLASH_MAX_HEALTH) return { ok: false, message: 'Health is already full.' }
+    const before = player.health
+    player.health = Math.min(CLASH_MAX_HEALTH, player.health + Number(item.heal_amount || 0))
+    affected.push({ playerId: player.id, before, after: player.health, damage: 0, healed: player.health - before })
+    addLog(state, `${player.name} used ${item.name} and healed to ${player.health} health.`)
+  } else {
+    const space = Number(targetSpace)
+    if (![player.space, ...clashSpacesWithinChebyshev(player.space, 5)].includes(space)) return { ok: false, message: 'Target square is outside item range.' }
+    if (item.effect === 'stun') {
+      for (const target of clashAffectedPlayers(state, space, 1, player.id)) {
+        target.clashStunnedThroughTurn = Math.max(target.clashStunnedThroughTurn || 0, state.turn + 1)
+        affected.push({ playerId: target.id, before: target.health, after: target.health, stunnedThroughTurn: target.clashStunnedThroughTurn })
+      }
+    } else if (item.effect === 'damage_over_time') {
+      const damagePerTurn = Number(item.damage_per_global_turn || 0)
+      const throughTurn = state.turn + Number(item.duration_in_global_turns || 1)
+      for (const target of clashAffectedPlayers(state, space, 1, player.id)) {
+        target.clashDotEffects ||= []
+        target.clashDotEffects.push({
+          itemId: item.id,
+          itemName: item.name,
+          damagePerTurn,
+          throughTurn,
+          ownerId: player.id,
+        })
+        affected.push({ playerId: target.id, before: target.health, after: target.health, damageOverTime: damagePerTurn, throughTurn })
+      }
+    } else {
+      const damageAmount = Number(item.damage_amount || 0)
+      for (const target of clashAffectedPlayers(state, space, 1, player.id)) {
+        const damage = applyClashDamage(state, target, damageAmount, item.name)
+        affected.push({ playerId: target.id, before: damage.before, after: damage.after, damage: damageAmount, eliminated: damage.eliminated })
+      }
+    }
+    addLog(state, `${player.name} used ${item.name} on square ${space}.`)
+  }
+  item.count--
+  if (item.count <= 0) player.clashInventory.items = player.clashInventory.items.filter(entry => entry.id !== item.id)
+  state.lastClashAction = { type: 'item', playerId, itemId: item.id, itemName: item.name, targetSpace, affected }
+  if (!state.gameOver) advanceTurn(state)
+  const kills = affected
+    .filter(entry => entry.eliminated)
+    .map(entry => {
+      const target = state.players.find(player => player.id === entry.playerId)
+      return { killerId: player.id, killerName: player.name, targetId: entry.playerId, targetName: target?.name || 'Player', sourceName: item.name }
+    })
+  state.lastClashAction.kills = kills
+  return { ok: true, player, item, affected, targetSpace, kills }
+}
+
+export function skipClashStunnedTurn(state) {
+  if (state.gameOver || state.mode !== 'clash_with') return { ok: false, message: 'Clash is unavailable.' }
+  const player = state.players[state.currentPlayerIndex]
+  if (!player) return { ok: false, message: 'No active player.' }
+  if (player.clashStunnedThroughTurn == null || state.turn > player.clashStunnedThroughTurn) return { ok: false, message: 'The active player is not stunned.' }
+  addLog(state, `${player.name} is stunned and automatically skips this turn.`)
+  advanceTurn(state)
+  return { ok: true, player }
+}
+
+function resolveClashGlobalStatuses(state) {
+  const affected = []
+  for (const player of state.players) {
+    if (player.clashStunnedThroughTurn != null && state.turn > player.clashStunnedThroughTurn) player.clashStunnedThroughTurn = null
+    const effects = player.clashDotEffects || []
+    if (!effects.length || player.eliminated || player.finished) {
+      player.clashDotEffects = effects.filter(effect => state.turn <= effect.throughTurn)
+      continue
+    }
+    const remaining = []
+    for (const effect of effects) {
+      if (state.turn > effect.throughTurn) continue
+      const damage = applyClashDamage(state, player, Number(effect.damagePerTurn || 0), effect.itemName || 'damage over time')
+      affected.push({ playerId: player.id, itemName: effect.itemName, before: damage.before, after: damage.after, damage: Number(effect.damagePerTurn || 0), eliminated: damage.eliminated })
+      if (state.turn < effect.throughTurn && !player.eliminated && !player.finished) remaining.push(effect)
+    }
+    player.clashDotEffects = remaining
+  }
+  if (affected.length) {
+    state.lastClashDot = { turn: state.turn, affected }
+    addLog(state, `${affected.length} player(s) suffered ongoing Clash damage.`)
+  }
+  return affected
+}
+
+function normalizeClashCurrentPlayer(state) {
+  if (state.gameOver || state.mode !== 'clash_with') return
+  const current = state.players[state.currentPlayerIndex]
+  if (current && !current.finished && !current.eliminated) return
+  const nextIndex = state.players.findIndex(player => !player.finished && !player.eliminated)
+  if (nextIndex >= 0) state.currentPlayerIndex = nextIndex
+}
+
+export function moveClashGhost(state, playerId, destination) {
+  if (state.gameOver || state.mode !== 'clash_with') return { ok: false, message: 'Ghost movement unavailable.' }
+  const player = state.players.find(item => item.id === playerId && item.eliminated)
+  if (!player) return { ok: false, message: 'Only eliminated Clash players can move as ghosts.' }
+  const targetSpace = Number(destination)
+  if (!clashGhostMoveOptions(player).includes(targetSpace)) return { ok: false, message: 'Ghosts can only drift one square per move.' }
+  const from = player.space
+  player.space = targetSpace
+  return { ok: true, player, from, to: targetSpace }
 }
 
 export function initializeEscapeState(state, rng = Math.random) {
@@ -905,6 +1356,19 @@ function advanceTurn(state, now = Date.now()) {
     }
     spawnEscapePickups(state)
   }
+  if (state.mode === 'clash_with' && state.turn !== previousTurn && state.turn >= state.nextClashDropTurn) {
+    resolveClashGlobalStatuses(state)
+    if (state.gameOver) return
+    normalizeClashCurrentPlayer(state)
+    state.clashDrops = []
+    for (const player of state.players) player.clashPendingPickup = null
+    spawnClashDrops(state, { weapons: 3, items: 6 })
+    state.nextClashDropTurn = state.turn + 4
+  } else if (state.mode === 'clash_with' && state.turn !== previousTurn) {
+    resolveClashGlobalStatuses(state)
+    if (state.gameOver) return
+    normalizeClashCurrentPlayer(state)
+  }
   if (state.turn !== previousTurn) {
     for (const player of state.players) {
       if (player.delayedSkillCooldownStartTurn != null && state.turn >= player.delayedSkillCooldownStartTurn) {
@@ -1085,6 +1549,8 @@ export function penalizeTurn(state) {
     cooldownAddedMs = 30_000
     if (player.weaponCooldownUntil > Date.now()) player.weaponCooldownUntil += cooldownAddedMs
     else player.weaponPendingPenaltyMs += cooldownAddedMs
+  } else if (state.mode === 'clash_with') {
+    destination = from
   } else {
     destination = Math.max(1, from - 1)
     while (destination > 1 && state.board.question_marks.includes(destination)) destination--
@@ -1099,7 +1565,9 @@ export function penalizeTurn(state) {
     ? `${player.name} ran out of time, stayed on square ${from}, and gained 30 seconds of skill cooldown.`
     : state.mode === 'escape_from'
       ? `${player.name} ran out of time, stayed on square ${from}, and gained 30 seconds on their next weapon cooldown.`
-    : `${player.name} ran out of time and was moved back from space ${from} to normal space ${destination}.`
+      : state.mode === 'clash_with'
+        ? `${player.name} ran out of time and stayed on square ${from}.`
+        : `${player.name} ran out of time and was moved back from space ${from} to normal space ${destination}.`
   addLog(state, message)
   advanceTurn(state)
   triggerExplosion(state)
@@ -1145,6 +1613,7 @@ function peekTarget(state, player, targetId) {
 
 export function activateSkill(state, now = Date.now(), targetId = null) {
   if (state.gameOver) return { ok: false, message: 'The game is over.' }
+  if (['guess_what', 'clash_with'].includes(state.mode)) return { ok: false, message: 'Character skills are disabled in this mode.' }
   const player = state.players[state.currentPlayerIndex]
   if (player.skillBlockedTurns > 0) return { ok: false, message: `Skill blocked for ${player.skillBlockedTurns} more turn(s).` }
   if (player.delayedSkillCooldownStartTurn != null) return { ok: false, message: `Skill cooldown starts on turn ${player.delayedSkillCooldownStartTurn}.` }

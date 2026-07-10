@@ -30,6 +30,12 @@ const DEAD_FOREST_Y_BOUNDS = [
   [1118, 1205], [1009, 1118], [897, 1009], [779, 897], [659, 779],
   [539, 659], [418, 539], [294, 418], [174, 294], [47, 174],
 ]
+const NO_MANS_LAND_X_BOUNDS = [20.5, 102.5, 183, 263.5, 344, 424.5, 505.5, 585.5, 666.5, 747.5, 828.5, 908.5, 989.5, 1069.5, 1150.5, 1232.5]
+const NO_MANS_LAND_Y_BOUNDS = [
+  [1126.5, 1230.5], [1047, 1126.5], [967.5, 1047], [888.5, 967.5], [809.5, 888.5],
+  [729.5, 809.5], [650.5, 729.5], [571.5, 650.5], [491.5, 571.5], [412.5, 491.5],
+  [334.5, 412.5], [255.5, 334.5], [177, 255.5], [98, 177], [20.5, 98],
+]
 
 function quietMansionPercent(value) {
   return `${Number((value / QUIET_MANSION_SIZE * 100).toFixed(3))}%`
@@ -44,10 +50,12 @@ export function getBoardSpacePosition(board, space) {
   const throwbackPh = board?.name === 'Throwback PH'
   const quietMansion = board?.name === 'Quiet Mansion'
   const deadForest = board?.name === 'Dead Forest'
+  const noMansLand = board?.name === "No Man's Land"
   const runAway = board?.type === 'run_away'
-  const row = Math.floor((space - 1) / 10)
-  const positionInRow = (space - 1) % 10
-  const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
+  const columns = noMansLand ? 15 : 10
+  const row = Math.floor((space - 1) / columns)
+  const positionInRow = (space - 1) % columns
+  const column = row % 2 === 0 ? positionInRow : columns - 1 - positionInRow
 
   if (atlantic) {
     return {
@@ -94,6 +102,13 @@ export function getBoardSpacePosition(board, space) {
       top: quietMansionPercent((yBounds[0] + yBounds[1]) / 2),
     }
   }
+  if (noMansLand) {
+    const yBounds = NO_MANS_LAND_Y_BOUNDS[row]
+    return {
+      left: quietMansionPercent((NO_MANS_LAND_X_BOUNDS[column] + NO_MANS_LAND_X_BOUNDS[column + 1]) / 2),
+      top: quietMansionPercent((yBounds[0] + yBounds[1]) / 2),
+    }
+  }
   if (runAway) return { left: `${5 + column * 10}%`, top: `${95 - row * 10}%` }
   if (space === 100) return { left: `${volcano ? 11.1 : 8.8}%`, top: `${volcano ? 9 : 8.8}%` }
   return {
@@ -103,13 +118,22 @@ export function getBoardSpacePosition(board, space) {
 }
 
 export function getBoardSpaceBounds(board, space) {
-  if (!['Quiet Mansion', 'Dead Forest'].includes(board?.name)) return null
-  const row = Math.floor((space - 1) / 10)
-  const positionInRow = (space - 1) % 10
-  const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
-  const xBounds = board.name === 'Dead Forest' ? DEAD_FOREST_X_BOUNDS : QUIET_MANSION_X_BOUNDS[row]
-  const yBounds = board.name === 'Dead Forest' ? DEAD_FOREST_Y_BOUNDS[row] : QUIET_MANSION_Y_BOUNDS[row]
-  if (board.name === 'Dead Forest') {
+  if (!['Quiet Mansion', 'Dead Forest', "No Man's Land"].includes(board?.name)) return null
+  const columns = board.name === "No Man's Land" ? 15 : 10
+  const row = Math.floor((space - 1) / columns)
+  const positionInRow = (space - 1) % columns
+  const column = row % 2 === 0 ? positionInRow : columns - 1 - positionInRow
+  const xBounds = board.name === "No Man's Land"
+    ? NO_MANS_LAND_X_BOUNDS
+    : board.name === 'Dead Forest'
+      ? DEAD_FOREST_X_BOUNDS
+      : QUIET_MANSION_X_BOUNDS[row]
+  const yBounds = board.name === "No Man's Land"
+    ? NO_MANS_LAND_Y_BOUNDS[row]
+    : board.name === 'Dead Forest'
+      ? DEAD_FOREST_Y_BOUNDS[row]
+      : QUIET_MANSION_Y_BOUNDS[row]
+  if (board.name === 'Dead Forest' || board.name === "No Man's Land") {
     const x = xBounds[column] / QUIET_MANSION_SIZE * 100
     const y = yBounds[0] / QUIET_MANSION_SIZE * 100
     const width = (xBounds[column + 1] - xBounds[column]) / QUIET_MANSION_SIZE * 100

@@ -30,7 +30,7 @@ function fileFrom(files, ending) {
 class AudioManager {
   constructor() {
     this.sfxVolume = 0.7
-    this.musicVolume = 0.4
+    this.musicVolume = 0.2
     this.muted = false
     this.unlocked = false
     this.scene = 'menu'
@@ -256,6 +256,21 @@ class AudioManager {
     this.random(`characters/${type}`)
   }
 
+  clashPickup(kind) {
+    this.play(fileFrom(soundFiles, `/clash_with/no_mans_land/${kind === 'item' ? 'items' : 'weapons'}/pick_up.mp3`), { volume: 0.85 })
+  }
+
+  clashWeapon(weaponName, modeName, volume = 0.9) {
+    const weapon = String(weaponName || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    const mode = String(modeName || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    this.play(fileFrom(soundFiles, `/clash_with/no_mans_land/weapons/${weapon}/${mode}.mp3`), { volume })
+  }
+
+  clashItem(itemName, volume = 0.85) {
+    const item = String(itemName || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    this.play(fileFrom(soundFiles, `/clash_with/no_mans_land/items/${item}/used.mp3`), { volume })
+  }
+
   escapeDanger(distance, board = 'quiet_mansion') {
     const rate = ({ 4: 0.75, 3: 0.95, 2: 1.2, 1: 1.5, 0: 1.8 })[distance] || 0.75
     let audio = this.channels.get('escape-danger')
@@ -283,8 +298,14 @@ class AudioManager {
     this.play(fileFrom(soundFiles, '/system/button_clicked.mp3'), { volume: 0.8 })
   }
 
-  playOutcome(type, resume = true) {
-    const tracks = entriesFrom(musicFiles, type)
+  playOutcome(type, resume = true, variant = null) {
+    let tracks = entriesFrom(musicFiles, type)
+    if (variant) {
+      const filtered = Object.entries(musicFiles)
+        .filter(([path]) => path.includes(`/musics/${type}/`) && path.includes(variant))
+        .map(([, url]) => url)
+      if (filtered.length) tracks = filtered
+    }
     if (!tracks.length || !this.unlocked) return
     this.music.pause()
     this.outcome?.pause()

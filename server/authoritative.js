@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, penalizeTurn, planRunAwayDestruction, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipEscapeTurn, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashMoveOptions, clashVisibleSpaces, CLASH_TURN_MS, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 import { createDestructionSkipState, updateDestructionSkipVote } from './destructionSkip.js'
@@ -1336,6 +1336,22 @@ function beginTurn(room) {
   if (room.game.mode === 'escape_from' && current.isAI && canSkipEscapeMove(room.game, current)) {
     triggerEscapeAiSocial(room, 'lets_go')
   }
+  if (room.game.mode === 'clash_with' && current.clashStunnedThroughTurn != null && room.game.turn <= current.clashStunnedThroughTurn) {
+    room.busy = true
+    const token = ++room.sequenceToken
+    emitEvent(room, 'clash_stun_skip', {
+      playerId: current.id,
+      playerName: current.name,
+      color: current.color,
+      stunnedThroughTurn: current.clashStunnedThroughTurn,
+    }, 1200)
+    wait(room, 1200, token).then(valid => {
+      if (!valid) return
+      skipClashStunnedTurn(room.game)
+      finishSequenceAndBeginTurn(room)
+    })
+    return
+  }
   if (room.game.mode === 'escape_from' && current.isAI) {
     const nearEntity = room.game.entities.some(entity => Math.abs(entity.space - current.space) <= 4)
     const weaponReady = current.weaponProtectFromTurn == null && current.weaponCooldownUntil <= Date.now()
@@ -1368,6 +1384,10 @@ function beginTurn(room) {
   if (current.isAI) {
     room.turnDeadline = null
     room.turnTimer = setTimeout(() => {
+      if (room.game.mode === 'clash_with') {
+        chooseClashAiAction(room, current)
+        return
+      }
       if (room.game.mode === 'guess_what') {
         startRoll(room, current.id, true)
         return
@@ -1392,10 +1412,149 @@ function beginTurn(room) {
       else startRoll(room, current.id, true)
     }, 550)
   } else {
-    room.turnDeadline = Date.now() + TURN_MS
-    room.turnTimer = setTimeout(() => applyPenalty(room), TURN_MS)
+    const duration = room.game.mode === 'clash_with' ? CLASH_TURN_MS : TURN_MS
+    room.turnDeadline = Date.now() + duration
+    room.turnTimer = setTimeout(() => applyPenalty(room), duration)
   }
   broadcastGame(room)
+}
+
+function currentClashPlayer(room, requesterId) {
+  if (room.phase !== 'playing' || room.game?.mode !== 'clash_with') return null
+  if (room.busy || room.game.gameOver) return null
+  const current = room.game.players[room.game.currentPlayerIndex]
+  return current?.id === requesterId ? current : null
+}
+
+function finishClashAction(room, result, eventType, eventData = {}) {
+  const token = ++room.sequenceToken
+  room.busy = true
+  clearTimer(room.turnTimer)
+  room.turnDeadline = null
+  const duration = eventType === 'clash_move' ? Math.max(350, Math.min(1100, Math.abs((result.to || 0) - (result.from || 0)) * 120)) : 1300
+  emitEvent(room, eventType, eventData, duration)
+  wait(room, duration, token).then(valid => {
+    if (!valid) return
+    broadcastGame(room)
+    finishSequenceAndBeginTurn(room)
+  })
+}
+
+function clashMove(room, requesterId, destination) {
+  const current = currentClashPlayer(room, requesterId)
+  if (!current) return reject(sockets.get(requesterId), 'It is not your turn.')
+  const result = takeClashMove(room.game, requesterId, destination)
+  if (!result.ok) return reject(sockets.get(requesterId), result.message)
+  finishClashAction(room, result, 'clash_move', {
+    playerId: requesterId,
+    from: result.from,
+    to: result.to,
+    pickup: result.pickup ? {
+      kind: result.pickup.kind,
+      dropId: result.pickup.drop.id,
+      name: result.pickup.drop.definition.name,
+      dropKind: result.pickup.drop.kind,
+    } : null,
+  })
+}
+
+function clashAttack(room, requesterId, message) {
+  const current = currentClashPlayer(room, requesterId)
+  if (!current) return reject(sockets.get(requesterId), 'It is not your turn.')
+  const sourceSpace = current.space
+  const result = takeClashAttack(room.game, requesterId, message.targetId, message.weaponName, message.modeName)
+  if (!result.ok) return reject(sockets.get(requesterId), result.message)
+  finishClashAction(room, result, 'clash_attack', {
+    playerId: requesterId,
+    targetId: result.target.id,
+    weaponName: result.weapon.name,
+    modeName: result.mode.name,
+    sourceSpace,
+    targetSpace: result.target.space,
+    attackerFrom: result.attackerFrom,
+    attackerTo: result.attackerTo,
+    hits: result.hits,
+    attempts: result.attempts,
+    damage: result.damage,
+    healthBefore: result.before,
+    healthAfter: result.after,
+    kills: result.kills || [],
+  })
+}
+
+function clashUseItem(room, requesterId, message) {
+  const current = currentClashPlayer(room, requesterId)
+  if (!current) return reject(sockets.get(requesterId), 'It is not your turn.')
+  const result = takeClashItem(room.game, requesterId, message.itemId, message.targetSpace)
+  if (!result.ok) return reject(sockets.get(requesterId), result.message)
+  finishClashAction(room, result, 'clash_item', {
+    playerId: requesterId,
+    itemId: result.item.id,
+    itemName: result.item.name,
+    effect: result.item.effect,
+    sourceSpace: current.space,
+    targetSpace: result.targetSpace,
+    affected: result.affected,
+    kills: result.kills || [],
+  })
+}
+
+function clashGhostMove(room, requesterId, destination) {
+  if (room.phase !== 'playing' || room.game?.mode !== 'clash_with') return reject(sockets.get(requesterId), 'Ghost movement unavailable.')
+  const result = moveClashGhost(room.game, requesterId, destination)
+  if (!result.ok) return reject(sockets.get(requesterId), result.message)
+  broadcast(room, {
+    type: 'clash_ghost_move',
+    playerId: requesterId,
+    from: result.from,
+    to: result.to,
+    game: room.game,
+    room: roomView(room),
+    revision: revise(room),
+    serverNow: Date.now(),
+  })
+}
+
+function clashResolvePickup(room, requesterId, replace) {
+  if (room.phase !== 'playing' || room.game?.mode !== 'clash_with') return reject(sockets.get(requesterId), 'Pickup unavailable.')
+  const result = resolveClashPickup(room.game, requesterId, Boolean(replace))
+  if (!result) return reject(sockets.get(requesterId), 'No pending pickup.')
+  broadcast(room, {
+    type: 'clash_pickup_resolved',
+    playerId: requesterId,
+    picked: result.picked,
+    name: result.drop.definition.name,
+    serverNow: Date.now(),
+  })
+  broadcastGame(room)
+}
+
+function chooseClashAiAction(room, current) {
+  const visible = clashVisibleSpaces(current)
+  const targets = room.game.players.filter(player => player.id !== current.id && !player.eliminated && !player.finished && visible.has(player.space))
+  if (targets.length) {
+    const now = Date.now()
+    const weapon = current.clashInventory.weapons.find(item => item.class !== 'melee' && Number(item.ammoRemaining ?? 0) > 0)
+      || current.clashInventory.weapons.find(item => item.class === 'melee' && Number(current.clashMeleeCooldownUntil || 0) <= now)
+    if (weapon) {
+      const mode = weapon.modes?.[Math.floor(Math.random() * (weapon.modes?.length || 1))]
+      clashAttack(room, current.id, { targetId: targets[0].id, weaponName: weapon.name, modeName: mode?.name })
+      return
+    }
+  }
+  const heal = current.clashInventory.items.find(item => item.effect === 'heal')
+  if (heal && current.health <= 60) {
+    clashUseItem(room, current.id, { itemId: heal.id })
+    return
+  }
+  if (current.clashStunnedThroughTurn != null && room.game.turn <= current.clashStunnedThroughTurn) {
+    applyPenalty(room)
+    return
+  }
+  const options = clashMoveOptions(room.game, current)
+  const dropSpaces = new Set((room.game.clashDrops || []).map(drop => drop.space))
+  const destination = options.find(space => dropSpaces.has(space)) || options[Math.floor(Math.random() * options.length)]
+  if (destination) clashMove(room, current.id, destination)
 }
 
 async function finishHiddenMinePlacement(room, playerId, requestedSpace = null) {
@@ -1646,7 +1805,7 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
     return
   }
   if (room.phase !== 'playing' || room.busy || room.game.gameOver) return
-  if (room.game.mode === 'guess_what') return reject(sockets.get(requesterId), 'Character skills are disabled in Guess WHAT?!')
+  if (['guess_what', 'clash_with'].includes(room.game.mode)) return reject(sockets.get(requesterId), 'Character skills are disabled in this mode.')
   const current = room.game.players[room.game.currentPlayerIndex]
   if (current.id !== requesterId) return reject(sockets.get(requesterId), 'Skill can only be used during your turn.')
   if (automatic && !current.isAI) return
@@ -2107,6 +2266,11 @@ wss.on('connection', socket => {
     else if (message.type === 'skip_escape_move') skipEscapeMoveChoice(room, clientId)
     else if (message.type === 'choose_guess_what_difficulty') chooseGuessWhatDifficulty(room, clientId, message.difficulty)
     else if (message.type === 'answer_guess_what') answerGuessWhatQuestion(room, clientId, message.answer)
+    else if (message.type === 'clash_move') clashMove(room, clientId, message.destination)
+    else if (message.type === 'clash_attack') clashAttack(room, clientId, message)
+    else if (message.type === 'clash_use_item') clashUseItem(room, clientId, message)
+    else if (message.type === 'clash_resolve_pickup') clashResolvePickup(room, clientId, message.replace)
+    else if (message.type === 'clash_ghost_move') clashGhostMove(room, clientId, message.destination)
     else if (message.type === 'use_skill') useSkill(room, clientId, message.targetId)
     else if (message.type === 'place_mine') finishHiddenMinePlacement(room, clientId, message.space)
     else if (message.type === 'destruction_skip') voteToSkipDestruction(room, clientId, Boolean(message.checked))
