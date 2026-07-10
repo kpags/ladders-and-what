@@ -716,6 +716,8 @@
         "items": [
             {
                 "name": "Medkit",
+                "gif": "assets/gifs/clash_with/no_mans_land/items/medkit/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/items/medkit/image",
                 "effect": "heal",
                 "heal_amount": 50,
                 "drop_chance": 75,
@@ -724,6 +726,8 @@
             },
             {
                 "name": "Bandage",
+                "gif": "assets/gifs/clash_with/no_mans_land/items/bandage/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/items/bandage/image",
                 "effect": "heal",
                 "heal_amount": 15,
                 "drop_chance": 90,
@@ -732,6 +736,8 @@
             },
             {
                 "name": "Frag Grenade",
+                "gif": "assets/gifs/clash_with/no_mans_land/items/frag_grenade/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/items/frag_grenade/image",
                 "effect": "damage",
                 "damage_amount": 25,
                 "drop_chance": 50,
@@ -739,6 +745,8 @@
             },
             {
                 "name": "Stun Grenade",
+                "gif": "assets/gifs/clash_with/no_mans_land/items/stun_grenade/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/items/stun_grenade/image",
                 "effect": "stun",
                 "stun_duration_in_sec": 2,
                 "drop_chance": 80,
@@ -746,6 +754,8 @@
             },
             {
                 "name": "Molotov",
+                "gif": "assets/gifs/clash_with/no_mans_land/items/molotov/gif",
+                "image": "assets/gifs/clash_with/no_mans_land/items/molotov/image",
                 "effect": "damage_over_time",
                 "damage_per_global_turn": 5,
                 "duration_in_global_turns": 5,
