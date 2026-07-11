@@ -1431,7 +1431,11 @@ function finishClashAction(room, result, eventType, eventData = {}) {
   room.busy = true
   clearTimer(room.turnTimer)
   room.turnDeadline = null
-  const duration = eventType === 'clash_move' ? Math.max(350, Math.min(1100, Math.abs((result.to || 0) - (result.from || 0)) * 120)) : 1300
+  const duration = eventType === 'clash_move'
+    ? Math.max(350, Math.min(1100, Math.abs((result.to || 0) - (result.from || 0)) * 120))
+    : eventType === 'clash_attack' && result.weapon?.class === 'melee'
+      ? 2150
+      : 1300
   emitEvent(room, eventType, eventData, duration)
   wait(room, duration, token).then(valid => {
     if (!valid) return
@@ -1468,6 +1472,8 @@ function clashAttack(room, requesterId, message) {
     playerId: requesterId,
     targetId: result.target.id,
     weaponName: result.weapon.name,
+    weaponClass: result.weapon.class,
+    isMelee: result.weapon.class === 'melee',
     modeName: result.mode.name,
     sourceSpace,
     targetSpace: result.target.space,

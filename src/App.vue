@@ -199,6 +199,9 @@ const clashDamageBlinkIds = ref({})
 const clashStunBlinkIds = ref({})
 const clashStunSkipOverlay = ref(null)
 const clashShotOverlay = ref(null)
+const clashMeleeOverlay = ref(null)
+const clashRivalRevealUntil = ref(0)
+const clashRivalRevealKey = ref('')
 const healthBlinkPlayerId = ref(null)
 const healthHealPlayerId = ref(null)
 const displayedHealth = ref({})
@@ -213,6 +216,7 @@ let diceTimer
 let operatorTimer
 
 const defaultModeKey = gameModes[0]?.key || 'standard'
+const CLASH_MELEE_EFFECT_MS = 2150
 const homeCharacterIndices = computed(() => characterIndicesForMode(characters, defaultModeKey))
 const lobbyCharacterIndices = computed(() => characterIndicesForMode(characters, selectedMode.value))
 const hero = computed(() => characters[selected.value] || characters[homeCharacterIndices.value[0]])
@@ -308,12 +312,48 @@ const clashRivalRevealActive = computed(() => {
   const player = controlledGamePlayer.value
   if (!player || player.eliminated) return false
   const living = game.value.players.filter(other => !other.eliminated && !other.finished)
-  return living.length === 2 && game.value.clashRivalRevealTurn === game.value.turn
+  return living.length === 2 && game.value.clashRivalRevealTurn === game.value.turn && now.value < clashRivalRevealUntil.value
 })
 const selectedClashWeapon = computed(() => controlledGamePlayer.value?.clashInventory?.weapons.find(weapon => weapon.name === clashSelectedWeapon.value) || controlledGamePlayer.value?.clashInventory?.weapons[0])
 const selectedClashItemEntry = computed(() => controlledGamePlayer.value?.clashInventory?.items.find(item => item.id === clashSelectedItem.value))
 const controlledClashWeapons = computed(() => controlledGamePlayer.value?.clashInventory?.weapons || [])
 const controlledClashItems = computed(() => controlledGamePlayer.value?.clashInventory?.items || [])
+const clashWeaponSlots = computed(() => {
+  const weapons = controlledClashWeapons.value
+  return [
+    {
+      key: 'primary',
+      label: 'Primary Weapon',
+      placeholder: 'Primary',
+      weapon: weapons.find(weapon => ['smg', 'assault_rifle', 'sniper'].includes(weapon.class)),
+    },
+    {
+      key: 'secondary',
+      label: 'Secondary Weapon',
+      placeholder: 'Pistol',
+      weapon: weapons.find(weapon => weapon.class === 'pistol'),
+    },
+    {
+      key: 'knife',
+      label: 'Knife (Default Weapon)',
+      placeholder: 'Knife',
+      weapon: weapons.find(weapon => weapon.class === 'melee') || game.value?.board?.weapons?.find(weapon => weapon.class === 'melee'),
+      locked: !weapons.some(weapon => weapon.class === 'melee'),
+    },
+  ]
+})
+const clashItemSlots = computed(() => {
+  const throwables = controlledClashItems.value.filter(item => ['damage', 'damage_over_time', 'stun'].includes(item.effect))
+  const medkit = controlledClashItems.value.find(item => String(item.id || item.name).toLowerCase().includes('medkit'))
+  const bandage = controlledClashItems.value.find(item => String(item.id || item.name).toLowerCase().includes('bandage'))
+  return [
+    { key: 'throwable-1', label: 'Throwable 1', placeholder: 'Throwable', item: throwables[0] },
+    { key: 'throwable-2', label: 'Throwable 2', placeholder: 'Throwable', item: throwables[1] },
+    { key: 'throwable-3', label: 'Throwable 3', placeholder: 'Throwable', item: throwables[2] },
+    { key: 'medkit', label: 'Medkit', placeholder: 'Medkit', item: medkit },
+    { key: 'bandage', label: 'Bandage', placeholder: 'Bandage', item: bandage },
+  ]
+})
 const clashMeleeCooldownRemainingMs = computed(() => Math.max(0, Number(controlledGamePlayer.value?.clashMeleeCooldownUntil || 0) - (now.value + serverClockOffset)))
 const clashMeleeCooldownSeconds = computed(() => Math.ceil(clashMeleeCooldownRemainingMs.value / 1000))
 const clashMeleeCooldownProgress = computed(() => Math.min(100, Math.max(0, (clashMeleeCooldownRemainingMs.value / 30_000) * 100)))
@@ -390,6 +430,26 @@ watch([dangerDistance, () => game.value?.board?.music], ([distance, board]) => {
   if (distance != null && distance <= 4) audioManager.escapeDanger(distance, board)
   else audioManager.stopEscapeDanger()
 })
+
+watch(() => [
+  game.value?.mode,
+  game.value?.turn,
+  game.value?.clashRivalRevealTurn,
+  game.value?.players?.filter(player => !player.eliminated && !player.finished).length,
+].join(':'), () => {
+  const living = game.value?.players?.filter(player => !player.eliminated && !player.finished) || []
+  const isRevealTurn = game.value?.mode === 'clash_with'
+    && living.length === 2
+    && game.value.clashRivalRevealTurn === game.value.turn
+  if (!isRevealTurn) {
+    clashRivalRevealUntil.value = 0
+    return
+  }
+  const key = `${onlineRoom.value?.code || 'local'}:${game.value.turn}`
+  if (clashRivalRevealKey.value === key) return
+  clashRivalRevealKey.value = key
+  clashRivalRevealUntil.value = Date.now() + 2600
+}, { immediate: true })
 
 function boardPicture(board) {
   return boardImages[`../${board.picture}`]
@@ -475,6 +535,9 @@ function clearGamePresentation() {
   clashStunBlinkIds.value = {}
   clashStunSkipOverlay.value = null
   clashShotOverlay.value = null
+  clashMeleeOverlay.value = null
+  clashRivalRevealUntil.value = 0
+  clashRivalRevealKey.value = ''
   settingsModalOpen.value = false
   healthBlinkPlayerId.value = null
   healthHealPlayerId.value = null
@@ -747,6 +810,7 @@ async function handleServerEvent(event) {
     audioManager.clashWeapon(event.data.weaponName, event.data.modeName, clashListenerVolume(event.data.sourceSpace))
     showClashBulletTraces(event.data)
     showClashShotOverlay(event.data)
+    showClashMeleeOverlay(event.data)
     showClashKills(event.data.kills)
     if (event.data.attackerTo != null) visualSpaces.value[event.data.playerId] = event.data.attackerTo
     displayedHealth.value[event.data.targetId] = event.data.healthBefore
@@ -1612,6 +1676,38 @@ function clashMedia(path, kind = 'gif') {
     || clashMediaFiles[`${normalized}.png`]
 }
 
+function clashInventoryImage(entry) {
+  return clashMedia(entry?.image, 'image')
+}
+
+function clashWeaponCapacity(weapon) {
+  if (!weapon) return ''
+  if (weapon.class === 'melee') return clashMeleeCooldownSeconds.value > 0 ? `${clashMeleeCooldownSeconds.value}s` : '∞'
+  return `${weapon.ammoRemaining ?? weapon.max_capacity}/${weapon.max_capacity}`
+}
+
+function clashItemCapacity(item) {
+  return item ? `×${item.count}` : ''
+}
+
+function clashWeaponDisabled(weapon, locked = false) {
+  return locked
+    || !weapon
+    || !isControlledTurn.value
+    || turnBusy.value
+    || controlledClashStunned.value
+    || (weapon.class !== 'melee' && weapon.ammoRemaining <= 0)
+    || (weapon.class === 'melee' && clashMeleeCooldownSeconds.value > 0)
+}
+
+function clashItemDisabled(item) {
+  return !item
+    || !isControlledTurn.value
+    || turnBusy.value
+    || controlledClashStunned.value
+    || (item.effect === 'heal' && controlledGamePlayer.value?.health >= 100)
+}
+
 function clashItemDefinition(name) {
   return game.value?.board?.items?.find(item => item.name === name)
 }
@@ -1631,6 +1727,10 @@ function clashItemEffectDuration(itemName) {
 
 function clashShotEffectMedia() {
   return clashMedia('assets/gifs/clash_with/no_mans_land/weapons/shot_effect')
+}
+
+function clashMeleeEffectMedia(kind) {
+  return clashMedia(`assets/gifs/clash_with/no_mans_land/weapons/${kind === 'attacked' ? 'melee_attacked_effect' : 'slash_attack_effect'}`, 'gif')
 }
 
 function positionPercent(space) {
@@ -1705,6 +1805,23 @@ function showClashShotOverlay(eventData) {
   window.setTimeout(() => {
     if (clashShotOverlay.value?.id === id) clashShotOverlay.value = null
   }, 980)
+}
+
+function showClashMeleeOverlay(eventData) {
+  const isMelee = eventData?.isMelee === true
+    || eventData?.weaponClass === 'melee'
+    || eventData?.attackerTo != null
+  if (!isMelee) return
+  const kind = eventData.playerId === clientId ? 'slash' : eventData.targetId === clientId ? 'attacked' : null
+  if (!kind) return
+  const src = clashMeleeEffectMedia(kind)
+  if (!src && import.meta.env.DEV) console.warn(`Missing Clash melee ${kind} GIF asset. Restart Vite if the asset was added while dev server was running.`)
+  if (!src) return
+  const id = `melee-${kind}-${Date.now()}`
+  clashMeleeOverlay.value = { id, src, kind }
+  window.setTimeout(() => {
+    if (clashMeleeOverlay.value?.id === id) clashMeleeOverlay.value = null
+  }, CLASH_MELEE_EFFECT_MS)
 }
 
 function showClashItemThrow(eventData) {
@@ -2596,6 +2713,9 @@ onUnmounted(() => {
         <div v-if="clashShotOverlay" class="clash-shot-overlay" role="presentation" aria-hidden="true">
           <img :src="clashShotOverlay.src" alt="">
         </div>
+        <div v-if="clashMeleeOverlay" class="clash-melee-overlay" :class="clashMeleeOverlay.kind" role="presentation" aria-hidden="true">
+          <img :src="clashMeleeOverlay.src" alt="">
+        </div>
         <div v-if="settingsModalOpen" class="game-settings-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title" @click.self="settingsModalOpen = false">
           <div class="game-settings-card">
             <button class="game-settings-close" type="button" aria-label="Close settings" @click="settingsModalOpen = false">×</button>
@@ -2993,7 +3113,77 @@ onUnmounted(() => {
                 <span>Your Loadout</span>
                 <strong>{{ controlledClashStunned ? 'Stunned' : isControlledTurn ? 'Tap to act' : 'Private' }}</strong>
               </div>
-              <section>
+              <div class="clash-loadout-slots">
+                <section class="clash-slot-section">
+                  <small>Weapons</small>
+                  <div class="clash-slot-grid weapon-slots">
+                    <article
+                      v-for="slot in clashWeaponSlots"
+                      :key="slot.key"
+                      class="clash-slot"
+                      :class="{ empty: !slot.weapon, active: slot.weapon && clashActionMode === 'attack' && clashSelectedWeapon === slot.weapon.name, cooling: slot.weapon?.class === 'melee' && clashMeleeCooldownSeconds > 0 }"
+                    >
+                      <span class="clash-slot-label">{{ slot.label }}</span>
+                      <button
+                        type="button"
+                        class="clash-slot-button"
+                        :disabled="clashWeaponDisabled(slot.weapon, slot.locked)"
+                        @click="selectClashWeaponAction(slot.weapon)"
+                      >
+                        <img v-if="slot.weapon && clashInventoryImage(slot.weapon)" :src="clashInventoryImage(slot.weapon)" :alt="slot.weapon.name">
+                        <span v-else class="clash-slot-placeholder" :data-kind="slot.key">{{ slot.placeholder }}</span>
+                        <span v-if="slot.weapon" class="clash-slot-name">{{ slot.weapon.name }}</span>
+                        <b v-if="slot.weapon" class="clash-slot-capacity">{{ clashWeaponCapacity(slot.weapon) }}</b>
+                        <i
+                          v-if="slot.weapon?.class === 'melee' && clashMeleeCooldownSeconds > 0"
+                          class="melee-cooldown-bar"
+                          :style="{ '--cooldown-progress': `${clashMeleeCooldownProgress}%` }"
+                          aria-hidden="true"
+                        ></i>
+                      </button>
+                      <div v-if="slot.weapon && clashActionMode === 'attack' && clashSelectedWeapon === slot.weapon.name && slot.weapon.modes?.length > 1" class="clash-slot-actions">
+                        <button
+                          v-for="mode in slot.weapon.modes"
+                          :key="mode.name"
+                          type="button"
+                          :class="{ active: clashSelectedWeaponMode === mode.name }"
+                          @click.stop="setClashWeaponMode(slot.weapon, mode.name)"
+                        >
+                          {{ mode.name }} · {{ mode.accuracy }}% accuracy
+                        </button>
+                      </div>
+                    </article>
+                  </div>
+                </section>
+
+                <section class="clash-slot-section">
+                  <small>Items</small>
+                  <div class="clash-slot-grid item-slots">
+                    <article
+                      v-for="slot in clashItemSlots"
+                      :key="slot.key"
+                      class="clash-slot"
+                      :class="{ empty: !slot.item, active: slot.item && clashItemTargeting === slot.item.id }"
+                    >
+                      <span class="clash-slot-label">{{ slot.label }}</span>
+                      <button
+                        type="button"
+                        class="clash-slot-button"
+                        :disabled="clashItemDisabled(slot.item)"
+                        @click="selectClashItemAction(slot.item)"
+                      >
+                        <img v-if="slot.item && clashInventoryImage(slot.item)" :src="clashInventoryImage(slot.item)" :alt="slot.item.name">
+                        <span v-else class="clash-slot-placeholder" :data-kind="slot.key">{{ slot.placeholder }}</span>
+                        <span v-if="slot.item" class="clash-slot-name">{{ slot.item.name }}</span>
+                        <b v-if="slot.item" class="clash-slot-capacity">{{ clashItemCapacity(slot.item) }}</b>
+                      </button>
+                    </article>
+                  </div>
+                </section>
+                <em v-if="clashActionMode === 'attack'">Click a red-outlined visible player.</em>
+                <em v-else-if="clashItemTargeting">Choose a yellow square.</em>
+              </div>
+              <section class="clash-loadout-list">
                 <small>Weapons</small>
                 <button
                   v-for="weapon in controlledClashWeapons"
@@ -3021,7 +3211,7 @@ onUnmounted(() => {
                 </label>
                 <em v-if="clashActionMode === 'attack'">Click a red-outlined visible player.</em>
               </section>
-              <section>
+              <section class="clash-loadout-list">
                 <small>Items</small>
                 <button
                   v-for="item in controlledClashItems"
