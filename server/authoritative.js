@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashMoveOptions, clashVisibleSpaces, CLASH_TURN_MS, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateClashSkill, activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashMoveOptions, clashVisibleSpaces, CLASH_TURN_MS, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 import { createDestructionSkipState, updateDestructionSkipVote } from './destructionSkip.js'
@@ -1434,7 +1434,7 @@ function finishClashAction(room, result, eventType, eventData = {}) {
   const duration = eventType === 'clash_move'
     ? Math.max(350, Math.min(1100, Math.abs((result.to || 0) - (result.from || 0)) * 120))
     : eventType === 'clash_attack' && result.weapon?.class === 'melee'
-      ? 2150
+      ? 4100
       : 1300
   emitEvent(room, eventType, eventData, duration)
   wait(room, duration, token).then(valid => {
@@ -1458,6 +1458,7 @@ function clashMove(room, requesterId, destination) {
       dropId: result.pickup.drop.id,
       name: result.pickup.drop.definition.name,
       dropKind: result.pickup.drop.kind,
+      passiveTrigger: result.pickup.passiveTrigger,
     } : null,
   })
 }
@@ -1485,6 +1486,9 @@ function clashAttack(room, requesterId, message) {
     healthBefore: result.before,
     healthAfter: result.after,
     kills: result.kills || [],
+    passiveTriggers: result.passiveTriggers || [],
+    dodged: Boolean(result.dodged),
+    stunnedThroughTurn: result.target.clashStunnedThroughTurn,
   })
 }
 
@@ -1531,6 +1535,26 @@ function clashResolvePickup(room, requesterId, replace) {
     picked: result.picked,
     name: result.drop.definition.name,
     serverNow: Date.now(),
+  })
+  broadcastGame(room)
+}
+
+function clashActivateSkill(room, requesterId) {
+  const current = currentClashPlayer(room, requesterId)
+  if (!current) return reject(sockets.get(requesterId), 'Skill can only be used during your Clash turn.')
+  const result = activateClashSkill(room.game, requesterId, Date.now())
+  if (!result.ok) return reject(sockets.get(requesterId), result.message)
+  const startedAt = Date.now()
+  broadcast(room, {
+    type: 'clash_skill_notice',
+    playerId: requesterId,
+    skillName: result.skill.name,
+    message: result.message,
+    reveal: result.reveal,
+    duration: result.reveal?.duration || 1800,
+    startedAt,
+    revision: revise(room),
+    serverNow: startedAt,
   })
   broadcastGame(room)
 }
@@ -1722,6 +1746,7 @@ function sendPlayerReaction(room, playerId, reaction) {
 function sendLobbyMessage(room, playerId, targetId, text) {
   if (room.phase !== 'lobby') return
   if (!room.players.some(player => player.id === playerId && !player.isAI)) return
+  if (targetId !== playerId) return
   const target = room.players.find(player => player.id === targetId)
   if (!target) return
   const message = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 50)
@@ -2277,6 +2302,7 @@ wss.on('connection', socket => {
     else if (message.type === 'clash_use_item') clashUseItem(room, clientId, message)
     else if (message.type === 'clash_resolve_pickup') clashResolvePickup(room, clientId, message.replace)
     else if (message.type === 'clash_ghost_move') clashGhostMove(room, clientId, message.destination)
+    else if (message.type === 'clash_activate_skill') clashActivateSkill(room, clientId)
     else if (message.type === 'use_skill') useSkill(room, clientId, message.targetId)
     else if (message.type === 'place_mine') finishHiddenMinePlacement(room, clientId, message.space)
     else if (message.type === 'destruction_skip') voteToSkipDestruction(room, clientId, Boolean(message.checked))

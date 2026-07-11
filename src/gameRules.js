@@ -1,10 +1,27 @@
 export const SKILL_COOLDOWN_MS = 120_000
 export const WEAPON_COOLDOWN_MS = 60_000
+export const CLASH_SKILL_COOLDOWN_MS = 60_000
 export const CLASH_MAX_HEALTH = 100
 export const CLASH_TURN_MS = 20_000
 export const CLASH_BOARD_COLUMNS = 15
 export const CLASH_BOARD_SPACES = CLASH_BOARD_COLUMNS * CLASH_BOARD_COLUMNS
 export const CLASH_PLAYER_SPAWN_SPACES = [1, 15, 106, 120, 211, 225]
+
+function normalizedCharacterSkill(skill) {
+  if (!skill) return null
+  return {
+    ...skill,
+    description: skill.description || skill.effect || '',
+  }
+}
+
+function passiveSkillFromCharacter(player) {
+  return normalizedCharacterSkill(player.passiveSkill || player.skills?.find(skill => skill.type === 'passive'))
+}
+
+function activeSkillFromCharacter(player) {
+  return normalizedCharacterSkill(player.specialSkill || player.activeSkill || player.skills?.find(skill => skill.type === 'active') || player.skills?.find(skill => skill.type !== 'passive'))
+}
 
 function randomInteger(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min
@@ -43,7 +60,9 @@ export function createGameState(board, players, startedAt = Date.now(), options 
       skipTurns: 0,
       skipReason: null,
       skillBlockedTurns: 0,
-      skillCooldownUntil: startedAt + SKILL_COOLDOWN_MS,
+      passiveSkill: passiveSkillFromCharacter(player),
+      specialSkill: activeSkillFromCharacter(player),
+      skillCooldownUntil: preparedBoard.type === 'clash_with' ? 0 : startedAt + SKILL_COOLDOWN_MS,
       skillRefreshPending: false,
       delayedSkillCooldownStartTurn: null,
       skillArmed: null,
@@ -63,6 +82,9 @@ export function createGameState(board, players, startedAt = Date.now(), options 
       clashStunnedThroughTurn: null,
       clashDotEffects: [],
       clashMeleeCooldownUntil: 0,
+      clashSkillArmed: null,
+      clashMoveBoostThroughTurn: null,
+      clashSkillNotice: null,
     })),
     currentPlayerIndex: 0,
     winners: [],
@@ -245,6 +267,34 @@ function spawnClashDrops(state, { pistols = 0, weapons = 0, items = 0 } = {}, rn
   for (let index = 0; index < pistols; index++) addDrop('weapon', chooseWeightedByChance(pistolDefinitions, rng))
   for (let index = 0; index < weapons; index++) addDrop('weapon', chooseWeightedByChance(weaponDefinitions, rng))
   for (let index = 0; index < items; index++) addDrop('item', chooseWeightedByChance(state.board.items || [], rng))
+  const scavenger = state.players.find(player => !player.eliminated && !player.finished && player.passiveSkill?.name === 'Scavenger')
+  if (scavenger && rng() < 0.2) {
+    const occupied = new Set([
+      ...state.players.filter(player => !player.eliminated).map(player => player.space),
+      ...drops.map(drop => drop.space),
+    ])
+    const nudgeDrop = (drop, preferRows) => {
+      if (!drop) return
+      const from = clashSpaceToGrid(drop.space)
+      const to = clashSpaceToGrid(scavenger.space)
+      const rowStep = Math.sign(to.row - from.row)
+      const columnStep = Math.sign(to.column - from.column)
+      const candidates = preferRows
+        ? [[from.row + rowStep, from.column], [from.row, from.column + columnStep]]
+        : [[from.row, from.column + columnStep], [from.row + rowStep, from.column]]
+      for (const [row, column] of candidates) {
+        const next = clashGridToSpace(row, column)
+        if (next && !occupied.has(next)) {
+          occupied.delete(drop.space)
+          drop.space = next
+          occupied.add(next)
+          return
+        }
+      }
+    }
+    nudgeDrop(drops.find(drop => drop.kind === 'weapon'), true)
+    nudgeDrop(drops.find(drop => drop.kind === 'item'), false)
+  }
   state.clashDrops.push(...drops)
   if (drops.length) {
     state.lastClashDrop = { turn: state.turn, count: drops.length }
@@ -299,7 +349,9 @@ export function clashVisibleSpaces(player) {
 
 export function clashMoveOptions(state, player = state.players[state.currentPlayerIndex]) {
   if (state.mode !== 'clash_with' || !player || player.eliminated || player.finished) return []
-  return clashSpacesWithinChebyshev(player.space, 2)
+  const boosted = player.clashMoveBoostThroughTurn != null && state.turn <= player.clashMoveBoostThroughTurn
+  const adventurer = player.clashSkillArmed === 'adventurer-steps'
+  return clashSpacesWithinChebyshev(player.space, adventurer ? 12 : boosted ? 4 : 2)
 }
 
 export function clashGhostMoveOptions(player) {
@@ -313,10 +365,22 @@ function canCarryClashItem(player, item) {
   const throwables = player.clashInventory.items
     .filter(entry => ['damage', 'damage_over_time', 'stun'].includes(entry.effect))
     .reduce((sum, entry) => sum + entry.count, 0)
-  if (['damage', 'damage_over_time', 'stun'].includes(item.effect) && throwables >= 2) return false
+  const throwableLimit = player.passiveSkill?.name === 'Handy' ? 3 : 2
+  if (['damage', 'damage_over_time', 'stun'].includes(item.effect) && throwables >= throwableLimit) return false
   if (item.effect === 'heal' && id.includes('medkit') && (existing?.count || 0) >= 1) return false
   if (item.effect === 'heal' && id.includes('bandage') && (existing?.count || 0) >= 2) return false
   return (existing?.count || 0) < Number(item.max_capacity || 1)
+}
+
+function applyPortableWorkbench(player, weapon, rng = Math.random) {
+  if (!weapon) return { weapon, triggered: false }
+  const prepared = prepareClashWeapon(weapon)
+  if (player.passiveSkill?.name !== 'Portable Workbench' || rng() >= 0.15) return { weapon: prepared, triggered: false }
+  if (prepared.class !== 'melee') {
+    prepared.max_capacity = Math.max(1, Number(prepared.max_capacity || prepared.ammoRemaining || 0) * 2)
+    prepared.ammoRemaining = prepared.max_capacity
+  }
+  return { weapon: prepared, triggered: true }
 }
 
 function pickupClashDrop(state, player, rng = Math.random) {
@@ -331,10 +395,11 @@ function pickupClashDrop(state, player, rng = Math.random) {
       addLog(state, `${player.name} found ${drop.definition.name}. Choose whether to replace your ${slot === 'pistol' ? 'pistol' : 'primary weapon'}.`)
       return { kind: 'weapon_pending', drop }
     }
-    player.clashInventory.weapons.push(prepareClashWeapon(drop.definition))
+    const prepared = applyPortableWorkbench(player, drop.definition, rng)
+    player.clashInventory.weapons.push(prepared.weapon)
     state.clashDrops = state.clashDrops.filter(item => item.id !== drop.id)
-    addLog(state, `${player.name} picked up ${drop.definition.name}.`)
-    return { kind: 'weapon', drop }
+    addLog(state, `${player.name} picked up ${drop.definition.name}${prepared.triggered ? ' with doubled ammo capacity' : ''}.`)
+    return { kind: 'weapon', drop, passiveTrigger: prepared.triggered ? { name: player.passiveSkill.name, playerId: player.id, playerName: player.name } : null }
   }
   if (!canCarryClashItem(player, drop.definition)) {
     addLog(state, `${player.name} found ${drop.definition.name}, but cannot carry more.`)
@@ -362,11 +427,12 @@ export function resolveClashPickup(state, playerId, replace) {
     return { player, picked: false, drop }
   }
   const existingIndex = player.clashInventory.weapons.findIndex(weapon => clashWeaponSlot(weapon) === pending.slot)
-  if (existingIndex >= 0) player.clashInventory.weapons.splice(existingIndex, 1, prepareClashWeapon(drop.definition))
-  else player.clashInventory.weapons.push(prepareClashWeapon(drop.definition))
+  const prepared = applyPortableWorkbench(player, drop.definition)
+  if (existingIndex >= 0) player.clashInventory.weapons.splice(existingIndex, 1, prepared.weapon)
+  else player.clashInventory.weapons.push(prepared.weapon)
   state.clashDrops = state.clashDrops.filter(item => item.id !== drop.id)
-  addLog(state, `${player.name} equipped ${drop.definition.name}.`)
-  return { player, picked: true, drop }
+  addLog(state, `${player.name} equipped ${drop.definition.name}${prepared.triggered ? ' with doubled ammo capacity' : ''}.`)
+  return { player, picked: true, drop, passiveTrigger: prepared.triggered ? { name: player.passiveSkill.name, playerId: player.id, playerName: player.name } : null }
 }
 
 function concludeClashIfOneRemains(state) {
@@ -384,7 +450,10 @@ function concludeClashIfOneRemains(state) {
   }
 }
 
-function applyClashDamage(state, target, amount, sourceText) {
+function applyClashDamage(state, target, amount, sourceText, rng = Math.random) {
+  if (target.passiveSkill?.name === 'Braveheart' && target.health < 30) {
+    amount = Math.max(0, Math.ceil(amount * 0.85))
+  }
   const before = target.health
   target.health = Math.max(0, target.health - amount)
   if (target.health <= 0) {
@@ -409,6 +478,7 @@ export function takeClashMove(state, playerId, destination) {
   const pickup = pickupClashDrop(state, player)
   state.lastClashAction = { type: 'move', playerId, from, to: targetSpace, pickup }
   addLog(state, `${player.name} moved from ${from} to ${targetSpace}.`)
+  if (player.clashSkillArmed === 'adventurer-steps') player.clashSkillArmed = null
   advanceTurn(state)
   return { ok: true, player, from, to: targetSpace, pickup }
 }
@@ -429,12 +499,35 @@ export function takeClashAttack(state, playerId, targetId, weaponName, modeName,
     return { ok: false, message: 'Melee weapon is cooling down.' }
   }
   if (weapon.class !== 'melee' && Number(weapon.ammoRemaining ?? 0) <= 0) return { ok: false, message: `${weapon.name} is out of ammo.` }
-  const result = weaponDamage(weapon, mode, rng)
+  let result = weaponDamage(weapon, mode, rng)
   if (result.attempts <= 0) return { ok: false, message: `${weapon.name} is out of ammo.` }
   if (weapon.class !== 'melee') {
     weapon.ammoRemaining = Math.max(0, Number(weapon.ammoRemaining ?? weapon.max_capacity ?? 0) - result.attempts)
   }
-  const damage = applyClashDamage(state, target, result.damage, weapon.name)
+  const passiveTriggers = []
+  if (target.passiveSkill?.name === 'Evasive Maneuver' && weapon.class !== 'sniper' && rng() < 0.2) {
+    passiveTriggers.push({ name: target.passiveSkill.name, playerId: target.id, playerName: target.name })
+    result = { ...result, hits: 0, damage: 0, dodged: true }
+  }
+  if (player.passiveSkill?.name === 'Lionheart' && player.health < 30 && result.damage > 0) {
+    passiveTriggers.push({ name: player.passiveSkill.name, playerId: player.id, playerName: player.name })
+    result = { ...result, damage: Math.ceil(result.damage * 1.1) }
+  }
+  if (weapon.class === 'melee' && player.clashSkillArmed === 'double-melee' && result.damage > 0) {
+    result = { ...result, damage: result.damage * 2 }
+    player.clashSkillArmed = null
+  }
+  const powerStrike = weapon.class === 'melee' && player.clashSkillArmed === 'melee-stun'
+  if (powerStrike) player.clashSkillArmed = null
+  const damage = applyClashDamage(state, target, result.damage, weapon.name, rng)
+  if (target.passiveSkill?.name === 'Braveheart' && target.health < 30 && damage.before > damage.after) {
+    passiveTriggers.push({ name: target.passiveSkill.name, playerId: target.id, playerName: target.name })
+  }
+  if (powerStrike && !target.eliminated) {
+    const targetIndex = state.players.findIndex(item => item.id === target.id)
+    const targetTurn = targetIndex > state.currentPlayerIndex ? state.turn : state.turn + 1
+    target.clashStunnedThroughTurn = Math.max(target.clashStunnedThroughTurn || 0, targetTurn)
+  }
   const kills = damage.eliminated
     ? [{ killerId: player.id, killerName: player.name, targetId: target.id, targetName: target.name, sourceName: weapon.name }]
     : []
@@ -443,10 +536,11 @@ export function takeClashAttack(state, playerId, targetId, weaponName, modeName,
   const attackerTo = weapon.class === 'melee' ? clashMeleeDestination(attackerFrom, target.space) : null
   if (attackerTo != null) player.space = attackerTo
   if (weapon.class === 'melee') player.clashMeleeCooldownUntil = now + 30_000
-  state.lastClashAction = { type: 'attack', playerId, targetId, weaponName: weapon.name, modeName: mode.name, weaponSpent, attackerFrom, attackerTo, kills, ...result, ...damage }
+  state.lastClashAction = { type: 'attack', playerId, targetId, weaponName: weapon.name, modeName: mode.name, weaponSpent, attackerFrom, attackerTo, kills, passiveTriggers, ...result, ...damage }
   addLog(state, `${player.name} attacked ${target.name} with ${weapon.name}: ${result.hits}/${result.attempts} hit for ${result.damage} damage.`)
+  if (player.clashSkillArmed === 'adventurer-steps') player.clashSkillArmed = null
   if (!state.gameOver) advanceTurn(state)
-  return { ok: true, player, target, weapon, mode, attackerFrom, attackerTo, kills, ...result, ...damage }
+  return { ok: true, player, target, weapon, mode, attackerFrom, attackerTo, kills, passiveTriggers, ...result, ...damage }
 }
 
 export function takeClashItem(state, playerId, itemIdValue, targetSpace = null) {
@@ -497,6 +591,7 @@ export function takeClashItem(state, playerId, itemIdValue, targetSpace = null) 
   item.count--
   if (item.count <= 0) player.clashInventory.items = player.clashInventory.items.filter(entry => entry.id !== item.id)
   state.lastClashAction = { type: 'item', playerId, itemId: item.id, itemName: item.name, targetSpace, affected }
+  if (player.clashSkillArmed === 'adventurer-steps') player.clashSkillArmed = null
   if (!state.gameOver) advanceTurn(state)
   const kills = affected
     .filter(entry => entry.eliminated)
@@ -506,6 +601,54 @@ export function takeClashItem(state, playerId, itemIdValue, targetSpace = null) 
     })
   state.lastClashAction.kills = kills
   return { ok: true, player, item, affected, targetSpace, kills }
+}
+
+export function activateClashSkill(state, playerId, now = Date.now()) {
+  if (state.gameOver || state.mode !== 'clash_with') return { ok: false, message: 'Clash skills are unavailable.' }
+  const player = state.players[state.currentPlayerIndex]
+  if (!player || player.id !== playerId) return { ok: false, message: 'Skill can only be used during your turn.' }
+  if (player.eliminated || player.finished) return { ok: false, message: 'Eliminated players cannot use skills.' }
+  if (player.clashStunnedThroughTurn != null && state.turn <= player.clashStunnedThroughTurn) return { ok: false, message: 'You are stunned and cannot use a skill.' }
+  if (!player.specialSkill?.name) return { ok: false, message: 'This character has no active skill.' }
+  if (player.skillCooldownUntil > now) return { ok: false, message: 'Skill is still cooling down.' }
+
+  const skill = player.specialSkill.name
+  let message = `${player.name} activated ${skill}.`
+  let reveal = null
+  if (skill === 'Dad Strength') {
+    player.clashSkillArmed = 'double-melee'
+    message = 'Dad Strength armed. Your next melee attack deals double damage.'
+  } else if (skill === 'Girl Scout') {
+    const before = player.health
+    player.health = Math.min(CLASH_MAX_HEALTH, player.health + 30)
+    message = `Girl Scout healed ${player.health - before} health.`
+  } else if (skill === 'Survival Instinct') {
+    const origin = clashSpaceToGrid(player.space)
+    const targetIds = activePlayers(state)
+      .filter(other => other.id !== player.id)
+      .filter(other => {
+        const target = clashSpaceToGrid(other.space)
+        return Math.max(Math.abs(target.row - origin.row), Math.abs(target.column - origin.column)) <= 10
+      })
+      .map(other => other.id)
+    reveal = { targetIds, duration: 3000 }
+    message = targetIds.length ? 'Survival Instinct revealed nearby enemies.' : 'Survival Instinct found no nearby enemies.'
+  } else if (skill === 'Power Strike') {
+    player.clashSkillArmed = 'melee-stun'
+    message = 'Power Strike armed. Your next melee attack stuns the target.'
+  } else if (skill === 'Extra Steps') {
+    player.clashMoveBoostThroughTurn = Math.max(player.clashMoveBoostThroughTurn || 0, state.turn + 1)
+    message = 'Extra Steps active. Movement range is boosted through next global turn.'
+  } else if (skill === "Adventurer's Spirit") {
+    player.clashSkillArmed = 'adventurer-steps'
+    message = "Adventurer's Spirit active. Your current movement can reach up to 12 spaces."
+  } else {
+    return { ok: false, message: 'This active skill is not available yet.' }
+  }
+  player.skillCooldownUntil = now + CLASH_SKILL_COOLDOWN_MS
+  player.clashSkillNotice = { message, turn: state.turn, at: now }
+  addLog(state, `${player.name} activated ${skill}.`)
+  return { ok: true, player, skill: player.specialSkill, message, reveal }
 }
 
 export function skipClashStunnedTurn(state) {
@@ -1367,6 +1510,9 @@ function advanceTurn(state, now = Date.now()) {
     resolveClashGlobalStatuses(state)
     if (state.gameOver) return
     normalizeClashCurrentPlayer(state)
+    for (const player of state.players) {
+      if (player.clashMoveBoostThroughTurn != null && state.turn > player.clashMoveBoostThroughTurn) player.clashMoveBoostThroughTurn = null
+    }
     if (state.turn >= state.nextClashDropTurn) {
       state.clashDrops = []
       for (const player of state.players) player.clashPendingPickup = null

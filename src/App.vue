@@ -200,8 +200,14 @@ const clashStunBlinkIds = ref({})
 const clashStunSkipOverlay = ref(null)
 const clashShotOverlay = ref(null)
 const clashMeleeOverlay = ref(null)
+const clashHitPopups = ref([])
 const clashRivalRevealUntil = ref(0)
 const clashRivalRevealKey = ref('')
+const clashCharacterActions = ref({})
+const clashSkillNoticeLocal = ref(null)
+const clashSkillReveal = ref(null)
+const clashAttackPending = ref(false)
+const clashFacing = ref({})
 const healthBlinkPlayerId = ref(null)
 const healthHealPlayerId = ref(null)
 const displayedHealth = ref({})
@@ -216,7 +222,8 @@ let diceTimer
 let operatorTimer
 
 const defaultModeKey = gameModes[0]?.key || 'standard'
-const CLASH_MELEE_EFFECT_MS = 2150
+const CLASH_MELEE_SLASH_MS = 1640
+const CLASH_MELEE_ATTACKED_MS = 4100
 const homeCharacterIndices = computed(() => characterIndicesForMode(characters, defaultModeKey))
 const lobbyCharacterIndices = computed(() => characterIndicesForMode(characters, selectedMode.value))
 const hero = computed(() => characters[selected.value] || characters[homeCharacterIndices.value[0]])
@@ -237,7 +244,11 @@ const availableBoards = computed(() => boards
 const selectedLobbyBoard = computed(() => availableBoards.value.find(board => board.sourceIndex === selectedBoard.value) || availableBoards.value[0] || null)
 const lobbyPlayers = computed(() => (onlineRoom.value?.players || []).map(player => ({
   ...player,
-  character: characters[player.characterIndex % characters.length],
+  character: {
+    ...characters[player.characterIndex % characters.length],
+    passiveSkill: characterSkillByType(characters[player.characterIndex % characters.length], 'passive'),
+    specialSkill: characterSkillByType(characters[player.characterIndex % characters.length], 'active'),
+  },
 })))
 const lobbySlotCount = computed(() => selectedMode.value === 'escape_from' ? 4 : 6)
 const lobbyMaxPlayers = computed(() => lobbySlotCount.value)
@@ -286,8 +297,13 @@ const clashMoveOptions = computed(() => {
   const row = Math.floor((player.space - 1) / CLASH_BOARD_COLUMNS)
   const position = (player.space - 1) % CLASH_BOARD_COLUMNS
   const column = row % 2 === 0 ? position : CLASH_BOARD_COLUMNS - 1 - position
-  for (let rowOffset = -2; rowOffset <= 2; rowOffset++) {
-    for (let columnOffset = -2; columnOffset <= 2; columnOffset++) {
+  const range = player.clashSkillArmed === 'adventurer-steps'
+    ? 12
+    : player.clashMoveBoostThroughTurn != null && game.value.turn <= player.clashMoveBoostThroughTurn
+      ? 4
+      : 2
+  for (let rowOffset = -range; rowOffset <= range; rowOffset++) {
+    for (let columnOffset = -range; columnOffset <= range; columnOffset++) {
       if (!rowOffset && !columnOffset) continue
       const nextRow = row + rowOffset
       const nextColumn = column + columnOffset
@@ -318,6 +334,9 @@ const selectedClashWeapon = computed(() => controlledGamePlayer.value?.clashInve
 const selectedClashItemEntry = computed(() => controlledGamePlayer.value?.clashInventory?.items.find(item => item.id === clashSelectedItem.value))
 const controlledClashWeapons = computed(() => controlledGamePlayer.value?.clashInventory?.weapons || [])
 const controlledClashItems = computed(() => controlledGamePlayer.value?.clashInventory?.items || [])
+const controlledClashActiveSkill = computed(() => controlledGamePlayer.value?.specialSkill || null)
+const controlledClashPassiveSkill = computed(() => controlledGamePlayer.value?.passiveSkill || null)
+const clashSkillCooldownSeconds = computed(() => Math.max(0, Math.ceil(((controlledGamePlayer.value?.skillCooldownUntil || 0) - (now.value + serverClockOffset)) / 1000)))
 const clashWeaponSlots = computed(() => {
   const weapons = controlledClashWeapons.value
   return [
@@ -804,14 +823,42 @@ async function handleServerEvent(event) {
     window.setTimeout(() => { penaltyOverlay.value = null }, remaining)
   } else if (event.type === 'clash_move') {
     audioManager.movement(remaining)
+    setClashFacing(event.data.playerId, event.data.from, event.data.to)
     visualSpaces.value[event.data.playerId] = event.data.to
-    if (event.data.pickup) audioManager.clashPickup(event.data.pickup.dropKind)
+    setClashPlayerAction(event.data.playerId, 'sprint', remaining)
+    if (event.data.pickup) {
+      audioManager.clashPickup(event.data.pickup.dropKind)
+      if (event.data.pickup.passiveTrigger?.playerId === clientId) {
+        clashSkillNoticeLocal.value = {
+          id: `passive-${event.data.pickup.passiveTrigger.name}-${Date.now()}`,
+          skillName: event.data.pickup.passiveTrigger.name,
+          message: `${event.data.pickup.passiveTrigger.name} activated.`,
+        }
+        window.setTimeout(() => {
+          if (clashSkillNoticeLocal.value?.skillName === event.data.pickup.passiveTrigger.name) clashSkillNoticeLocal.value = null
+        }, 1600)
+      }
+    }
   } else if (event.type === 'clash_attack') {
+    clashAttackPending.value = false
     audioManager.clashWeapon(event.data.weaponName, event.data.modeName, clashListenerVolume(event.data.sourceSpace))
+    setClashFacing(event.data.playerId, event.data.sourceSpace, event.data.targetSpace)
+    if (event.data.weaponClass === 'melee') clearClashPlayerAction(event.data.playerId)
+    else setClashPlayerAction(event.data.playerId, event.data.weaponClass === 'pistol' ? 'secondary_fire' : 'primary_fire', Math.min(remaining, 1200))
     showClashBulletTraces(event.data)
     showClashShotOverlay(event.data)
     showClashMeleeOverlay(event.data)
+    showClashHitPopup(event.data)
     showClashKills(event.data.kills)
+    const ownPassive = (event.data.passiveTriggers || []).find(trigger => trigger.playerId === clientId)
+    if (ownPassive) {
+      clashSkillNoticeLocal.value = {
+        id: `passive-${ownPassive.name}-${Date.now()}`,
+        skillName: ownPassive.name,
+        message: `${ownPassive.name} activated.`,
+      }
+      window.setTimeout(() => { if (clashSkillNoticeLocal.value?.skillName === ownPassive.name) clashSkillNoticeLocal.value = null }, 1600)
+    }
     if (event.data.attackerTo != null) visualSpaces.value[event.data.playerId] = event.data.attackerTo
     displayedHealth.value[event.data.targetId] = event.data.healthBefore
     healthBlinkPlayerId.value = event.data.targetId
@@ -821,6 +868,10 @@ async function handleServerEvent(event) {
     }, Math.min(900, remaining))
   } else if (event.type === 'clash_item') {
     audioManager.clashItem(event.data.itemName, clashListenerVolume(event.data.sourceSpace || event.data.targetSpace))
+    setClashFacing(event.data.playerId, event.data.sourceSpace, event.data.targetSpace)
+    if (['damage', 'damage_over_time', 'stun'].includes(event.data.effect)) {
+      setClashPlayerAction(event.data.playerId, 'throw', Math.min(remaining, 560))
+    }
     showClashItemThrow(event.data)
     showClashKills(event.data.kills)
     const stunnedPlayers = []
@@ -962,6 +1013,7 @@ function applyGameSnapshot(message) {
   turnDeadline.value = message.turnDeadline
   escapeBriefing.value = message.escapeBriefing
   visibleLog.value = [...(message.game?.log || [])]
+  if (!message.currentEvent) clashAttackPending.value = false
   for (const player of message.game?.players || []) {
     if (visualSpaces.value[player.id] == null || !message.currentEvent) visualSpaces.value[player.id] = player.space
     if (healthBlinkPlayerId.value !== player.id && player.health != null) displayedHealth.value[player.id] = player.health
@@ -1086,6 +1138,28 @@ function handleSocketMessage(event) {
     }
     return
   }
+  if (message.type === 'clash_skill_notice') {
+    if (message.playerId === clientId) {
+      clashSkillNoticeLocal.value = {
+        id: `${message.startedAt}-${message.skillName}`,
+        skillName: message.skillName,
+        message: message.message,
+      }
+      window.setTimeout(() => {
+        if (clashSkillNoticeLocal.value?.id === `${message.startedAt}-${message.skillName}`) clashSkillNoticeLocal.value = null
+      }, Math.max(900, Math.min(2200, message.duration || 1800)))
+      if (message.reveal?.targetIds?.length) {
+        clashSkillReveal.value = {
+          id: `${message.startedAt}-${message.skillName}-reveal`,
+          targetIds: message.reveal.targetIds,
+        }
+        window.setTimeout(() => {
+          if (clashSkillReveal.value?.id === `${message.startedAt}-${message.skillName}-reveal`) clashSkillReveal.value = null
+        }, message.reveal.duration || 3000)
+      }
+    }
+    return
+  }
   if (message.type === 'room_list') {
     roomList.value = message.rooms || []
     roomListLoading.value = false
@@ -1126,6 +1200,7 @@ function handleSocketMessage(event) {
   } else if (message.type === 'player_forfeited') {
     onlineError.value = `${message.playerName || 'A player'} forfeited.`
   } else if (message.type === 'action_rejected' || message.type === 'error') {
+    clashAttackPending.value = false
     if (/room no longer exists|not part of this room/i.test(message.message)) {
       resetOnlineRoom(message.message)
       return
@@ -1503,7 +1578,11 @@ function playTurn() {
 
 function useSkill(targetId = null) {
   if (!game.value || page.value !== 'game' || turnBusy.value || game.value.gameOver) return
-  if (game.value.mode === 'guess_what' || game.value.mode === 'clash_with') return
+  if (game.value.mode === 'guess_what') return
+  if (game.value.mode === 'clash_with') {
+    activateClashSkill()
+    return
+  }
   const player = game.value.players[game.value.currentPlayerIndex]
   if (!isControlledTurn.value) {
     skillNotice.value = 'Skill can only be used during your turn.'
@@ -1534,6 +1613,27 @@ function useSkill(targetId = null) {
   }
   skillTargetOptions.value = []
   sendLobby({ type: 'use_skill', targetId })
+}
+
+function activateClashSkill() {
+  if (!game.value || game.value.mode !== 'clash_with' || page.value !== 'game' || turnBusy.value || game.value.gameOver) return
+  if (!isControlledTurn.value) {
+    skillNotice.value = 'Skill can only be used during your turn.'
+    return
+  }
+  if (!controlledClashActiveSkill.value) {
+    skillNotice.value = 'This character has no active skill.'
+    return
+  }
+  if (controlledClashStunned.value) {
+    skillNotice.value = 'You are stunned and cannot use a skill.'
+    return
+  }
+  if (clashSkillCooldownSeconds.value > 0) {
+    skillNotice.value = 'Skill is still cooling down.'
+    return
+  }
+  sendLobby({ type: 'clash_activate_skill' })
 }
 
 function selectSkillTarget(targetId) {
@@ -1622,7 +1722,7 @@ function handleGameKey(event) {
     event.preventDefault()
     return
   }
-  if (key === 'g' && !event.repeat && game.value?.mode !== 'clash_with') useSkill()
+  if (key === 'g' && !event.repeat) useSkill()
 }
 
 function handleAudioUnlock() {
@@ -1674,6 +1774,76 @@ function clashMedia(path, kind = 'gif') {
   return clashMediaFiles[`${normalized}.${kind === 'image' ? 'png' : 'gif'}`]
     || clashMediaFiles[`${normalized}.gif`]
     || clashMediaFiles[`${normalized}.png`]
+}
+
+function characterSkillByType(character, type) {
+  const skill = character?.skills?.find(item => item.type === type)
+  if (!skill) return type === 'active'
+    ? character?.specialSkill || character?.activeSkill || character?.skills?.find(item => item.type !== 'passive')
+    : character?.passiveSkill
+  return { ...skill, description: skill.description || skill.effect || '' }
+}
+
+function characterHasSkillInfo(character) {
+  return Boolean(characterSkillByType(character, 'active') || characterSkillByType(character, 'passive'))
+}
+
+function clashCharacterAsset(characterOrPlayer, action = 'idle') {
+  const assetsDir = characterOrPlayer?.assets_dir || characterOrPlayer?.assetsDir
+  if (!assetsDir) return null
+  const kind = ['idle', 'image'].includes(action) ? 'image' : 'gif'
+  return clashMedia(`${assetsDir}/${action}`, kind)
+}
+
+function lobbyCharacterImage(character) {
+  return clashCharacterAsset(character, 'image')
+}
+
+function clashPlayerAction(player) {
+  return clashCharacterActions.value[player.id] || 'idle'
+}
+
+function clashPlayerSprite(player) {
+  if (game.value?.mode !== 'clash_with') return null
+  return clashCharacterAsset(player, clashPlayerAction(player)) || clashCharacterAsset(player, 'idle')
+}
+
+function clashGridColumn(space) {
+  const position = (Number(space) - 1) % CLASH_BOARD_COLUMNS
+  const row = Math.floor((Number(space) - 1) / CLASH_BOARD_COLUMNS)
+  return row % 2 === 0 ? position : CLASH_BOARD_COLUMNS - 1 - position
+}
+
+function setClashFacing(playerId, from, to) {
+  if (!playerId || !from || !to || from === to) return
+  const fromColumn = clashGridColumn(from)
+  const toColumn = clashGridColumn(to)
+  if (fromColumn === toColumn) return
+  clashFacing.value = { ...clashFacing.value, [playerId]: toColumn < fromColumn ? -1 : 1 }
+}
+
+function clashFacingStyle(player) {
+  if (game.value?.mode !== 'clash_with') return null
+  const facing = clashFacing.value[player.id] ?? 1
+  return facing !== 1 ? { transform: `scaleX(${facing})` } : null
+}
+
+function setClashPlayerAction(playerId, action, duration = 900) {
+  if (!playerId || !action) return
+  clashCharacterActions.value = { ...clashCharacterActions.value, [playerId]: action }
+  window.setTimeout(() => {
+    const current = { ...clashCharacterActions.value }
+    if (current[playerId] === action) {
+      delete current[playerId]
+      clashCharacterActions.value = current
+    }
+  }, duration)
+}
+
+function clearClashPlayerAction(playerId) {
+  const current = { ...clashCharacterActions.value }
+  delete current[playerId]
+  clashCharacterActions.value = current
 }
 
 function clashInventoryImage(entry) {
@@ -1818,10 +1988,26 @@ function showClashMeleeOverlay(eventData) {
   if (!src && import.meta.env.DEV) console.warn(`Missing Clash melee ${kind} GIF asset. Restart Vite if the asset was added while dev server was running.`)
   if (!src) return
   const id = `melee-${kind}-${Date.now()}`
-  clashMeleeOverlay.value = { id, src, kind }
+  const duration = kind === 'attacked' ? CLASH_MELEE_ATTACKED_MS : CLASH_MELEE_SLASH_MS
+  clashMeleeOverlay.value = { id, src, kind, duration }
   window.setTimeout(() => {
     if (clashMeleeOverlay.value?.id === id) clashMeleeOverlay.value = null
-  }, CLASH_MELEE_EFFECT_MS)
+  }, duration)
+}
+
+function showClashHitPopup(eventData) {
+  if (!eventData?.targetId || eventData.targetSpace == null) return
+  const damage = Number(eventData.damage || 0)
+  const missed = Number(eventData.attempts || 0) > 0 && Number(eventData.hits || 0) <= 0
+  if (!damage && !missed) return
+  const id = `hit-${eventData.targetId}-${Date.now()}-${Math.random()}`
+  const position = boardSpacePosition(eventData.targetSpace)
+  scheduleClashOverlay(clashHitPopups, {
+    id,
+    text: damage > 0 ? `-${damage}` : 'miss',
+    kind: damage > 0 ? 'damage' : 'miss',
+    style: position,
+  }, 950)
 }
 
 function showClashItemThrow(eventData) {
@@ -1870,11 +2056,13 @@ function clashPlayerVisible(player) {
 
 function clashRivalRevealed(player) {
   return game.value?.mode === 'clash_with'
-    && clashRivalRevealActive.value
     && player.id !== clientId
     && !player.eliminated
     && !player.finished
-    && !clashVisibleSpaces.value.has(player.space)
+    && (
+      (clashRivalRevealActive.value && !clashVisibleSpaces.value.has(player.space))
+      || clashSkillReveal.value?.targetIds?.includes(player.id)
+    )
 }
 
 function selectClashAction(mode) {
@@ -1899,6 +2087,14 @@ function setClashWeaponMode(weapon, modeName) {
   clashSelectedWeaponMode.value = modeName
 }
 
+function showClashLocalNotice(message, duration = 1400) {
+  const id = `clash-notice-${Date.now()}-${Math.random()}`
+  clashSkillNoticeLocal.value = { id, message }
+  window.setTimeout(() => {
+    if (clashSkillNoticeLocal.value?.id === id) clashSkillNoticeLocal.value = null
+  }, duration)
+}
+
 function selectClashItemAction(item) {
   if (!isControlledTurn.value || turnBusy.value || controlledClashStunned.value || game.value?.mode !== 'clash_with' || !item) return
   clashSelectedItem.value = item.id
@@ -1919,9 +2115,51 @@ function sendClashMove(destination) {
 function sendClashAttack(targetId) {
   const weapon = selectedClashWeapon.value
   const mode = weapon?.modes?.find(item => item.name === clashSelectedWeaponMode.value) || weapon?.modes?.[0]
-  if (!isControlledTurn.value || controlledClashStunned.value || !weapon || !mode) return
+  if (!isControlledTurn.value) {
+    showClashLocalNotice('It is not your turn.')
+    return
+  }
+  if (controlledClashStunned.value) {
+    showClashLocalNotice('You are stunned.')
+    return
+  }
+  if (clashAttackPending.value) {
+    showClashLocalNotice('Attack is already resolving.')
+    return
+  }
+  if (!weapon || !mode) {
+    showClashLocalNotice('Select a weapon first.')
+    return
+  }
+  clashAttackPending.value = true
   clashActionMode.value = null
   sendLobby({ type: 'clash_attack', targetId, weaponName: weapon.name, modeName: mode.name })
+}
+
+function handleBoardTokenClick(player) {
+  if (game.value?.mode === 'clash_with') {
+    if (
+      !clashAttackPending.value
+      && clashActionMode.value === 'attack'
+      && player.id !== clientId
+      && !player.eliminated
+      && !player.finished
+    ) {
+      sendClashAttack(player.id)
+    } else if (clashActionMode.value === 'attack') {
+      showClashLocalNotice(clashAttackPending.value ? 'Attack is already resolving.' : 'Target unavailable.')
+    } else if (
+      !clashAttackPending.value
+      && !clashActionMode.value
+      && player.id !== clientId
+      && !player.eliminated
+      && !player.finished
+    ) {
+      sendClashAttack(player.id)
+    }
+    return
+  }
+  toggleEmojiPicker(player, 'board')
 }
 
 function sendClashUseHeal(itemId = null) {
@@ -2203,6 +2441,7 @@ onUnmounted(() => {
                     {{ activeLobbyMessages[lobbyPlayers[slot - 1].id].text }}
                   </span>
                   <button
+                    v-if="lobbyPlayers[slot - 1].id === clientId"
                     type="button"
                     class="lobby-message-toggle"
                     :class="{ open: lobbyMessageTargetId === lobbyPlayers[slot - 1].id }"
@@ -2212,7 +2451,7 @@ onUnmounted(() => {
                     :aria-label="`Send message above ${lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name}`"
                   ><span></span></button>
                   <form
-                    v-if="lobbyMessageTargetId === lobbyPlayers[slot - 1].id"
+                    v-if="lobbyPlayers[slot - 1].id === clientId && lobbyMessageTargetId === lobbyPlayers[slot - 1].id"
                     :id="`lobby-message-box-${slot}`"
                     class="lobby-message-box"
                     @submit.prevent="submitLobbyMessage(lobbyPlayers[slot - 1].id)"
@@ -2244,28 +2483,32 @@ onUnmounted(() => {
                     class="lobby-pawn"
                     :class="{
                       owned: lobbyPlayers[slot - 1].id === clientId,
-                      'has-tooltip': lobbyPlayers[slot - 1].id === clientId || Boolean(lobbyPlayers[slot - 1].character.passiveSkill),
+                      'has-tooltip': lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character),
+                      'has-image': Boolean(lobbyCharacterImage(lobbyPlayers[slot - 1].character)),
                     }"
-                    :tabindex="lobbyPlayers[slot - 1].id === clientId || lobbyPlayers[slot - 1].character.passiveSkill ? 0 : null"
-                    :role="lobbyPlayers[slot - 1].character.passiveSkill ? 'button' : null"
-                    :aria-label="lobbyPlayers[slot - 1].character.passiveSkill ? `Show ${lobbyPlayers[slot - 1].character.name} passive skill` : null"
-                    :aria-describedby="lobbyPlayers[slot - 1].id === clientId || lobbyPlayers[slot - 1].character.passiveSkill ? `lobby-character-tip-${slot}` : null"
-                  ><span>{{ lobbyPlayers[slot - 1].character.face }}</span></div>
+                    :tabindex="lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? 0 : null"
+                    :role="characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? 'button' : null"
+                    :aria-label="characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? `Show ${lobbyPlayers[slot - 1].character.name} skills` : null"
+                    :aria-describedby="lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? `lobby-character-tip-${slot}` : null"
+                  >
+                    <img v-if="lobbyCharacterImage(lobbyPlayers[slot - 1].character)" :src="lobbyCharacterImage(lobbyPlayers[slot - 1].character)" :alt="lobbyPlayers[slot - 1].character.name">
+                    <span v-else>{{ lobbyPlayers[slot - 1].character.face }}</span>
+                  </div>
                   <button v-if="(lobbyPlayers[slot - 1].id === clientId || (isLobbyHost && lobbyPlayers[slot - 1].isAI)) && lobbyCharacterIndices.length" type="button" class="lobby-char-arrow right" @click.stop.prevent="changeLobbySlotCharacter(lobbyPlayers[slot - 1], 1)">›</button>
                   <div
-                    v-if="lobbyPlayers[slot - 1].id === clientId || lobbyPlayers[slot - 1].character.passiveSkill"
+                    v-if="lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character)"
                     :id="`lobby-character-tip-${slot}`"
                     class="lobby-character-tooltip"
                     role="tooltip"
                   >
-                    <strong>{{ lobbyPlayers[slot - 1].character.passiveSkill ? lobbyPlayers[slot - 1].character.name : (lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name) }}</strong>
-                    <template v-if="lobbyPlayers[slot - 1].character.specialSkill">
-                      <small>{{ lobbyPlayers[slot - 1].character.specialSkill.name }}</small>
-                      <p>{{ lobbyPlayers[slot - 1].character.specialSkill.description }}</p>
+                    <strong>{{ characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? lobbyPlayers[slot - 1].character.name : (lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name) }}</strong>
+                    <template v-if="characterSkillByType(lobbyPlayers[slot - 1].character, 'active')">
+                      <small>Active · {{ characterSkillByType(lobbyPlayers[slot - 1].character, 'active').name }}</small>
+                      <p>{{ characterSkillByType(lobbyPlayers[slot - 1].character, 'active').description }}</p>
                     </template>
-                    <template v-else-if="lobbyPlayers[slot - 1].character.passiveSkill">
+                    <template v-if="characterSkillByType(lobbyPlayers[slot - 1].character, 'passive')">
                       <small>Passive · {{ lobbyPlayers[slot - 1].character.passiveSkill.name }}</small>
-                      <p>{{ lobbyPlayers[slot - 1].character.passiveSkill.description }}</p>
+                      <p>{{ characterSkillByType(lobbyPlayers[slot - 1].character, 'passive').description }}</p>
                     </template>
                   </div>
                   <input
@@ -2710,12 +2953,6 @@ onUnmounted(() => {
           </div>
         </header>
         <div v-if="clashKillFeed" class="clash-kill-feed" role="status">{{ clashKillFeed.text }}</div>
-        <div v-if="clashShotOverlay" class="clash-shot-overlay" role="presentation" aria-hidden="true">
-          <img :src="clashShotOverlay.src" alt="">
-        </div>
-        <div v-if="clashMeleeOverlay" class="clash-melee-overlay" :class="clashMeleeOverlay.kind" role="presentation" aria-hidden="true">
-          <img :src="clashMeleeOverlay.src" alt="">
-        </div>
         <div v-if="settingsModalOpen" class="game-settings-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title" @click.self="settingsModalOpen = false">
           <div class="game-settings-card">
             <button class="game-settings-close" type="button" aria-label="Close settings" @click="settingsModalOpen = false">×</button>
@@ -2860,6 +3097,20 @@ onUnmounted(() => {
               >
                 <img :src="effect.src" :alt="effect.alt">
               </div>
+              <div v-if="clashMeleeOverlay" class="clash-melee-overlay" :class="clashMeleeOverlay.kind" :style="{ '--melee-duration': `${clashMeleeOverlay.duration}ms` }" role="presentation" aria-hidden="true">
+                <img :src="clashMeleeOverlay.src" alt="">
+              </div>
+              <div v-if="clashShotOverlay" class="clash-shot-overlay" role="presentation" aria-hidden="true">
+                <img :src="clashShotOverlay.src" alt="">
+              </div>
+              <span
+                v-for="popup in clashHitPopups"
+                :key="popup.id"
+                class="clash-hit-popup"
+                :class="popup.kind"
+                :style="popup.style"
+                role="status"
+              >{{ popup.text }}</span>
               <button
                 v-for="space in game.mode === 'clash_with' && clashActionMode === 'move' ? clashMoveOptions : []"
                 :key="`clash-move-${space}`"
@@ -2985,13 +3236,14 @@ onUnmounted(() => {
                   'clash-stun-hit': clashStunBlinkIds[player.id],
                   'clash-stunned': game.mode === 'clash_with' && player.clashStunnedThroughTurn != null && game.turn <= player.clashStunnedThroughTurn,
                   'clash-rival-revealed': clashRivalRevealed(player),
-                  'clash-targetable': game.mode === 'clash_with' && clashActionMode === 'attack' && visibleClashTargets.some(target => target.id === player.id),
+                  'clash-character-token': Boolean(clashPlayerSprite(player)),
+                  'clash-targetable': game.mode === 'clash_with' && !clashAttackPending && clashActionMode === 'attack' && visibleClashTargets.some(target => target.id === player.id),
                   'sound-picker-open': emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board',
                   'social-active': game.mode === 'escape_from' && Boolean(activeReactions[player.id])
                 }"
                 :style="tokenPosition(visualSpace(player), game.players.findIndex(item => item.id === player.id))"
                 :title="`${player.name}: space ${player.space}`"
-                @click.stop="game.mode === 'clash_with' && clashActionMode === 'attack' && visibleClashTargets.some(target => target.id === player.id) ? sendClashAttack(player.id) : toggleEmojiPicker(player, 'board')"
+                @click.stop="handleBoardTokenClick(player)"
               >
                 <div v-if="game.mode !== 'clash_with' && emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board'" class="emoji-picker" :class="boardPickerClasses(player)" @click.stop>
                   <div v-if="game.mode !== 'escape_from'" class="emoji-row"><button v-for="emoji in ['😭','😂','😐','😛','😎']" :key="emoji" type="button" @click="sendPlayerEmoji(player.id, emoji)">{{ emoji }}</button></div>
@@ -3000,8 +3252,9 @@ onUnmounted(() => {
                 <span v-if="activeEmojis[player.id]" class="player-emote">{{ activeEmojis[player.id].emoji }}</span>
                 <span v-if="activeReactions[player.id]" class="player-reaction">{{ activeReactions[player.id].text }}</span>
                 <span v-if="game.mode === 'clash_with' && player.clashStunnedThroughTurn != null && game.turn <= player.clashStunnedThroughTurn" class="clash-stun-marker" aria-hidden="true"></span>
-                <span>{{ player.face }}</span>
-                <small>{{ game.players.findIndex(item => item.id === player.id) + 1 }}</small>
+                <img v-if="clashPlayerSprite(player)" class="clash-character-sprite" :src="clashPlayerSprite(player)" :alt="player.name" :style="clashFacingStyle(player)">
+                <span v-else>{{ player.face }}</span>
+                <small v-if="game.mode !== 'clash_with'">{{ game.players.findIndex(item => item.id === player.id) + 1 }}</small>
               </div>
             </div>
           </div>
@@ -3113,6 +3366,24 @@ onUnmounted(() => {
                 <span>Your Loadout</span>
                 <strong>{{ controlledClashStunned ? 'Stunned' : isControlledTurn ? 'Tap to act' : 'Private' }}</strong>
               </div>
+              <div v-if="controlledClashActiveSkill || controlledClashPassiveSkill" class="clash-skill-control">
+                <div>
+                  <small v-if="controlledClashPassiveSkill">Passive · {{ controlledClashPassiveSkill.name }}</small>
+                  <strong v-if="controlledClashActiveSkill">{{ controlledClashActiveSkill.name }}</strong>
+                  <span v-if="controlledClashActiveSkill">{{ controlledClashActiveSkill.description }}</span>
+                </div>
+                <button
+                  v-if="controlledClashActiveSkill"
+                  type="button"
+                  :disabled="!isControlledTurn || turnBusy || controlledClashStunned || clashSkillCooldownSeconds > 0"
+                  @click="activateClashSkill"
+                >
+                  <template v-if="!isControlledTurn">Wait</template>
+                  <template v-else-if="clashSkillCooldownSeconds > 0">{{ clashSkillCooldownSeconds }}s</template>
+                  <template v-else>Use Skill · G</template>
+                </button>
+              </div>
+              <p v-if="clashSkillNoticeLocal" class="clash-skill-toast">{{ clashSkillNoticeLocal.message }}</p>
               <div class="clash-loadout-slots">
                 <section class="clash-slot-section">
                   <small>Weapons</small>
@@ -3180,7 +3451,7 @@ onUnmounted(() => {
                     </article>
                   </div>
                 </section>
-                <em v-if="clashActionMode === 'attack'">Click a red-outlined visible player.</em>
+                <em v-if="clashActionMode === 'attack'">Click a visible player.</em>
                 <em v-else-if="clashItemTargeting">Choose a yellow square.</em>
               </div>
               <section class="clash-loadout-list">
@@ -3209,7 +3480,7 @@ onUnmounted(() => {
                     <option v-for="mode in selectedClashWeapon.modes" :key="mode.name" :value="mode.name">{{ mode.name }} · {{ mode.accuracy }}% accuracy</option>
                   </select>
                 </label>
-                <em v-if="clashActionMode === 'attack'">Click a red-outlined visible player.</em>
+                <em v-if="clashActionMode === 'attack'">Click a visible player.</em>
               </section>
               <section class="clash-loadout-list">
                 <small>Items</small>

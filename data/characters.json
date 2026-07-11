@@ -6,8 +6,7 @@
     "modes": [
       "standard",
       "run_away",
-      "guess_what",
-      "clash_with"
+      "guess_what"
     ],
     "face": "ಠ‿ಠ",
     "description": "Cool. Sarcastic. Probably judging you right now.",
@@ -23,8 +22,7 @@
     "modes": [
       "standard",
       "run_away",
-      "guess_what",
-      "clash_with"
+      "guess_what"    
     ],
     "face": "ಠ益ಠ",
     "description": "Hot-headed and always ready to blame the dice.",
@@ -40,8 +38,7 @@
     "modes": [
       "standard",
       "run_away",
-      "guess_what",
-      "clash_with"
+      "guess_what"
     ],
     "face": "¬‿¬",
     "description": "Smart mouth. Sharper moves. Zero regrets.",
@@ -57,8 +54,7 @@
     "modes": [
       "standard",
       "run_away",
-      "guess_what",
-      "clash_with"
+      "guess_what"
     ],
     "face": "◔‿◔",
     "description": "Unpredictable. Unapologetic. Unstoppable.",
@@ -74,8 +70,7 @@
     "modes": [
       "standard",
       "run_away",
-      "guess_what",
-      "clash_with"
+      "guess_what"
     ],
     "face": "ಠ_ಠ",
     "description": "Mysterious. Mischievous. Menacing.",
@@ -91,8 +86,7 @@
     "modes": [
       "standard",
       "run_away",
-      "guess_what",
-      "clash_with"
+      "guess_what"
     ],
     "face": "ಠ‿↼",
     "description": "Cunning. Deceptive. Delightfully tricky.",
@@ -108,8 +102,7 @@
     "modes": [
       "standard",
       "run_away",
-      "guess_what",
-      "clash_with"
+      "guess_what"
     ],
     "face": "ಠ益ಠ",
     "description": "Agile. Fearless. Always on the move.",
@@ -125,8 +118,7 @@
     "modes": [
       "standard",
       "run_away",
-      "guess_what",
-      "clash_with"
+      "guess_what"
     ],
     "face": "ಠ_ಠ",
     "description": "Explosive. Bold. Always ready to blow things up.",
@@ -142,8 +134,7 @@
     "modes": [
       "standard",
       "run_away",
-      "guess_what",
-      "clash_with"
+      "guess_what"
     ],
     "face": "¬‿¬",
     "description": "Crab Mentality. Demanding. Always ready to complain.",
@@ -207,5 +198,131 @@
       "name": "Optimistic Mind",
       "description": "When encountering an entity while on the move, has a 15% chance to ignore it (does not trigger the attack sequence) and continue moving. This skill does not work when the move ends on the square with the entity."
     }
-  }
+  },
+  {
+    "id": "big-daddy",
+    "name": "Big Daddy",
+    "assets_dir": "assets/gifs/clash_with/characters/big_daddy",
+    "modes": [
+      "clash_with"
+    ],
+    "description": "Strong. Dominant. Always ready to take charge.",
+    "skills": [
+      {
+        "name": "Handy",
+        "effect": "Can carry one additional item in the loadout (Maximum of 1 item).",
+        "type": "passive"
+      },
+      {
+        "name": "Dad Strength",
+        "effect": "When activated, the next melee attack will deal double damage.",
+        "type": "active"
+      }
+    ]
+  },
+  {
+      "id": "angel",
+      "name": "Angel",
+      "assets_dir": "assets/gifs/clash_with/characters/angel",
+      "modes": [
+        "clash_with"
+      ],
+      "description": "Strict. Disciplined. Always ready for everything.",
+      "skills": [
+        {
+          "name": "Lionheart",
+          "effect": "When health is below 30 points, boost all attack damage by 10%.",
+          "type": "passive"
+        },
+        {
+          "name": "Girl Scout",
+          "effect": "Heal 30 health points without consuming any heal items.",
+          "type": "active"
+        }
+      ]
+    },
+    {
+      "id": "luisa",
+      "name": "Luisa",
+      "assets_dir": "assets/gifs/clash_with/characters/luisa",
+      "modes": [
+        "clash_with"
+      ],
+      "description": "Alert. Survivalist. Ready to face the unknowns.",
+      "skills": [
+        {
+          "name": "Portable Workbench",
+          "effect": "Has 15% chance to double the ammo capacity of the next picked up weapon.",
+          "type": "passive"
+        },
+        {
+          "name": "Survival Instinct",
+          "effect": "When activated, reveal the positions of all enemies within 10 spaces from all directions for 3 seconds.",
+          "type": "active"
+        }
+      ]
+    },
+    {
+      "id": "ritcher",
+      "name": "Ritcher",
+      "assets_dir": "assets/gifs/clash_with/characters/ritcher",
+      "modes": [
+        "clash_with"
+      ],
+      "description": "Bulk. Brave. Strong Body.",
+      "skills": [
+        {
+          "name": "Braveheart",
+          "effect": "When health is below 30 points, reduce all damage taken by 15%.",
+          "type": "passive"
+        },
+        {
+          "name": "Power Strike",
+          "effect": "When activated, the next melee attack will stun the target on its next turn, not global turn.",
+          "type": "active"  
+        }
+      ]
+    },
+    {
+      "id": "speed",
+      "name": "Speed",
+      "assets_dir": "assets/gifs/clash_with/characters/speed",
+      "modes": [
+        "clash_with"
+      ],
+      "description": "Fast. Agile. Always on the move.",
+      "skills": [
+        {
+          "name": "Evasive Maneuver",
+          "effect": "When attacked by any weapon, except snipers, has a 20% chance to dodge the attack.",
+          "type": "passive"
+        },
+        {
+          "name": "Extra Steps",
+          "effect": "When activated, boost by 2 available move spaces to all directions for 2 global turns, including the current global turn.",
+          "type": "active"
+        }
+      ]
+    },
+    {
+      "id": "young-jack",
+      "name": "Young Jack",
+      "assets_dir": "assets/gifs/clash_with/characters/young_jack",
+      "modes": [
+        "clash_with"
+      ],
+      "description": "Young. Naive. Adventurous.",
+      "skills": [
+        {
+          "name": "Scavenger",
+          "effect": "For the next spawn turn of items and weapons, 20% chance for a random weapon and item to be dropped 1 square closer to the character in different directions.",
+          "type": "passive"
+        },
+        {
+          "name": "Adventurer's Spirit",
+          "effect": "When activated, allow movement to extend by 10 spaces to all directions for the current turn. If the character is already on the edge of the board, then the movement will be limited to the available spaces.",
+          "type": "active"
+        }
+      ]
+    }
 ]
