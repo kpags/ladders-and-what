@@ -143,6 +143,44 @@ test('Clash supply rounds replace board drops and spent weapons disappear', () =
 
   assert.equal(state.turn, 2)
   assert.equal(state.clashDrops.some(drop => beforeDropIds.has(drop.id)), false)
+  assert.equal(state.clashDrops.filter(drop => drop.kind === 'weapon').length, 4)
+  assert.equal(state.clashDrops.filter(drop => drop.kind === 'item').length, 4)
+})
+
+test('Clash supply counts scale with player count', () => {
+  const noMansLand = boards.find(board => board.name === "No Man's Land")
+  const threePlayerState = createGameState(noMansLand, [
+    { id: 'player-1', name: 'Player 1' },
+    { id: 'player-2', name: 'Player 2' },
+    { id: 'player-3', name: 'Player 3' },
+  ], 0)
+  const fourPlayerState = createGameState(noMansLand, [
+    { id: 'player-1', name: 'Player 1' },
+    { id: 'player-2', name: 'Player 2' },
+    { id: 'player-3', name: 'Player 3' },
+    { id: 'player-4', name: 'Player 4' },
+  ], 0)
+
+  assert.equal(threePlayerState.clashDrops.filter(drop => drop.kind === 'weapon').length, 11)
+  assert.equal(threePlayerState.clashDrops.filter(drop => drop.kind === 'item').length, 4)
+  assert.equal(fourPlayerState.clashDrops.filter(drop => drop.kind === 'weapon').length, 12)
+  assert.equal(fourPlayerState.clashDrops.filter(drop => drop.kind === 'item').length, 5)
+})
+
+test('Clash reveals the rival location every two global turns when two players remain', () => {
+  const noMansLand = boards.find(board => board.name === "No Man's Land")
+  const state = createGameState(noMansLand, [
+    { id: 'player-1', name: 'Player 1' },
+    { id: 'player-2', name: 'Player 2' },
+  ], 0)
+
+  takeClashMove(state, 'player-1', clashMoveOptions(state, state.players[0])[0])
+  assert.equal(state.turn, 1)
+  assert.equal(state.clashRivalRevealTurn, null)
+
+  takeClashMove(state, 'player-2', clashMoveOptions(state, state.players[1])[0])
+  assert.equal(state.turn, 2)
+  assert.equal(state.clashRivalRevealTurn, 2)
 })
 
 test('Clash melee attacks move the attacker in front of the target', () => {

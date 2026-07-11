@@ -169,8 +169,8 @@ input[type=range] { height:30px; }
 .lobby-character-tooltip strong { display:block; color:#fff; text-transform:uppercase; font:1.1rem 'Luckiest Guy'; }
 .lobby-character-tooltip small { display:block; margin:.2rem 0; color:#ffc325; text-transform:uppercase; font:.9rem 'Luckiest Guy'; }
 .lobby-character-tooltip p { margin:0; color:#ded7c8; font-size:.78rem; line-height:1.25; }
-.lobby-message-toggle { position:absolute; z-index:10; top:7px; right:7px; width:35px; height:31px; display:grid; place-items:center; padding:0; border:3px solid #090d16; border-radius:50%; background:#fff; box-shadow:0 4px 0 #090d16; }
-.lobby-message-toggle::before { content:""; position:absolute; left:2px; bottom:-8px; width:13px; height:13px; background:#fff; border-left:3px solid #090d16; border-bottom:3px solid #090d16; transform:skew(-16deg) rotate(12deg); }
+.lobby-message-toggle { position:absolute; z-index:10; top:7px; right:7px; width:39px; height:30px; display:grid; place-items:center; padding:0; border:3px solid #090d16; border-radius:999px; background:#fff; box-shadow:0 4px 0 #090d16; }
+.lobby-message-toggle::before { content:none; }
 .lobby-message-toggle span,
 .lobby-message-toggle span::before,
 .lobby-message-toggle span::after { width:5px; height:5px; border-radius:50%; background:#090d16; }
@@ -280,7 +280,7 @@ input[type=range] { height:30px; }
 .escape-briefing-close { position:absolute; top:.65rem; right:.75rem; display:grid; place-items:center; width:38px; height:38px; padding:0; border:2px solid #d6a83c; border-radius:50%; background:#24170c; color:#fff1ce; font:1.75rem/1 Arial,sans-serif; cursor:pointer; }
 .escape-briefing-close:hover:not(:disabled) { background:#6d271d; transform:scale(1.06); }
 .escape-briefing-close.voted { border-color:#5ca76b; background:#17351e; color:#9be2a8; cursor:wait; }
-.game-hud { position:relative; min-height:86px; display:grid; grid-template-columns:110px minmax(100px,.6fr) minmax(160px,.9fr) 90px minmax(240px,1fr); align-items:center; gap:.8rem; max-width:1500px; margin:auto; padding:.45rem 6.8rem .45rem .8rem; border:3px solid #26354a; border-radius:16px; background:#080f1ddd; box-shadow:0 7px 0 #02050a; }
+.game-hud { position:relative; min-height:86px; display:grid; grid-template-columns:110px minmax(100px,.6fr) minmax(160px,.9fr) 90px minmax(240px,1fr); align-items:center; gap:.8rem; max-width:1500px; margin:auto; padding:.45rem 9rem .45rem .8rem; border:3px solid #26354a; border-radius:16px; background:#080f1ddd; box-shadow:0 7px 0 #02050a; }
 .game-hud.escape-hud { grid-template-columns:96px minmax(145px,1fr) minmax(150px,.9fr) 108px 96px minmax(150px,210px); grid-template-areas:"exit board turn keys timer roll"; gap:.65rem; }
 .escape-hud .game-exit { grid-area:exit; }
 .escape-hud .board-status { grid-area:board; }
@@ -295,8 +295,13 @@ input[type=range] { height:30px; }
 .escape-key-status strong { color:#ffd24a; font-size:1.35rem; }
 .escape-key-status em { color:#c9b980; font-size:.72rem; font-style:normal; text-transform:uppercase; }
 .game-exit { align-self:stretch; border:3px solid #241d16; border-radius:10px; background:#ead8b5; box-shadow:0 5px 0 #17110d; font:1.2rem 'Luckiest Guy'; text-transform:uppercase; }
-.game-settings-button { position:absolute; z-index:4; top:.45rem; right:.65rem; min-height:38px; padding:.35rem .65rem; border:2px solid #1a1423; border-radius:10px; background:linear-gradient(#ffd86e,#d99015); box-shadow:0 4px 0 #07101c,0 0 12px #ffc92833; color:#17110a; text-transform:uppercase; font:.88rem 'Luckiest Guy'; cursor:pointer; }
+.game-settings-button { position:absolute; z-index:4; top:.45rem; right:.65rem; min-width:112px; min-height:55px; padding:.35rem .65rem; border:2px solid #1a1423; border-radius:10px; background:linear-gradient(#ffd86e,#d99015); box-shadow:0 4px 0 #07101c,0 0 12px #ffc92833; color:#17110a; text-transform:uppercase; font:.88rem 'Luckiest Guy'; cursor:pointer; }
 .game-settings-button:hover { filter:brightness(1.08); transform:translateY(-1px); }
+.game-settings-modal { position:fixed; z-index:150; inset:0; display:grid; place-items:center; padding:1rem; background:rgba(2,6,14,.78); backdrop-filter:blur(5px); }
+.game-settings-card { position:relative; width:min(560px,calc(100vw - 2rem)); max-height:calc(100dvh - 2rem); overflow:auto; padding:2.6rem 1.35rem 1.25rem; border:4px solid #141c2b; border-radius:18px; background:#f1dfbd; box-shadow:0 10px 0 #06101e,0 22px 38px #000b; color:#17141b; }
+.game-settings-card .ribbon { margin:-4.05rem auto 1rem; width:min(300px,82%); }
+.game-settings-close { position:absolute; top:.55rem; right:.65rem; width:38px; height:38px; display:grid; place-items:center; border:2px solid #151a29; border-radius:50%; background:#101827; color:#f4ddb4; font:2rem/1 Arial,sans-serif; cursor:pointer; }
+.game-settings-close:hover { filter:brightness(1.12); transform:scale(1.04); }
 .turn-banner { align-items:flex-end; text-align:right; }
 .turn-count { padding:.18rem .65rem; border-radius:7px; background:#ffc019; color:#15110a !important; font-size:1.05rem !important; }
 .turn-banner strong { -webkit-text-stroke:2px #080b12; paint-order:stroke fill; }
@@ -517,7 +522,7 @@ input[type=range] { height:30px; }
 .clash-board-object.clash-item { width:4.8%; height:4.8%; }
 .clash-board-object.clash-weapon { width:5.2%; height:5.2%; }
 .clash-bullet-trace { position:absolute; z-index:32; height:3px; border-radius:999px; background:linear-gradient(90deg,#fff7a8,#ffe65f 45%,#ffffff00); box-shadow:0 0 8px #ffe55a,0 0 2px #fff; transform:translateY(-50%) rotate(var(--trace-angle,0deg)) scaleX(0); transform-origin:left center; pointer-events:none; animation:clash-bullet-trace .36s ease-out var(--trace-delay,0ms) both; }
-.clash-thrown-item { position:absolute; z-index:33; width:4.8%; height:4.8%; object-fit:contain; object-position:center; left:var(--throw-start-left); top:var(--throw-start-top); transform:translate(-50%,-50%) scale(.72) rotate(720deg); filter:drop-shadow(0 2px 3px #000c); pointer-events:none; animation:clash-thrown-item .68s cubic-bezier(.2,.75,.2,1) both; }
+.clash-thrown-item,.game-board > img.clash-thrown-item { position:absolute; z-index:33; display:block; width:2.65%; height:2.65%; object-fit:contain; object-position:center; left:var(--throw-start-left); top:var(--throw-start-top); transform:translate(-50%,-50%) rotate(360deg); filter:drop-shadow(0 2px 3px #000c); pointer-events:none; animation:clash-thrown-item .43s cubic-bezier(.39,.575,.565,1) both; }
 .clash-item-effect { position:absolute; z-index:31; width:6.35%; aspect-ratio:1; overflow:hidden; display:grid; place-items:center; transform:translate(-50%,-50%); pointer-events:none; animation:clash-item-effect 1.8s steps(1,end) both; }
 .clash-item-effect img { width:100%; height:100%; object-fit:contain; object-position:center; filter:drop-shadow(0 0 6px #000b); }
 .clash-space-option { position:absolute; z-index:30; width:6.35%; aspect-ratio:1; border:1.5px solid #fff35a; border-radius:8px; background:#ffde591f; box-shadow:0 0 9px #ffef5e88,inset 0 0 4px #fff5; transform:translate(-50%,-50%); animation:clash-target-pulse .55s ease-in-out infinite alternate; }
@@ -528,6 +533,7 @@ input[type=range] { height:30px; }
 .clash-board .board-token.health-hit { animation:clash-token-hit .2s ease-in-out 6 alternate; }
 .clash-board .board-token.clash-damage-hit { animation:clash-damage-hit .18s ease-in-out 6 alternate; }
 .clash-board .board-token.clash-stun-hit { animation:clash-stun-hit .16s ease-in-out 7 alternate; }
+.clash-board .board-token.clash-rival-revealed { outline:3px solid #ff3030; outline-offset:5px; box-shadow:0 0 0 4px #2d0202,0 0 18px #ff2a2a,0 0 34px #ff2a2a99; animation:clash-rival-reveal .45s ease-in-out infinite alternate; }
 .clash-board .board-token.ghost { display:grid; opacity:.38; filter:grayscale(.55) drop-shadow(0 0 12px #dcecff); mix-blend-mode:screen; }
 .clash-board .board-token.ghost::after { content:"GHOST"; position:absolute; top:100%; left:50%; padding:.05rem .22rem; border-radius:4px; background:#dcecffd9; color:#0a1020; font:700 .48rem system-ui,sans-serif; letter-spacing:.04em; transform:translate(-50%,2px); }
 .clash-stun-marker { position:absolute; z-index:24; bottom:calc(100% + 4px); left:50%; width:clamp(10px,1.4vw,18px); aspect-ratio:1; border:3px solid #ffd93c; border-top-color:#fff7a5; border-radius:50%; box-shadow:0 0 8px #ffe255cc; transform:translateX(-50%); pointer-events:none; animation:clash-stun-spin .55s linear infinite; }
@@ -571,14 +577,13 @@ input[type=range] { height:30px; }
   100% { opacity:0; transform:translateY(-50%) rotate(var(--trace-angle,0deg)) scaleX(1); }
 }
 @keyframes clash-thrown-item {
-  from { left:var(--throw-start-left); top:var(--throw-start-top); transform:translate(-50%,-50%) scale(.45) rotate(0deg); }
-  60% { transform:translate(-50%,-50%) scale(.62) rotate(520deg); }
-  to { left:var(--throw-end-left); top:var(--throw-end-top); transform:translate(-50%,-50%) scale(.55) rotate(720deg); }
+  from { left:var(--throw-start-left); top:var(--throw-start-top); transform:translate(-50%,-50%) rotate(0deg); }
+  to { left:var(--throw-end-left); top:var(--throw-end-top); transform:translate(-50%,-50%) rotate(360deg); }
 }
 @keyframes clash-item-effect {
-  0% { opacity:0; transform:translate(-50%,-50%) scale(.6); }
-  8%,88% { opacity:1; transform:translate(-50%,-50%) scale(1); }
-  100% { opacity:0; transform:translate(-50%,-50%) scale(1.08); }
+  0% { opacity:0; }
+  8%,88% { opacity:1; }
+  100% { opacity:0; }
 }
 @keyframes clash-token-hit {
   from { filter:drop-shadow(0 0 4px #ff1f1f); box-shadow:0 0 0 2px #ff1f1f; background:#9e1515; }
@@ -591,6 +596,10 @@ input[type=range] { height:30px; }
 @keyframes clash-stun-hit {
   from { filter:drop-shadow(0 0 4px #ffffff); box-shadow:0 0 0 2px #ffffff; }
   to { filter:drop-shadow(0 0 18px #fff) brightness(1.7); box-shadow:0 0 0 4px #fff,0 0 18px #ffe45e; background:#fff7bd; }
+}
+@keyframes clash-rival-reveal {
+  from { opacity:.55; filter:drop-shadow(0 0 3px #ff3030) saturate(1.1); transform:translate(-50%,-50%) scale(.94); }
+  to { opacity:1; filter:drop-shadow(0 0 16px #ff3030) saturate(1.65); transform:translate(-50%,-50%) scale(1.08); }
 }
 @keyframes clash-stun-spin { to { transform:translateX(-50%) rotate(360deg); } }
 .destroyed-space { position:absolute; z-index:3; box-sizing:border-box; width:var(--destroyed-cell-width,calc(10% + 1px)); height:var(--destroyed-cell-height,calc(10% + 1px)); border:0; background:#0b0d10; box-shadow:inset 0 0 0 1px #d7b56f99; transform:translate(-50%,-50%); pointer-events:none; }
@@ -759,7 +768,7 @@ input[type=range] { height:30px; }
   .room-list-controls { gap:.55rem; }
   .room-list-grid { grid-template-columns:1fr; }
   .game-layout { grid-template-columns:1fr; }
-  .game-hud { grid-template-columns:90px 1fr 1fr 80px; padding-right:5.8rem; }
+  .game-hud { grid-template-columns:90px 1fr 1fr 80px; padding-right:8.6rem; }
   .game-hud.escape-hud { grid-template-columns:90px minmax(130px,1fr) minmax(145px,1fr) 105px 86px; grid-template-areas:"exit board turn keys timer" "roll roll roll roll roll"; }
   .escape-hud .hud-dice-panel { width:min(360px,100%); justify-self:end; }
   .hud-dice-panel { grid-column:1 / -1; width:min(430px,100%); justify-self:center; }
@@ -815,8 +824,8 @@ input[type=range] { height:30px; }
   .player-slots { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; }
   .lobby-player { min-height:200px; }
   .lobby-pawn { transform:scale(.8); transform-origin:top center; }
-  .lobby-message-toggle { width:31px; height:28px; border-width:2px; }
-  .lobby-message-toggle::before { bottom:-7px; width:11px; height:11px; border-width:2px; }
+  .lobby-message-toggle { width:34px; height:27px; border-width:2px; }
+  .lobby-message-toggle::before { content:none; }
   .lobby-message-box { top:42px; right:5px; width:calc(100% - 10px); padding:.42rem; }
   .lobby-message-box textarea { min-height:62px; font-size:.82rem; }
   .lobby-message-bubble { top:12px; max-width:calc(100% - 60px); padding:.32rem .45rem; border-width:2px; font-size:.68rem; }
@@ -839,7 +848,7 @@ input[type=range] { height:30px; }
   .board-copy small { font-size:.9rem; }
   .board-radio { position:absolute; right:7px; bottom:28px; width:30px; height:30px; border-width:2px; font-size:1.25rem; }
   .game-screen { padding:.5rem; }
-  .game-hud { grid-template-columns:75px 1fr 70px; gap:.5rem; padding:.3rem 3.35rem .3rem .5rem; }
+  .game-hud { grid-template-columns:75px 1fr 70px; gap:.5rem; padding:.3rem 3.8rem .3rem .5rem; }
   .game-hud.escape-hud { grid-template-columns:70px minmax(95px,1fr) 88px 68px; grid-template-areas:"exit turn keys timer" "roll roll roll roll"; }
   .escape-hud .board-status { display:none; }
   .escape-hud .escape-key-status { min-width:0; padding:.2rem; }
@@ -863,6 +872,11 @@ input[type=range] { height:30px; }
   .clash-inventory-entry { min-height:34px; padding:.35rem .45rem; font-size:.86rem; }
   .dice-panel { grid-template-columns:65px 1fr; }
   .dice { width:62px; height:62px; font-size:2rem; }
+}
+
+@media (min-width: 1051px) {
+  .game-console.clash-console { max-height:none; overflow:visible; }
+  .game-console.clash-console .clash-inventory-panel { min-height:0; max-height:none; overflow:visible; }
 }
 
 @media (max-width: 380px) {

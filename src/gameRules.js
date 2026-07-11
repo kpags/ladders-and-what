@@ -221,6 +221,12 @@ function chooseWeightedByChance(definitions, rng = Math.random) {
   return structuredClone(source[Math.floor(rng() * source.length)])
 }
 
+function clashSupplyDropCounts(state) {
+  const playerCount = Math.max(0, state.players?.length || 0)
+  const count = 4 + Math.max(0, playerCount - 3)
+  return { weapons: count, items: count }
+}
+
 function spawnClashDrops(state, { pistols = 0, weapons = 0, items = 0 } = {}, rng = Math.random) {
   const spaces = shuffled(clashAvailableDropSpaces(state), rng)
   const drops = []
@@ -281,7 +287,8 @@ export function initializeClashState(state, rng = Math.random) {
   state.clashEffects = []
   state.lastClashAction = null
   state.nextClashDropTurn = 5
-  spawnClashDrops(state, { pistols: 7, weapons: 3, items: 6 }, rng)
+  state.clashRivalRevealTurn = null
+  spawnClashDrops(state, { pistols: 7, ...clashSupplyDropCounts(state) }, rng)
   state.log = ['Clash begins. Loot fast, stay hidden, and be the last one standing.']
   state.lastEvent = state.log[0]
 }
@@ -1356,18 +1363,18 @@ function advanceTurn(state, now = Date.now()) {
     }
     spawnEscapePickups(state)
   }
-  if (state.mode === 'clash_with' && state.turn !== previousTurn && state.turn >= state.nextClashDropTurn) {
+  if (state.mode === 'clash_with' && state.turn !== previousTurn) {
     resolveClashGlobalStatuses(state)
     if (state.gameOver) return
     normalizeClashCurrentPlayer(state)
-    state.clashDrops = []
-    for (const player of state.players) player.clashPendingPickup = null
-    spawnClashDrops(state, { weapons: 3, items: 6 })
-    state.nextClashDropTurn = state.turn + 4
-  } else if (state.mode === 'clash_with' && state.turn !== previousTurn) {
-    resolveClashGlobalStatuses(state)
-    if (state.gameOver) return
-    normalizeClashCurrentPlayer(state)
+    if (state.turn >= state.nextClashDropTurn) {
+      state.clashDrops = []
+      for (const player of state.players) player.clashPendingPickup = null
+      spawnClashDrops(state, clashSupplyDropCounts(state))
+      state.nextClashDropTurn = state.turn + 4
+    }
+    const livingClashPlayers = activePlayers(state)
+    state.clashRivalRevealTurn = livingClashPlayers.length === 2 && state.turn % 2 === 0 ? state.turn : null
   }
   if (state.turn !== previousTurn) {
     for (const player of state.players) {

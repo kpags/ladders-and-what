@@ -124,6 +124,7 @@ const roomList = ref([])
 const roomListLoading = ref(false)
 const isSpectating = ref(false)
 const settingsReturnPage = ref('home')
+const settingsModalOpen = ref(false)
 let lobbySocket
 let reconnectTimer
 let reconnectAttempts = 0
@@ -302,6 +303,13 @@ const visibleClashTargets = computed(() => {
     && !other.finished
     && clashVisibleSpaces.value.has(other.space))
 })
+const clashRivalRevealActive = computed(() => {
+  if (game.value?.mode !== 'clash_with') return false
+  const player = controlledGamePlayer.value
+  if (!player || player.eliminated) return false
+  const living = game.value.players.filter(other => !other.eliminated && !other.finished)
+  return living.length === 2 && game.value.clashRivalRevealTurn === game.value.turn
+})
 const selectedClashWeapon = computed(() => controlledGamePlayer.value?.clashInventory?.weapons.find(weapon => weapon.name === clashSelectedWeapon.value) || controlledGamePlayer.value?.clashInventory?.weapons[0])
 const selectedClashItemEntry = computed(() => controlledGamePlayer.value?.clashInventory?.items.find(item => item.id === clashSelectedItem.value))
 const controlledClashWeapons = computed(() => controlledGamePlayer.value?.clashInventory?.weapons || [])
@@ -467,6 +475,7 @@ function clearGamePresentation() {
   clashStunBlinkIds.value = {}
   clashStunSkipOverlay.value = null
   clashShotOverlay.value = null
+  settingsModalOpen.value = false
   healthBlinkPlayerId.value = null
   healthHealPlayerId.value = null
   escapeEncounterSpace.value = null
@@ -1274,6 +1283,10 @@ function leaveSettings() {
   page.value = settingsReturnPage.value === 'lobby' && onlineRoom.value?.phase === 'lobby' ? 'lobby' : 'home'
 }
 
+function openGameSettings() {
+  settingsModalOpen.value = true
+}
+
 function boardSpacePosition(space) {
   return getBoardSpacePosition(game.value?.board, space)
 }
@@ -1696,6 +1709,7 @@ function showClashShotOverlay(eventData) {
 
 function showClashItemThrow(eventData) {
   if (!eventData?.sourceSpace || !eventData?.targetSpace) return
+  const projectileDuration = 430
   const item = clashItemDefinition(eventData.itemName)
   const from = positionPercent(eventData.sourceSpace)
   const to = positionPercent(eventData.targetSpace)
@@ -1712,7 +1726,7 @@ function showClashItemThrow(eventData) {
         '--throw-end-left': `${to.left}%`,
         '--throw-end-top': `${to.top}%`,
       },
-    }, 720)
+    }, projectileDuration + 40)
   }
   const effect = clashItemEffectMedia(item)
   if (effect) {
@@ -1723,7 +1737,7 @@ function showClashItemThrow(eventData) {
         alt: '',
         style: boardSpacePosition(eventData.targetSpace),
       }, clashItemEffectDuration(eventData.itemName))
-    }, image ? 680 : 0)
+    }, image ? projectileDuration : 0)
   }
 }
 
@@ -1734,7 +1748,16 @@ function clashDropVisible(drop) {
 function clashPlayerVisible(player) {
   if (game.value?.mode !== 'clash_with') return true
   if (player.eliminated) return player.id === clientId
-  return player.id === clientId || clashVisibleSpaces.value.has(player.space)
+  return player.id === clientId || clashVisibleSpaces.value.has(player.space) || clashRivalRevealActive.value
+}
+
+function clashRivalRevealed(player) {
+  return game.value?.mode === 'clash_with'
+    && clashRivalRevealActive.value
+    && player.id !== clientId
+    && !player.eliminated
+    && !player.finished
+    && !clashVisibleSpaces.value.has(player.space)
 }
 
 function selectClashAction(mode) {
@@ -2527,7 +2550,7 @@ onUnmounted(() => {
         </div>
         <header class="game-hud" :class="{ 'escape-hud': game.mode === 'escape_from' }">
           <button class="game-exit" @click="leaveOnlineRoom()">← {{ isSpectating ? 'Stop watching' : 'Exit' }}</button>
-          <button class="game-settings-button" type="button" @click="goSettings('game')" aria-label="Open settings">⚙ Settings</button>
+          <button class="game-settings-button" type="button" @click="openGameSettings" aria-label="Open settings">⚙ Settings</button>
           <div class="board-status">
             <small>Board</small>
             <strong>{{ game.board.name }}</strong>
@@ -2572,6 +2595,32 @@ onUnmounted(() => {
         <div v-if="clashKillFeed" class="clash-kill-feed" role="status">{{ clashKillFeed.text }}</div>
         <div v-if="clashShotOverlay" class="clash-shot-overlay" role="presentation" aria-hidden="true">
           <img :src="clashShotOverlay.src" alt="">
+        </div>
+        <div v-if="settingsModalOpen" class="game-settings-modal" role="dialog" aria-modal="true" aria-labelledby="game-settings-title" @click.self="settingsModalOpen = false">
+          <div class="game-settings-card">
+            <button class="game-settings-close" type="button" aria-label="Close settings" @click="settingsModalOpen = false">×</button>
+            <div class="ribbon" id="game-settings-title">Settings</div>
+            <div class="setting-row">
+              <div class="round-icon">🔊</div>
+              <div class="setting-control">
+                <label for="game-sfx">SFX volume <output>{{ muted ? 0 : sfx }}</output></label>
+                <input id="game-sfx" v-model="sfx" type="range" min="0" max="100" :disabled="muted">
+                <p>Adjust the <b>sound effects</b> volume.</p>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div class="round-icon">♫</div>
+              <div class="setting-control">
+                <label for="game-music">Music volume <output>{{ muted ? 0 : music }}</output></label>
+                <input id="game-music" v-model="music" type="range" min="0" max="100" :disabled="muted">
+                <p>Adjust the <b>background music</b> volume.</p>
+              </div>
+            </div>
+            <label class="mute-row">
+              <span class="mute-icon">🔇</span><span><b>Mute all</b><small>Silence everything. Finally.</small></span>
+              <input v-model="muted" type="checkbox"><i></i>
+            </label>
+          </div>
         </div>
 
         <div class="game-layout">
@@ -2815,6 +2864,7 @@ onUnmounted(() => {
                   'clash-damage-hit': clashDamageBlinkIds[player.id],
                   'clash-stun-hit': clashStunBlinkIds[player.id],
                   'clash-stunned': game.mode === 'clash_with' && player.clashStunnedThroughTurn != null && game.turn <= player.clashStunnedThroughTurn,
+                  'clash-rival-revealed': clashRivalRevealed(player),
                   'clash-targetable': game.mode === 'clash_with' && clashActionMode === 'attack' && visibleClashTargets.some(target => target.id === player.id),
                   'sound-picker-open': emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board',
                   'social-active': game.mode === 'escape_from' && Boolean(activeReactions[player.id])
@@ -2836,7 +2886,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <aside class="game-console">
+          <aside class="game-console" :class="{ 'clash-console': game.mode === 'clash_with' }">
             <div class="player-order">
               <article
                 v-for="(player, index) in game.players"
