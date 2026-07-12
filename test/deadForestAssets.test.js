@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { CLASH_MOVE_EVENT_MS, CLASH_MOVE_PUFF_MS } from '../src/gameRules.js'
 
 const root = resolve(import.meta.dirname, '..')
 const assets = [
@@ -21,6 +22,50 @@ function graphicControlExtensions(buffer) {
     }
   }
   return extensions
+}
+
+function pngHasAlpha(buffer) {
+  assert.equal(buffer.toString('ascii', 1, 4), 'PNG')
+  const colorType = buffer[25]
+  return colorType === 4 || colorType === 6
+}
+
+function graphicSize(buffer, path) {
+  if (buffer.toString('ascii', 1, 4) === 'PNG') {
+    return [buffer.readUInt32BE(16), buffer.readUInt32BE(20)]
+  }
+  if (buffer.toString('ascii', 0, 3) === 'GIF') {
+    return [buffer.readUInt16LE(6), buffer.readUInt16LE(8)]
+  }
+  throw new Error(`Unsupported graphic: ${path}`)
+}
+
+function clashModelAssetPaths() {
+  const characterRoot = resolve(root, 'assets/gifs/clash_with/characters')
+  const pathsByCharacter = new Map()
+  for (const character of readdirSync(characterRoot, { withFileTypes: true })) {
+    if (!character.isDirectory()) continue
+    const characterPath = resolve(characterRoot, character.name)
+    const pending = [characterPath]
+    const assets = []
+    while (pending.length) {
+      const current = pending.pop()
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        const path = resolve(current, entry.name)
+        if (entry.isDirectory()) pending.push(path)
+        else if (
+          entry.isFile()
+          && /\.(gif|png)$/i.test(entry.name)
+          && !entry.name.includes('.bak')
+          && entry.name !== 'image.png'
+        ) {
+          assets.push(path)
+        }
+      }
+    }
+    if (assets.length) pathsByCharacter.set(character.name, assets)
+  }
+  return pathsByCharacter
 }
 
 test('Dead Forest board objects preserve animation with transparent frames', () => {
@@ -63,5 +108,70 @@ test('Clash melee effect animations use transparent GIF frames', () => {
     assert.equal(frames.length, expectedFrames, path)
     assert.equal(frames.reduce((sum, frame) => sum + frame.durationMs, 0), expectedDurationMs, path)
     assert.ok(frames.some(frame => frame.transparent), path)
+  }
+})
+
+test('Angel Clash character assets use the canonical directional folder structure', () => {
+  const directions = [
+    'north',
+    'south',
+    'east',
+    'west',
+    'north_east',
+    'north_west',
+    'south_east',
+    'south_west',
+  ]
+  const pngActions = ['idle', 'primary_fire', 'secondary_fire', 'throw']
+  for (const action of pngActions) {
+    for (const direction of directions) {
+      const path = resolve(root, 'assets/gifs/clash_with/characters/angel', action, `${direction}.png`)
+      assert.equal(existsSync(path), true, path)
+      assert.equal(pngHasAlpha(readFileSync(path)), true, path)
+    }
+  }
+})
+
+test('Clash movement puff has transparent frames after background cleanup', () => {
+  const puffGif = resolve(root, 'assets/gifs/clash_with/characters/move_puff.gif')
+  const frames = graphicControlExtensions(readFileSync(puffGif))
+  assert.ok(frames.length > 0, puffGif)
+  assert.equal(frames.reduce((sum, frame) => sum + frame.durationMs, 0), CLASH_MOVE_PUFF_MS)
+  assert.ok(frames.every(frame => frame.transparent), puffGif)
+})
+
+test('legacy Clash sprint GIFs have transparent frames after background cleanup', () => {
+  const sprintGifs = []
+  for (const assets of clashModelAssetPaths().values()) {
+    for (const path of assets) {
+      const parts = path.split(/[\\/]/)
+      if (path.endsWith('.gif') && (parts.includes('sprint') || parts.at(-1).startsWith('sprint'))) {
+        sprintGifs.push(path)
+      }
+    }
+  }
+  assert.ok(sprintGifs.length > 0)
+  for (const path of sprintGifs) {
+    const frames = graphicControlExtensions(readFileSync(path))
+    assert.ok(frames.length > 0, path)
+    assert.ok(frames.every(frame => frame.transparent), path)
+  }
+})
+
+test('Clash puff movement leaves time for vanish and reappear puffs', () => {
+  assert.equal(CLASH_MOVE_EVENT_MS, 1100)
+  assert.equal(CLASH_MOVE_EVENT_MS - CLASH_MOVE_PUFF_MS, 500)
+})
+
+test('Clash in-game character models share one canvas size per character', () => {
+  for (const [character, assets] of clashModelAssetPaths()) {
+    const sizes = assets.map(path => [path, graphicSize(readFileSync(path), path)])
+    const expected = sizes.reduce((largest, [, size]) => [
+      Math.max(largest[0], size[0]),
+      Math.max(largest[1], size[1]),
+    ], [0, 0])
+    for (const [path, size] of sizes) {
+      assert.deepEqual(size, expected, `${character}: ${path}`)
+    }
   }
 })

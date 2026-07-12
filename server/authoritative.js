@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateClashSkill, activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashMoveOptions, clashVisibleSpaces, CLASH_TURN_MS, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateClashSkill, activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashMoveOptions, clashVisibleSpaces, CLASH_MOVE_EVENT_MS, CLASH_TURN_MS, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 import { createDestructionSkipState, updateDestructionSkipVote } from './destructionSkip.js'
@@ -1432,7 +1432,7 @@ function finishClashAction(room, result, eventType, eventData = {}) {
   clearTimer(room.turnTimer)
   room.turnDeadline = null
   const duration = eventType === 'clash_move'
-    ? Math.max(350, Math.min(1100, Math.abs((result.to || 0) - (result.from || 0)) * 120))
+    ? CLASH_MOVE_EVENT_MS
     : eventType === 'clash_attack' && result.weapon?.class === 'melee'
       ? 4100
       : 1300

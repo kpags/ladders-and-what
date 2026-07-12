@@ -23,6 +23,19 @@ test('incompatible and invalid character indices normalize deterministically', (
   assert.equal(normalizeCharacterIndex(characters, 'guess_what', 0), 0)
 })
 
+test('only explicitly active characters are selectable', () => {
+  const roster = [
+    { name: 'Missing Active', modes: ['standard'] },
+    { name: 'Inactive', is_active: false, modes: ['standard'] },
+    { name: 'Truthish', is_active: 'true', modes: ['standard'] },
+    { name: 'Active', is_active: true, modes: ['standard'] },
+    { name: 'Other Mode', is_active: true, modes: ['escape_from'] },
+  ]
+  assert.deepEqual(characterIndicesForMode(roster, 'standard'), [3])
+  assert.equal(normalizeCharacterIndex(roster, 'standard', 0), 3)
+  assert.equal(normalizeCharacterIndex(roster, 'standard', 3), 3)
+})
+
 test('Quiet Mansion is available for Escape From', () => {
   const quietMansion = boards.find(board => board.name === 'Quiet Mansion')
   const deadForest = boards.find(board => board.name === 'Dead Forest')

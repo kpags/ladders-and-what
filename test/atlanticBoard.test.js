@@ -225,7 +225,7 @@ test('Clash damage items affect players within one guide space of the thrown squ
   assert.equal(state.players[2].health, 100)
 })
 
-test('Stun Grenade affects players within one guide space and blocks movement for one global turn', () => {
+test('Stun Grenade affects players within one guide space and blocks the target next turn', () => {
   const noMansLand = boards.find(board => board.name === "No Man's Land")
   const state = createGameState(noMansLand, [
     { id: 'player-1', name: 'Player 1' },
@@ -241,7 +241,7 @@ test('Stun Grenade affects players within one guide space and blocks movement fo
   const result = takeClashItem(state, 'player-1', 'stun_grenade', 112)
 
   assert.equal(result.ok, true)
-  assert.equal(state.players[1].clashStunnedThroughTurn, 2)
+  assert.equal(state.players[1].clashStunnedThroughTurn, 1)
   assert.equal(state.players[2].clashStunnedThroughTurn, null)
   const stunnedAttack = takeClashAttack(state, 'player-2', 'player-1', 'Combat Knife', 'Single Attack', () => 0, 1_000)
   assert.equal(stunnedAttack.ok, false)

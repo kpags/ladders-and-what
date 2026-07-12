@@ -5,3 +5,4 @@ dist/
 .edge-runaway-qa/
 runaway-smoke.cjs
 .tmp/
+positions.zip

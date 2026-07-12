@@ -3,6 +3,9 @@ export const WEAPON_COOLDOWN_MS = 60_000
 export const CLASH_SKILL_COOLDOWN_MS = 60_000
 export const CLASH_MAX_HEALTH = 100
 export const CLASH_TURN_MS = 20_000
+export const CLASH_MOVE_PUFF_MS = 600
+export const CLASH_MOVE_REAPPEAR_DELAY_MS = 500
+export const CLASH_MOVE_EVENT_MS = CLASH_MOVE_REAPPEAR_DELAY_MS + CLASH_MOVE_PUFF_MS
 export const CLASH_BOARD_COLUMNS = 15
 export const CLASH_BOARD_SPACES = CLASH_BOARD_COLUMNS * CLASH_BOARD_COLUMNS
 export const CLASH_PLAYER_SPAWN_SPACES = [1, 15, 106, 120, 211, 225]
@@ -562,7 +565,9 @@ export function takeClashItem(state, playerId, itemIdValue, targetSpace = null) 
     if (![player.space, ...clashSpacesWithinChebyshev(player.space, 5)].includes(space)) return { ok: false, message: 'Target square is outside item range.' }
     if (item.effect === 'stun') {
       for (const target of clashAffectedPlayers(state, space, 1, player.id)) {
-        target.clashStunnedThroughTurn = Math.max(target.clashStunnedThroughTurn || 0, state.turn + 1)
+        const targetIndex = state.players.findIndex(entry => entry.id === target.id)
+        const targetTurn = targetIndex > state.currentPlayerIndex ? state.turn : state.turn + 1
+        target.clashStunnedThroughTurn = Math.max(target.clashStunnedThroughTurn || 0, targetTurn)
         affected.push({ playerId: target.id, before: target.health, after: target.health, stunnedThroughTurn: target.clashStunnedThroughTurn })
       }
     } else if (item.effect === 'damage_over_time') {

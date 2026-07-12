@@ -38,7 +38,7 @@ import baldLastGif from '../assets/gifs/escape_from/dead_forest/entities/bald/la
 import uncleLastGif from '../assets/gifs/escape_from/dead_forest/entities/uncle/last_frame.png'
 import { audioManager } from './audioManager'
 import { getBoardSpaceBounds, getBoardSpacePosition, getVisualSurroundingSpaces } from './boardLayout'
-import { CLASH_BOARD_COLUMNS, CLASH_BOARD_SPACES } from './gameRules'
+import { CLASH_BOARD_COLUMNS, CLASH_BOARD_SPACES, CLASH_MOVE_REAPPEAR_DELAY_MS } from './gameRules'
 import { boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
 
 const boardImages = import.meta.glob('../assets/boards/**/template.{png,jpg,jpeg,webp}', {
@@ -204,6 +204,7 @@ const clashHitPopups = ref([])
 const clashRivalRevealUntil = ref(0)
 const clashRivalRevealKey = ref('')
 const clashCharacterActions = ref({})
+const clashPuffMoves = ref({})
 const clashSkillNoticeLocal = ref(null)
 const clashSkillReveal = ref(null)
 const clashAttackPending = ref(false)
@@ -224,6 +225,16 @@ let operatorTimer
 const defaultModeKey = gameModes[0]?.key || 'standard'
 const CLASH_MELEE_SLASH_MS = 1640
 const CLASH_MELEE_ATTACKED_MS = 4100
+const CLASH_DIRECTION_KEYS = new Set([
+  'north',
+  'south',
+  'east',
+  'west',
+  'north_east',
+  'north_west',
+  'south_east',
+  'south_west',
+])
 const homeCharacterIndices = computed(() => characterIndicesForMode(characters, defaultModeKey))
 const lobbyCharacterIndices = computed(() => characterIndicesForMode(characters, selectedMode.value))
 const hero = computed(() => characters[selected.value] || characters[homeCharacterIndices.value[0]])
@@ -441,6 +452,14 @@ watch([sfx, music, muted], ([nextSfx, nextMusic, nextMuted]) => {
   audioManager.configure({ sfx: nextSfx, music: nextMusic, muted: nextMuted })
 }, { immediate: true })
 
+watch(homeCharacterIndices, (available) => {
+  if (available.length && !available.includes(selected.value)) selected.value = available[0]
+}, { immediate: true })
+
+watch(lobbyCharacterIndices, (available) => {
+  if (available.length && !available.includes(playerCharacter.value)) playerCharacter.value = available[0]
+}, { immediate: true })
+
 watch([page, () => game.value?.board?.music || game.value?.board?.name], ([nextPage, boardMusic]) => {
   audioManager.setScene(nextPage === 'game' ? 'game' : 'menu', boardMusic)
 }, { immediate: true })
@@ -557,6 +576,7 @@ function clearGamePresentation() {
   clashMeleeOverlay.value = null
   clashRivalRevealUntil.value = 0
   clashRivalRevealKey.value = ''
+  clashPuffMoves.value = {}
   settingsModalOpen.value = false
   healthBlinkPlayerId.value = null
   healthHealPlayerId.value = null
@@ -824,27 +844,31 @@ async function handleServerEvent(event) {
   } else if (event.type === 'clash_move') {
     audioManager.movement(remaining)
     setClashFacing(event.data.playerId, event.data.from, event.data.to)
-    visualSpaces.value[event.data.playerId] = event.data.to
-    setClashPlayerAction(event.data.playerId, 'sprint', remaining)
+    startClashPuffMove(event.data.playerId, event.data.from, event.data.to, remaining)
     if (event.data.pickup) {
-      audioManager.clashPickup(event.data.pickup.dropKind)
-      if (event.data.pickup.passiveTrigger?.playerId === clientId) {
-        clashSkillNoticeLocal.value = {
-          id: `passive-${event.data.pickup.passiveTrigger.name}-${Date.now()}`,
-          skillName: event.data.pickup.passiveTrigger.name,
-          message: `${event.data.pickup.passiveTrigger.name} activated.`,
+      window.setTimeout(() => {
+        audioManager.clashPickup(event.data.pickup.dropKind)
+        if (event.data.pickup.passiveTrigger?.playerId === clientId) {
+          clashSkillNoticeLocal.value = {
+            id: `passive-${event.data.pickup.passiveTrigger.name}-${Date.now()}`,
+            skillName: event.data.pickup.passiveTrigger.name,
+            message: `${event.data.pickup.passiveTrigger.name} activated.`,
+          }
+          window.setTimeout(() => {
+            if (clashSkillNoticeLocal.value?.skillName === event.data.pickup.passiveTrigger.name) clashSkillNoticeLocal.value = null
+          }, 1600)
         }
-        window.setTimeout(() => {
-          if (clashSkillNoticeLocal.value?.skillName === event.data.pickup.passiveTrigger.name) clashSkillNoticeLocal.value = null
-        }, 1600)
-      }
+      }, Math.min(CLASH_MOVE_REAPPEAR_DELAY_MS, remaining))
     }
   } else if (event.type === 'clash_attack') {
     clashAttackPending.value = false
     audioManager.clashWeapon(event.data.weaponName, event.data.modeName, clashListenerVolume(event.data.sourceSpace))
     setClashFacing(event.data.playerId, event.data.sourceSpace, event.data.targetSpace)
     if (event.data.weaponClass === 'melee') clearClashPlayerAction(event.data.playerId)
-    else setClashPlayerAction(event.data.playerId, event.data.weaponClass === 'pistol' ? 'secondary_fire' : 'primary_fire', Math.min(remaining, 1200))
+    else {
+      const actionDuration = audioManager.clashWeaponDuration(event.data.weaponName, event.data.modeName, Math.min(remaining, 1200))
+      setClashPlayerAction(event.data.playerId, event.data.weaponClass === 'pistol' ? 'secondary_fire' : 'primary_fire', Math.max(250, Math.min(remaining, actionDuration)))
+    }
     showClashBulletTraces(event.data)
     showClashShotOverlay(event.data)
     showClashMeleeOverlay(event.data)
@@ -1776,6 +1800,10 @@ function clashMedia(path, kind = 'gif') {
     || clashMediaFiles[`${normalized}.png`]
 }
 
+function clashMediaKindForAction(action) {
+  return action === 'sprint' ? 'gif' : 'image'
+}
+
 function characterSkillByType(character, type) {
   const skill = character?.skills?.find(item => item.type === type)
   if (!skill) return type === 'active'
@@ -1788,24 +1816,48 @@ function characterHasSkillInfo(character) {
   return Boolean(characterSkillByType(character, 'active') || characterSkillByType(character, 'passive'))
 }
 
-function clashCharacterAsset(characterOrPlayer, action = 'idle') {
+function clashCharacterAsset(characterOrPlayer, action = 'idle', direction = null) {
   const assetsDir = characterOrPlayer?.assets_dir || characterOrPlayer?.assetsDir
   if (!assetsDir) return null
-  const kind = ['idle', 'image'].includes(action) ? 'image' : 'gif'
-  return clashMedia(`${assetsDir}/${action}`, kind)
+  if (action === 'image') {
+    const image = clashMedia(`${assetsDir}/image`, 'image')
+    return image ? { src: image, directional: true } : null
+  }
+  const kind = clashMediaKindForAction(action)
+  const safeDirection = CLASH_DIRECTION_KEYS.has(direction) ? direction : null
+  if (safeDirection) {
+    const directional = clashMedia(`${assetsDir}/${action}/${safeDirection}`, kind)
+    if (directional) return { src: directional, directional: true }
+  }
+  const nestedLegacy = clashMedia(`${assetsDir}/${action}/${action}`, kind)
+  if (nestedLegacy) return { src: nestedLegacy, directional: false }
+  const legacy = clashMedia(`${assetsDir}/${action}`, kind)
+  if (legacy) return { src: legacy, directional: false }
+  return null
 }
 
 function lobbyCharacterImage(character) {
-  return clashCharacterAsset(character, 'image')
+  return clashCharacterAsset(character, 'image')?.src
 }
 
 function clashPlayerAction(player) {
   return clashCharacterActions.value[player.id] || 'idle'
 }
 
-function clashPlayerSprite(player) {
+function clashPlayerDirection(player) {
+  return clashFacing.value[player.id] || 'south'
+}
+
+function clashPlayerSpriteInfo(player) {
   if (game.value?.mode !== 'clash_with') return null
-  return clashCharacterAsset(player, clashPlayerAction(player)) || clashCharacterAsset(player, 'idle')
+  const direction = clashPlayerDirection(player)
+  return clashCharacterAsset(player, clashPlayerAction(player), direction)
+    || clashCharacterAsset(player, 'idle', direction)
+    || clashCharacterAsset(player, 'image')
+}
+
+function clashPlayerSprite(player) {
+  return clashPlayerSpriteInfo(player)?.src
 }
 
 function clashGridColumn(space) {
@@ -1814,18 +1866,37 @@ function clashGridColumn(space) {
   return row % 2 === 0 ? position : CLASH_BOARD_COLUMNS - 1 - position
 }
 
+function clashGridPoint(space) {
+  const numeric = Number(space)
+  if (!Number.isFinite(numeric) || numeric < 1) return null
+  return {
+    row: Math.floor((numeric - 1) / CLASH_BOARD_COLUMNS),
+    column: clashGridColumn(numeric),
+  }
+}
+
+function clashDirectionFromSpaces(from, to) {
+  const start = clashGridPoint(from)
+  const end = clashGridPoint(to)
+  if (!start || !end || (start.row === end.row && start.column === end.column)) return null
+  const vertical = end.row > start.row ? 'north' : end.row < start.row ? 'south' : ''
+  const horizontal = end.column > start.column ? 'east' : end.column < start.column ? 'west' : ''
+  return [vertical, horizontal].filter(Boolean).join('_')
+}
+
 function setClashFacing(playerId, from, to) {
   if (!playerId || !from || !to || from === to) return
-  const fromColumn = clashGridColumn(from)
-  const toColumn = clashGridColumn(to)
-  if (fromColumn === toColumn) return
-  clashFacing.value = { ...clashFacing.value, [playerId]: toColumn < fromColumn ? -1 : 1 }
+  const direction = clashDirectionFromSpaces(from, to)
+  if (!direction) return
+  clashFacing.value = { ...clashFacing.value, [playerId]: direction }
 }
 
 function clashFacingStyle(player) {
   if (game.value?.mode !== 'clash_with') return null
-  const facing = clashFacing.value[player.id] ?? 1
-  return facing !== 1 ? { transform: `scaleX(${facing})` } : null
+  const sprite = clashPlayerSpriteInfo(player)
+  if (!sprite || sprite.directional) return null
+  const direction = clashPlayerDirection(player)
+  return direction.includes('west') ? { transform: 'scaleX(-1)' } : null
 }
 
 function setClashPlayerAction(playerId, action, duration = 900) {
@@ -1903,6 +1974,10 @@ function clashMeleeEffectMedia(kind) {
   return clashMedia(`assets/gifs/clash_with/no_mans_land/weapons/${kind === 'attacked' ? 'melee_attacked_effect' : 'slash_attack_effect'}`, 'gif')
 }
 
+function clashMovePuffMedia() {
+  return clashMedia('assets/gifs/clash_with/characters/move_puff', 'gif')
+}
+
 function positionPercent(space) {
   const position = boardSpacePosition(space)
   return {
@@ -1928,6 +2003,41 @@ function flashClashMap(mapRef, playerIds, duration = 900) {
     for (const playerId of playerIds) delete current[playerId]
     mapRef.value = current
   }, duration)
+}
+
+function startClashPuffMove(playerId, from, to, duration = 1100) {
+  if (!playerId) return
+  const id = `${playerId}-${Date.now()}`
+  const totalDuration = Math.max(600, duration)
+  const reappearDelay = Math.min(CLASH_MOVE_REAPPEAR_DELAY_MS, Math.max(0, totalDuration - 600))
+  visualSpaces.value[playerId] = from
+  clashPuffMoves.value = {
+    ...clashPuffMoves.value,
+    [playerId]: { id, stage: 'vanish' },
+  }
+  window.setTimeout(() => {
+    if (clashPuffMoves.value[playerId]?.id !== id) return
+    visualSpaces.value[playerId] = to
+    clashPuffMoves.value = {
+      ...clashPuffMoves.value,
+      [playerId]: { id, stage: 'appear' },
+    }
+  }, reappearDelay)
+  window.setTimeout(() => {
+    const current = { ...clashPuffMoves.value }
+    if (current[playerId]?.id === id) {
+      delete current[playerId]
+      clashPuffMoves.value = current
+    }
+  }, totalDuration)
+}
+
+function clashPuffMove(player) {
+  return game.value?.mode === 'clash_with' ? clashPuffMoves.value[player.id] : null
+}
+
+function clashTokenMotionStyle(player) {
+  return clashPuffMove(player) ? { '--token-move-ms': '0ms' } : null
 }
 
 function weaponTraceCount(modeName, attempts = 1) {
@@ -3237,11 +3347,13 @@ onUnmounted(() => {
                   'clash-stunned': game.mode === 'clash_with' && player.clashStunnedThroughTurn != null && game.turn <= player.clashStunnedThroughTurn,
                   'clash-rival-revealed': clashRivalRevealed(player),
                   'clash-character-token': Boolean(clashPlayerSprite(player)),
+                  'clash-puffing': Boolean(clashPuffMove(player)),
+                  'clash-puff-vanish': clashPuffMove(player)?.stage === 'vanish',
                   'clash-targetable': game.mode === 'clash_with' && !clashAttackPending && clashActionMode === 'attack' && visibleClashTargets.some(target => target.id === player.id),
                   'sound-picker-open': emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board',
                   'social-active': game.mode === 'escape_from' && Boolean(activeReactions[player.id])
                 }"
-                :style="tokenPosition(visualSpace(player), game.players.findIndex(item => item.id === player.id))"
+                :style="[tokenPosition(visualSpace(player), game.players.findIndex(item => item.id === player.id)), clashTokenMotionStyle(player)]"
                 :title="`${player.name}: space ${player.space}`"
                 @click.stop="handleBoardTokenClick(player)"
               >
@@ -3252,6 +3364,7 @@ onUnmounted(() => {
                 <span v-if="activeEmojis[player.id]" class="player-emote">{{ activeEmojis[player.id].emoji }}</span>
                 <span v-if="activeReactions[player.id]" class="player-reaction">{{ activeReactions[player.id].text }}</span>
                 <span v-if="game.mode === 'clash_with' && player.clashStunnedThroughTurn != null && game.turn <= player.clashStunnedThroughTurn" class="clash-stun-marker" aria-hidden="true"></span>
+                <img v-if="game.mode === 'clash_with' && clashPuffMove(player)" class="clash-move-puff-effect" :src="clashMovePuffMedia()" alt="">
                 <img v-if="clashPlayerSprite(player)" class="clash-character-sprite" :src="clashPlayerSprite(player)" :alt="player.name" :style="clashFacingStyle(player)">
                 <span v-else>{{ player.face }}</span>
                 <small v-if="game.mode !== 'clash_with'">{{ game.players.findIndex(item => item.id === player.id) + 1 }}</small>

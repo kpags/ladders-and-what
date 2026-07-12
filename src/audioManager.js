@@ -27,6 +27,10 @@ function fileFrom(files, ending) {
   return Object.entries(files).find(([path]) => path.endsWith(ending))?.[1]
 }
 
+function slug(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+}
+
 class AudioManager {
   constructor() {
     this.sfxVolume = 0.7
@@ -43,6 +47,7 @@ class AudioManager {
       menu: entriesFrom(musicFiles, 'menu'),
     }
     this.playlistIndex = { menu: 0 }
+    this.durationCache = new Map()
   }
 
   unlock() {
@@ -256,18 +261,48 @@ class AudioManager {
     this.random(`characters/${type}`)
   }
 
+  preloadDuration(url) {
+    if (!url || this.durationCache.has(url)) return
+    this.durationCache.set(url, null)
+    const audio = new Audio(url)
+    audio.preload = 'metadata'
+    audio.addEventListener('loadedmetadata', () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        this.durationCache.set(url, Math.round(audio.duration * 1000))
+      }
+    }, { once: true })
+    audio.addEventListener('error', () => {
+      this.durationCache.delete(url)
+    }, { once: true })
+  }
+
   clashPickup(kind) {
     this.play(fileFrom(soundFiles, `/clash_with/no_mans_land/${kind === 'item' ? 'items' : 'weapons'}/pick_up.mp3`), { volume: 0.85 })
   }
 
+  clashWeaponUrl(weaponName, modeName) {
+    const weapon = slug(weaponName)
+    const mode = slug(modeName)
+    return fileFrom(soundFiles, `/clash_with/no_mans_land/weapons/${weapon}/${mode}.mp3`)
+  }
+
+  clashWeaponDuration(weaponName, modeName, fallback = 1200) {
+    const url = this.clashWeaponUrl(weaponName, modeName)
+    if (!url) return fallback
+    const cached = this.durationCache.get(url)
+    if (cached) return cached
+    this.preloadDuration(url)
+    return fallback
+  }
+
   clashWeapon(weaponName, modeName, volume = 0.9) {
-    const weapon = String(weaponName || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-    const mode = String(modeName || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
-    this.play(fileFrom(soundFiles, `/clash_with/no_mans_land/weapons/${weapon}/${mode}.mp3`), { volume })
+    const url = this.clashWeaponUrl(weaponName, modeName)
+    this.preloadDuration(url)
+    this.play(url, { volume })
   }
 
   clashItem(itemName, volume = 0.85) {
-    const item = String(itemName || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    const item = slug(itemName)
     this.play(fileFrom(soundFiles, `/clash_with/no_mans_land/items/${item}/used.mp3`), { volume })
   }
 

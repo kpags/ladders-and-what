@@ -1,9 +1,13 @@
 export const UNAVAILABLE_BOARD_NAMES = new Set()
 
+export function characterIsActive(character) {
+  return character?.is_active === true
+}
+
 export function characterIndicesForMode(characters, modeKey) {
   return characters
     .map((character, index) => ({ character, index }))
-    .filter(({ character }) => Array.isArray(character.modes) && character.modes.includes(modeKey))
+    .filter(({ character }) => characterIsActive(character) && Array.isArray(character.modes) && character.modes.includes(modeKey))
     .map(({ index }) => index)
 }
 

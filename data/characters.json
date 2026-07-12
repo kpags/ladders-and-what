@@ -1,6 +1,7 @@
 [
   {
     "id": "blue-sass",
+    "is_active": true,
     "name": "Blue Sass",
     "color": "#0879e7",
     "modes": [
@@ -17,6 +18,7 @@
   },
   {
     "id": "red-rage",
+    "is_active": true,
     "name": "Red Rage",
     "color": "#e9342d",
     "modes": [
@@ -33,6 +35,7 @@
   },
   {
     "id": "yellow-sarcasm",
+    "is_active": true,
     "name": "Yellow Sarcasm",
     "color": "#f2ae13",
     "modes": [
@@ -49,6 +52,7 @@
   },
   {
     "id": "green-mayhem",
+    "is_active": true,
     "name": "Green Mayhem",
     "color": "#5da52b",
     "modes": [
@@ -65,6 +69,7 @@
   },
   {
     "id": "black-devil",
+    "is_active": true,
     "name": "Black Devil",
     "color": "#000000",
     "modes": [
@@ -81,6 +86,7 @@
   },
   {
     "id": "purple-tricker",
+    "is_active": true,
     "name": "Purple Tricker",
     "color": "#800080",
     "modes": [
@@ -97,6 +103,7 @@
   },
   {
     "id": "parkour-joe",
+    "is_active": true,
     "name": "Parkour Joe",
     "color": "#808080",
     "modes": [
@@ -113,6 +120,7 @@
   },
   {
     "id": "bomber-jack",
+    "is_active": true,
     "name": "Bomber Jack",
     "color": "#ff4500",
     "modes": [
@@ -129,6 +137,7 @@
   },
   {
     "id": "crab-karen",
+    "is_active": true,
     "name": "Crab Karen",
     "color": "#FFF7D6",
     "modes": [
@@ -145,6 +154,7 @@
   },
   {
     "id": "brave-bob",
+    "is_active": true,
     "name": "Brave Bob",
     "color": "#E8E8E8",
     "modes": [
@@ -159,6 +169,7 @@
   },
   {
     "id": "crybaby-curl",
+    "is_active": true,
     "name": "Crybaby Curl",
     "color": "#80AAFF",
     "modes": [
@@ -173,6 +184,7 @@
   },
   {
     "id": "calm-alice",
+    "is_active": true,
     "name": "Calm Alice",
     "color": "#FFF0AB",
     "modes": [
@@ -187,6 +199,7 @@
   },
   {
     "id": "energetic-sam",
+    "is_active": true,
     "name": "Energetic Sam",
     "color": "#FFC1AB",
     "modes": [
@@ -203,6 +216,7 @@
     "id": "big-daddy",
     "name": "Big Daddy",
     "assets_dir": "assets/gifs/clash_with/characters/big_daddy",
+    "is_active": true,
     "modes": [
       "clash_with"
     ],
@@ -224,6 +238,7 @@
       "id": "angel",
       "name": "Angel",
       "assets_dir": "assets/gifs/clash_with/characters/angel",
+      "is_active": true,
       "modes": [
         "clash_with"
       ],
@@ -245,6 +260,7 @@
       "id": "luisa",
       "name": "Luisa",
       "assets_dir": "assets/gifs/clash_with/characters/luisa",
+      "is_active": true,
       "modes": [
         "clash_with"
       ],
@@ -266,6 +282,7 @@
       "id": "ritcher",
       "name": "Ritcher",
       "assets_dir": "assets/gifs/clash_with/characters/ritcher",
+      "is_active": true,
       "modes": [
         "clash_with"
       ],
@@ -287,6 +304,7 @@
       "id": "speed",
       "name": "Speed",
       "assets_dir": "assets/gifs/clash_with/characters/speed",
+      "is_active": true,
       "modes": [
         "clash_with"
       ],
@@ -308,6 +326,7 @@
       "id": "young-jack",
       "name": "Young Jack",
       "assets_dir": "assets/gifs/clash_with/characters/young_jack",
+      "is_active": true,
       "modes": [
         "clash_with"
       ],
