@@ -1510,6 +1510,25 @@ function tokenPosition(space, playerIndex) {
   }
 }
 
+function clashSquareMarkerPosition(space) {
+  const bounds = boardSpaceBounds(space)
+  if (bounds) {
+    return {
+      left: bounds.x,
+      top: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      '--clash-square-transform': 'none',
+    }
+  }
+  const position = boardSpacePosition(space)
+  return {
+    left: position.left,
+    top: position.top,
+    '--clash-square-transform': 'translate(-50%, -50%)',
+  }
+}
+
 function boardPickerClasses(player) {
   const position = boardSpacePosition(visualSpace(player))
   const x = Number.parseFloat(position.left)
@@ -3331,6 +3350,13 @@ onUnmounted(() => {
                 alt=""
                 :style="boardSpacePosition(destructionSpace)"
               >
+              <span
+                v-for="player in game.mode === 'clash_with' ? game.players.filter(player => clashPlayerVisible(player) && !player.eliminated) : []"
+                :key="`clash-square-${player.id}`"
+                class="clash-current-square"
+                :style="clashSquareMarkerPosition(visualSpace(player))"
+                aria-hidden="true"
+              ></span>
               <div
                 v-for="player in game.players.filter(player => game.mode !== 'clash_with' || clashPlayerVisible(player))"
                 :key="player.id"

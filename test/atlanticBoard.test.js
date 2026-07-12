@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getBoardSpaceBounds, getBoardSpacePosition } from '../src/boardLayout.js'
-import { applyWhatEffects, clashMoveOptions, CLASH_BOARD_SPACES, CLASH_PLAYER_SPAWN_SPACES, createGameState, skipClashStunnedTurn, takeClashAttack, takeClashItem, takeClashMove } from '../src/gameRules.js'
+import { activateClashSkill, applyWhatEffects, clashMoveOptions, CLASH_BOARD_SPACES, CLASH_PLAYER_SPAWN_SPACES, CLASH_SKILL_COOLDOWN_MS, createGameState, skipClashStunnedTurn, takeClashAttack, takeClashItem, takeClashMove } from '../src/gameRules.js'
 
 const root = resolve(import.meta.dirname, '..')
 const boards = JSON.parse(readFileSync(resolve(root, 'data/boards.json'), 'utf8'))
@@ -203,6 +203,83 @@ test('Clash melee attacks move the attacker in front of the target', () => {
   const blocked = takeClashAttack(state, 'player-1', 'player-2', 'Combat Knife', 'Single Attack', () => 0, 2_000)
   assert.equal(blocked.ok, false)
   assert.equal(blocked.message, 'Melee weapon is cooling down.')
+})
+
+test('Clash armed melee skills start cooldown only when consumed', () => {
+  const noMansLand = boards.find(board => board.name === "No Man's Land")
+  const state = createGameState(noMansLand, [
+    { id: 'player-1', name: 'Big Daddy', specialSkill: { name: 'Dad Strength' } },
+    { id: 'player-2', name: 'Target' },
+  ], 0)
+  state.players[0].space = 111
+  state.players[1].space = 113
+
+  const activation = activateClashSkill(state, 'player-1', 1_000)
+  assert.equal(activation.ok, true)
+  assert.equal(state.players[0].clashSkillArmed, 'double-melee')
+  assert.equal(state.players[0].skillCooldownUntil, 0)
+
+  const attack = takeClashAttack(state, 'player-1', 'player-2', 'Combat Knife', 'Single Attack', () => 0, 2_000)
+  assert.equal(attack.ok, true)
+  assert.equal(state.players[0].clashSkillArmed, null)
+  assert.equal(state.players[0].skillCooldownUntil, 2_000 + CLASH_SKILL_COOLDOWN_MS)
+})
+
+test('Clash Power Strike starts cooldown when the melee attack is made', () => {
+  const noMansLand = boards.find(board => board.name === "No Man's Land")
+  const state = createGameState(noMansLand, [
+    { id: 'player-1', name: 'Ritcher', specialSkill: { name: 'Power Strike' } },
+    { id: 'player-2', name: 'Target' },
+  ], 0)
+  state.players[0].space = 111
+  state.players[1].space = 113
+
+  const activation = activateClashSkill(state, 'player-1', 1_000)
+  assert.equal(activation.ok, true)
+  assert.equal(state.players[0].clashSkillArmed, 'melee-stun')
+  assert.equal(state.players[0].skillCooldownUntil, 0)
+
+  const attack = takeClashAttack(state, 'player-1', 'player-2', 'Combat Knife', 'Single Attack', () => 0, 2_000)
+  assert.equal(attack.ok, true)
+  assert.equal(state.players[0].clashSkillArmed, null)
+  assert.equal(state.players[0].skillCooldownUntil, 2_000 + CLASH_SKILL_COOLDOWN_MS)
+})
+
+test('Clash Adventurer skill starts cooldown after boosted movement is used', () => {
+  const noMansLand = boards.find(board => board.name === "No Man's Land")
+  const state = createGameState(noMansLand, [
+    { id: 'player-1', name: 'Young Jack', specialSkill: { name: "Adventurer's Spirit" } },
+    { id: 'player-2', name: 'Target' },
+  ], 0)
+  const player = state.players[0]
+  player.space = 113
+  const normalMoves = new Set(clashMoveOptions(state, player))
+
+  const activation = activateClashSkill(state, 'player-1', 1_000)
+  assert.equal(activation.ok, true)
+  assert.equal(player.clashSkillArmed, 'adventurer-steps')
+  assert.equal(player.skillCooldownUntil, 0)
+
+  const boostedDestination = clashMoveOptions(state, player).find(space => !normalMoves.has(space))
+  assert.ok(boostedDestination)
+  const move = takeClashMove(state, 'player-1', boostedDestination, 2_000)
+  assert.equal(move.ok, true)
+  assert.equal(player.clashSkillArmed, null)
+  assert.equal(player.skillCooldownUntil, 2_000 + CLASH_SKILL_COOLDOWN_MS)
+})
+
+test('Clash immediate active skills start cooldown on activation', () => {
+  const noMansLand = boards.find(board => board.name === "No Man's Land")
+  for (const skillName of ['Girl Scout', 'Survival Instinct', 'Extra Steps']) {
+    const state = createGameState(noMansLand, [
+      { id: 'player-1', name: 'Skill User', specialSkill: { name: skillName } },
+      { id: 'player-2', name: 'Target' },
+    ], 0)
+    state.players[0].health = 50
+    const result = activateClashSkill(state, 'player-1', 1_000)
+    assert.equal(result.ok, true, skillName)
+    assert.equal(state.players[0].skillCooldownUntil, 1_000 + CLASH_SKILL_COOLDOWN_MS, skillName)
+  }
 })
 
 test('Clash damage items affect players within one guide space of the thrown square', () => {

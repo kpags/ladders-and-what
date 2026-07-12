@@ -453,6 +453,10 @@ function concludeClashIfOneRemains(state) {
   }
 }
 
+function startClashSkillCooldown(player, now = Date.now()) {
+  player.skillCooldownUntil = now + CLASH_SKILL_COOLDOWN_MS
+}
+
 function applyClashDamage(state, target, amount, sourceText, rng = Math.random) {
   if (target.passiveSkill?.name === 'Braveheart' && target.health < 30) {
     amount = Math.max(0, Math.ceil(amount * 0.85))
@@ -469,7 +473,7 @@ function applyClashDamage(state, target, amount, sourceText, rng = Math.random) 
   return { before, after: target.health, eliminated: target.eliminated }
 }
 
-export function takeClashMove(state, playerId, destination) {
+export function takeClashMove(state, playerId, destination, now = Date.now()) {
   if (state.gameOver || state.mode !== 'clash_with') return { ok: false, message: 'Clash is unavailable.' }
   const player = state.players[state.currentPlayerIndex]
   if (!player || player.id !== playerId) return { ok: false, message: 'It is not your turn.' }
@@ -481,7 +485,10 @@ export function takeClashMove(state, playerId, destination) {
   const pickup = pickupClashDrop(state, player)
   state.lastClashAction = { type: 'move', playerId, from, to: targetSpace, pickup }
   addLog(state, `${player.name} moved from ${from} to ${targetSpace}.`)
-  if (player.clashSkillArmed === 'adventurer-steps') player.clashSkillArmed = null
+  if (player.clashSkillArmed === 'adventurer-steps') {
+    player.clashSkillArmed = null
+    startClashSkillCooldown(player, now)
+  }
   advanceTurn(state)
   return { ok: true, player, from, to: targetSpace, pickup }
 }
@@ -519,9 +526,13 @@ export function takeClashAttack(state, playerId, targetId, weaponName, modeName,
   if (weapon.class === 'melee' && player.clashSkillArmed === 'double-melee' && result.damage > 0) {
     result = { ...result, damage: result.damage * 2 }
     player.clashSkillArmed = null
+    startClashSkillCooldown(player, now)
   }
   const powerStrike = weapon.class === 'melee' && player.clashSkillArmed === 'melee-stun'
-  if (powerStrike) player.clashSkillArmed = null
+  if (powerStrike) {
+    player.clashSkillArmed = null
+    startClashSkillCooldown(player, now)
+  }
   const damage = applyClashDamage(state, target, result.damage, weapon.name, rng)
   if (target.passiveSkill?.name === 'Braveheart' && target.health < 30 && damage.before > damage.after) {
     passiveTriggers.push({ name: target.passiveSkill.name, playerId: target.id, playerName: target.name })
@@ -650,7 +661,7 @@ export function activateClashSkill(state, playerId, now = Date.now()) {
   } else {
     return { ok: false, message: 'This active skill is not available yet.' }
   }
-  player.skillCooldownUntil = now + CLASH_SKILL_COOLDOWN_MS
+  if (!player.clashSkillArmed) startClashSkillCooldown(player, now)
   player.clashSkillNotice = { message, turn: state.turn, at: now }
   addLog(state, `${player.name} activated ${skill}.`)
   return { ok: true, player, skill: player.specialSkill, message, reveal }

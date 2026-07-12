@@ -537,10 +537,12 @@ input[type=range] { height:30px; }
 .clash-item-effect img { width:100%; height:100%; object-fit:contain; object-position:center; filter:drop-shadow(0 0 6px #000b); }
 .clash-space-option { position:absolute; z-index:30; width:6.35%; aspect-ratio:1; border:1.5px solid #fff35a; border-radius:8px; background:#ffde591f; box-shadow:0 0 9px #ffef5e88,inset 0 0 4px #fff5; transform:translate(-50%,-50%); animation:clash-target-pulse .55s ease-in-out infinite alternate; }
 .clash-space-option.item { border-color:#ffd13f; background:#ffde5918; box-shadow:0 0 8px #ffcf33aa,inset 0 0 3px #fff5; }
+.clash-current-square { position:absolute; z-index:20; width:6.35%; aspect-ratio:1; border:2px solid #ff9f1c; border-radius:7px; background:#ff9f1c10; box-shadow:0 0 8px #ff9f1caa,inset 0 0 8px #ffcb5d44; transform:var(--clash-square-transform,translate(-50%,-50%)); pointer-events:none; }
 .clash-board .board-token { z-index:22; }
-.clash-board .board-token.clash-character-token { width:6.05%; border-radius:0; overflow:visible; background:transparent; border-color:transparent; box-shadow:none; display:grid; place-items:center; }
+.clash-board .board-token.clash-character-token { width:6.05%; height:6.05%; aspect-ratio:1; border-radius:0; overflow:visible; background:transparent; border-color:transparent; box-shadow:none; display:flex; align-items:flex-end; justify-content:center; padding-bottom:.12%; }
+.clash-board .board-token.clash-character-token::after { content:""; position:absolute; z-index:0; left:50%; bottom:8%; width:52%; height:13%; border-radius:50%; background:#0009; filter:blur(2px); transform:translateX(-50%); pointer-events:none; }
 .clash-board .board-token.clash-puffing { transition:left 0ms linear,top 0ms linear; }
-.clash-character-sprite { width:auto; height:auto; max-width:100%; max-height:100%; object-fit:contain; object-position:center center; pointer-events:none; filter:drop-shadow(0 4px 5px #000b); transform-origin:center center; }
+.clash-character-sprite { position:relative; z-index:1; width:86%; height:92%; max-width:86%; max-height:92%; object-fit:contain; object-position:center bottom; pointer-events:none; filter:drop-shadow(0 4px 5px #000b); transform-origin:center bottom; }
 .clash-move-puff-effect { position:absolute; z-index:25; left:50%; top:50%; width:145%; height:145%; object-fit:contain; object-position:center; pointer-events:none; filter:drop-shadow(0 4px 8px #0009); transform:translate(-50%,-50%); transform-origin:center center; }
 .clash-board .board-token.clash-puff-vanish .clash-character-sprite { visibility:hidden; }
 .clash-board .board-token.clash-character-token small { right:0; bottom:0; }

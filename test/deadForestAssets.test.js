@@ -128,6 +128,7 @@ test('Angel Clash character assets use the canonical directional folder structur
       const path = resolve(root, 'assets/gifs/clash_with/characters/angel', action, `${direction}.png`)
       assert.equal(existsSync(path), true, path)
       assert.equal(pngHasAlpha(readFileSync(path)), true, path)
+      assert.notDeepEqual(graphicSize(readFileSync(path), path), [768, 1376], path)
     }
   }
 })
