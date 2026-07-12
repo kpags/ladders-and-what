@@ -148,6 +148,14 @@ class AudioManager {
     }, duration)
   }
 
+  clashMovePuffStart() {
+    this.play(fileFrom(soundFiles, '/clash_with/move_puff_start.mp3'), { channel: 'clash-move-puff', volume: 0.9 })
+  }
+
+  clashMovePuffEnd() {
+    this.play(fileFrom(soundFiles, '/clash_with/move_puff_end.mp3'), { channel: 'clash-move-puff', volume: 0.9 })
+  }
+
   ladder() {
     this.random('ladders')
   }

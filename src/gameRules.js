@@ -892,6 +892,77 @@ export function minePushDestination(landedSpace, distance) {
   }
 }
 
+export function mineForwardDestination(landedSpace, distance) {
+  const rowIndex = Math.floor((landedSpace - 1) / 10)
+  const rowEnd = Math.min(100, rowIndex * 10 + 10)
+  return {
+    destination: Math.min(rowEnd, landedSpace + Math.max(0, distance)),
+    edge: rowIndex % 2 === 0 ? 'right' : 'left',
+  }
+}
+
+function movementPath(from, intended, exactBounce = false) {
+  if (from === intended && !exactBounce) return []
+  if (exactBounce) {
+    return [
+      ...Array.from({ length: Math.max(0, 100 - from) }, (_, index) => from + index + 1),
+      ...Array.from({ length: Math.max(0, 100 - intended) }, (_, index) => 99 - index),
+    ]
+  }
+  return Array.from(
+    { length: Math.abs(intended - from) },
+    (_, index) => from + Math.sign(intended - from) * (index + 1),
+  )
+}
+
+function hiddenMineIndexAt(state, space) {
+  return state.hiddenMines.findIndex(mine => mine.space === space)
+}
+
+function triggerHiddenMine(state, player, {
+  landedSpace = player.space,
+  pushOrigin = landedSpace,
+  maxBackwardDistance = 4,
+  applyQuestionAfterPush = true,
+  duringMove = false,
+  ladder = null,
+} = {}) {
+  const mineIndex = hiddenMineIndexAt(state, landedSpace)
+  if (mineIndex < 0 || player.eliminated || player.finished) return null
+  const mine = state.hiddenMines.splice(mineIndex, 1)[0]
+  const selfTriggered = mine.ownerId === player.id
+  const distance = randomInteger(1, selfTriggered ? 2 : maxBackwardDistance)
+  const push = selfTriggered
+    ? mineForwardDestination(landedSpace, distance)
+    : ladder
+      ? { destination: pushOrigin, edge: minePushDestination(pushOrigin, 1).edge }
+      : minePushDestination(pushOrigin, distance)
+  player.space = push.destination
+  state.lastMineExplosion = {
+    ownerId: mine.ownerId,
+    playerId: player.id,
+    landedSpace,
+    pushOrigin,
+    destination: player.space,
+    distance,
+    direction: selfTriggered ? 'forward' : 'backward',
+    selfTriggered,
+    duringMove,
+    ladder: ladder ? { ...ladder } : null,
+    edge: push.edge,
+  }
+  addLog(state, selfTriggered
+    ? `${player.name} triggered their own hidden mine and was blasted forward to space ${player.space}.`
+    : `${player.name} landed on a hidden mine and was blown back to space ${player.space}.`)
+  if (!selfTriggered && applyQuestionAfterPush && state.board.question_marks.includes(player.space)) {
+    const precedingChain = [...state.lastQuestionChain]
+    const mineResolution = { kind: 'mine', ...state.lastMineExplosion, destination: player.space }
+    resolveLanding(state, player)
+    state.lastQuestionChain = [...precedingChain, mineResolution, ...state.lastQuestionChain]
+  }
+  return state.lastMineExplosion
+}
+
 function dropEscapeKeys(state, player, rng = Math.random) {
   const held = [...player.heldKeys]
   held.forEach((keyId, index) => {
@@ -1229,22 +1300,28 @@ function movePlayer(state, player, destination, allowExactBounce = false) {
   const intended = exactBounce
     ? Math.max(1, 100 - (destination - 100))
     : Math.max(1, Math.min(100, destination))
+  const path = movementPath(from, intended, exactBounce)
   if (state.mode === 'run_away' && intended !== from) {
-    const path = exactBounce
-      ? [
-          ...Array.from({ length: 100 - from }, (_, index) => from + index + 1),
-          ...Array.from({ length: 100 - intended }, (_, index) => 99 - index),
-        ]
-      : Array.from(
-          { length: Math.abs(intended - from) },
-          (_, index) => from + Math.sign(intended - from) * (index + 1),
-        )
     for (const square of path) {
       if (state.destroyedSpaces.includes(square)) {
         player.space = square
         eliminatePlayer(state, player, `${player.name} traversed destroyed square ${square} and is now spectating.`)
         state.lastTraversalElimination = { playerId: player.id, playerName: player.name, from, intended, space: square }
         return square
+      }
+    }
+  }
+  if (!player.eliminated && !player.finished && path.length > 1) {
+    for (const square of path.slice(0, -1)) {
+      if (hiddenMineIndexAt(state, square) >= 0) {
+        player.space = square
+        triggerHiddenMine(state, player, {
+          landedSpace: square,
+          maxBackwardDistance: 2,
+          applyQuestionAfterPush: false,
+          duringMove: true,
+        })
+        return player.space
       }
     }
   }
@@ -1438,34 +1515,23 @@ function resolveLanding(state, player) {
     if (player.space === questionSpace && !returnedByExactBounce) break
   }
 
-  const ladder = !player.eliminated && !player.rerollPending && state.board.ladders.find(item => item.from === player.space)
+  if (!player.eliminated && !player.rerollPending) {
+    triggerHiddenMine(state, player, { landedSpace: player.space })
+  }
+  const ladder = !player.eliminated
+    && !player.rerollPending
+    && !state.lastMineExplosion
+    && state.board.ladders.find(item => item.from === player.space)
   if (ladder) {
     const start = player.space
     player.space = ladder.to
     addLog(state, `${player.name} climbed a ladder from ${start} to ${ladder.to}!`)
-  }
-  const mineIndex = state.hiddenMines.findIndex(mine => mine.space === player.space && mine.ownerId !== player.id)
-  if (mineIndex >= 0 && !player.eliminated && !player.finished) {
-    const mine = state.hiddenMines.splice(mineIndex, 1)[0]
-    const landedSpace = player.space
-    const distance = randomInteger(1, 4)
-    const push = minePushDestination(landedSpace, distance)
-    player.space = push.destination
-    state.lastMineExplosion = {
-      ownerId: mine.ownerId,
-      playerId: player.id,
-      landedSpace,
-      destination: player.space,
-      distance: landedSpace - player.space,
-      edge: push.edge,
-    }
-    addLog(state, `${player.name} landed on a hidden mine and was blown back to space ${player.space}.`)
-    if (state.board.question_marks.includes(player.space)) {
-      const precedingChain = [...state.lastQuestionChain]
-      const mineResolution = { kind: 'mine', ...state.lastMineExplosion, destination: player.space }
-      resolveLanding(state, player)
-      state.lastQuestionChain = [...precedingChain, mineResolution, ...state.lastQuestionChain]
-    }
+    triggerHiddenMine(state, player, {
+      landedSpace: ladder.to,
+      pushOrigin: ladder.from,
+      applyQuestionAfterPush: false,
+      ladder,
+    })
   }
   if (player.space >= 100) finishPlayer(state, player)
 }
@@ -1473,15 +1539,12 @@ function resolveLanding(state, player) {
 export function hiddenMineOptions(state, player = state.players[state.currentPlayerIndex]) {
   if (!player) return []
   const blocked = new Set(state.board.question_marks)
+  const ladderEndpoints = ladderSpaces(state.board)
   for (const occupant of state.players) {
     if (!occupant.finished && !occupant.eliminated) blocked.add(occupant.space)
   }
-  for (const ladder of state.board.ladders) {
-    blocked.add(ladder.from)
-    blocked.add(ladder.to)
-  }
   return Array.from({ length: 98 }, (_, index) => index + 2)
-    .filter(space => space % 10 !== 0 && space % 10 !== 1 && !blocked.has(space))
+    .filter(space => (ladderEndpoints.has(space) || (space % 10 !== 0 && space % 10 !== 1)) && !blocked.has(space))
 }
 
 function advanceTurn(state, now = Date.now()) {
@@ -1648,7 +1711,7 @@ export function takeTurn(state, forcedRoll) {
         : 'stayed in place'
     addLog(state, `${player.name} rolled ${roll}, ${movementText}, and is on space ${player.space}.`)
   }
-  if (!player.eliminated && roll !== 0) resolveLanding(state, player)
+  if (!player.eliminated && roll !== 0 && !state.lastMineExplosion?.duringMove) resolveLanding(state, player)
   if (player.skillBlockedTurns > 0) player.skillBlockedTurns--
   if (!state.gameOver && !player.rerollPending) advanceTurn(state)
   triggerExplosion(state)

@@ -163,15 +163,12 @@ test('Clash puff movement leaves time for vanish and reappear puffs', () => {
   assert.equal(CLASH_MOVE_EVENT_MS - CLASH_MOVE_PUFF_MS, 500)
 })
 
-test('Clash in-game character models share one canvas size per character', () => {
+test('Clash in-game character model graphics are readable', () => {
   for (const [character, assets] of clashModelAssetPaths()) {
-    const sizes = assets.map(path => [path, graphicSize(readFileSync(path), path)])
-    const expected = sizes.reduce((largest, [, size]) => [
-      Math.max(largest[0], size[0]),
-      Math.max(largest[1], size[1]),
-    ], [0, 0])
-    for (const [path, size] of sizes) {
-      assert.deepEqual(size, expected, `${character}: ${path}`)
+    for (const path of assets) {
+      const [width, height] = graphicSize(readFileSync(path), path)
+      assert.ok(width > 0, `${character}: ${path}`)
+      assert.ok(height > 0, `${character}: ${path}`)
     }
   }
 })

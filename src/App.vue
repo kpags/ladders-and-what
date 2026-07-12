@@ -842,9 +842,12 @@ async function handleServerEvent(event) {
     visualSpaces.value[event.data.playerId] = event.data.to
     window.setTimeout(() => { penaltyOverlay.value = null }, remaining)
   } else if (event.type === 'clash_move') {
-    audioManager.movement(remaining)
+    audioManager.clashMovePuffStart()
     setClashFacing(event.data.playerId, event.data.from, event.data.to)
     startClashPuffMove(event.data.playerId, event.data.from, event.data.to, remaining)
+    window.setTimeout(() => {
+      audioManager.clashMovePuffEnd()
+    }, Math.min(CLASH_MOVE_REAPPEAR_DELAY_MS, remaining))
     if (event.data.pickup) {
       window.setTimeout(() => {
         audioManager.clashPickup(event.data.pickup.dropKind)

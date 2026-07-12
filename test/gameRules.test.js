@@ -38,6 +38,16 @@ function createState(spaces = [1, 1, 1]) {
   return state
 }
 
+function withMockRandom(value, fn) {
+  const original = Math.random
+  Math.random = () => value
+  try {
+    return fn()
+  } finally {
+    Math.random = original
+  }
+}
+
 test('Ghost Town destroyed-square effects use the last destroyed square without rescheduling destruction', () => {
   const state = createState([30, 50])
   state.destroyedSpaces = [1, 2, 3, 4, 5]
@@ -114,7 +124,7 @@ test('Run Away destruction starts only after every player completes the schedule
   assert.ok(state.lastExplosion?.spaces.length)
 })
 
-test('Hidden Mine allows the whole board except endpoints, question marks, and ladder-connected squares', () => {
+test('Hidden Mine allows the whole board except endpoints, question marks, and occupied squares', () => {
   const state = createState([20, 25])
   state.board.question_marks = [18]
   state.board.ladders = [{ from: 22, to: 40 }]
@@ -123,8 +133,8 @@ test('Hidden Mine allows the whole board except endpoints, question marks, and l
   assert.equal(options[0], 2)
   assert.equal(options.at(-1), 99)
   assert.equal(options.includes(18), false)
-  assert.equal(options.includes(22), false)
-  assert.equal(options.includes(40), false)
+  assert.equal(options.includes(22), true)
+  assert.equal(options.includes(40), true)
   assert.equal(options.includes(11), false)
   assert.equal(options.includes(20), false)
   assert.equal(options.includes(23), true)
@@ -139,7 +149,7 @@ test('Hidden Mine pushes another player back without crossing the row edge', () 
 
   state.currentPlayerIndex = 1
   state.nextExplosionTurn = 99
-  takeTurn(state, 1)
+  withMockRandom(0, () => takeTurn(state, 1))
 
   assert.equal(state.players[1].space, 11)
   assert.equal(state.lastMineExplosion.landedSpace, 12)
@@ -159,12 +169,88 @@ test('Hidden Mine applies a WHAT after blowing a player onto a question square',
   state.currentPlayerIndex = 1
   state.nextExplosionTurn = 99
 
-  takeTurn(state, 1)
+  withMockRandom(0, () => takeTurn(state, 1))
 
   assert.equal(state.players[1].space, 11)
   assert.equal(state.players[1].skipTurns, 1)
   assert.equal(state.lastQuestionChain[0].kind, 'mine')
   assert.equal(state.lastQuestionChain[1].what.name, 'Mine Surprise')
+})
+
+test('Hidden Mine interrupts movement and limits mid-move pushback to two spaces', () => {
+  const state = createState([15, 10])
+  state.hiddenMines = [{ ownerId: 'player-1', space: 12 }]
+  state.currentPlayerIndex = 1
+  state.nextExplosionTurn = 99
+
+  withMockRandom(0.99, () => takeTurn(state, 5))
+
+  assert.equal(state.lastMineExplosion.duringMove, true)
+  assert.equal(state.lastMineExplosion.landedSpace, 12)
+  assert.equal(state.lastMineExplosion.distance, 2)
+  assert.equal(state.players[1].space, 11)
+  assert.equal(state.currentPlayerIndex, 0)
+})
+
+test('Hidden Mine pushes its owner forward and ends the turn immediately', () => {
+  const state = createState([10, 30])
+  state.hiddenMines = [{ ownerId: 'player-1', space: 12 }]
+  state.nextExplosionTurn = 99
+
+  withMockRandom(0.99, () => takeTurn(state, 5))
+
+  assert.equal(state.lastMineExplosion.selfTriggered, true)
+  assert.equal(state.lastMineExplosion.direction, 'forward')
+  assert.equal(state.lastMineExplosion.landedSpace, 12)
+  assert.equal(state.players[0].space, 14)
+  assert.equal(state.currentPlayerIndex, 1)
+})
+
+test('Bomber Jack mine at ladder top pushes owner forward from the ladder top', () => {
+  const state = createState([10, 30])
+  state.board.ladders = [{ from: 14, to: 22 }]
+  state.hiddenMines = [{ ownerId: 'player-1', space: 22 }]
+  state.nextExplosionTurn = 99
+
+  // player-1 at 10 rolls 4 → lands on 14 → climbs to 22 → own mine explodes
+  // withMockRandom(0.99): randomInteger(1, 2) = 2
+  // mineForwardDestination(22, 2): rowEnd=30, destination=24
+  withMockRandom(0.99, () => takeTurn(state, 4))
+
+  assert.equal(state.lastMineExplosion.selfTriggered, true)
+  assert.equal(state.lastMineExplosion.landedSpace, 22)
+  assert.equal(state.lastMineExplosion.pushOrigin, 14)
+  assert.equal(state.players[0].space, 24)
+  assert.equal(state.currentPlayerIndex, 1)
+})
+
+test('Hidden Mine on ladder bottom prevents climbing and pushes back', () => {
+  const state = createState([15, 20])
+  state.board.ladders = [{ from: 22, to: 40 }]
+  state.hiddenMines = [{ ownerId: 'player-1', space: 22 }]
+  state.currentPlayerIndex = 1
+  state.nextExplosionTurn = 99
+
+  withMockRandom(0, () => takeTurn(state, 2))
+
+  assert.equal(state.lastMineExplosion.landedSpace, 22)
+  assert.equal(state.lastMineExplosion.ladder, null)
+  assert.equal(state.players[1].space, 21)
+})
+
+test('Hidden Mine on ladder top explodes after climbing and returns player to ladder bottom', () => {
+  const state = createState([15, 20])
+  state.board.ladders = [{ from: 22, to: 40 }]
+  state.hiddenMines = [{ ownerId: 'player-1', space: 40 }]
+  state.currentPlayerIndex = 1
+  state.nextExplosionTurn = 99
+
+  withMockRandom(0, () => takeTurn(state, 2))
+
+  assert.deepEqual(state.lastMineExplosion.ladder, { from: 22, to: 40 })
+  assert.equal(state.lastMineExplosion.landedSpace, 40)
+  assert.equal(state.lastMineExplosion.pushOrigin, 22)
+  assert.equal(state.players[1].space, 22)
 })
 
 test('Hidden Mine placement excludes occupied squares and keeps the newest two mines', () => {

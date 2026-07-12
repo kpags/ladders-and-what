@@ -743,7 +743,12 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
   if (!await wait(room, 2000, token)) return
 
   const traversal = room.game.lastTraversalElimination
-  const rollLanding = traversal?.from === startSpace ? traversal.space : Math.max(1, Math.min(100, startSpace + roll))
+  const mineExplosion = room.game.lastMineExplosion
+  const rollLanding = mineExplosion?.playerId === player.id && mineExplosion.duringMove
+    ? mineExplosion.landedSpace
+    : traversal?.from === startSpace
+      ? traversal.space
+      : Math.max(1, Math.min(100, startSpace + roll))
   const rollDuration = Math.abs(rollLanding - startSpace) * 540
   if (rollDuration > 0) {
     emitEvent(room, 'movement', { playerId: player.id, from: startSpace, to: rollLanding, kind: 'roll' }, rollDuration)
@@ -805,7 +810,9 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
     resolvedSpace = nextSpace
   }
 
-  const ladder = !player.eliminated && room.game.board.ladders.find(item => item.from === resolvedSpace)
+  const ladder = !player.eliminated
+    && (!mineExplosion || mineExplosion.ladder?.from === resolvedSpace)
+    && room.game.board.ladders.find(item => item.from === resolvedSpace)
   if (ladder) {
     emitEvent(room, 'ladder', { playerId: player.id, from: ladder.from, to: ladder.to }, 1600)
     if (!await wait(room, 1600, token)) return
@@ -816,7 +823,6 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
     if (!await wait(room, duration, token)) return
   }
 
-  const mineExplosion = room.game.lastMineExplosion
   if (mineExplosion?.playerId === player.id && !questionChain.some(item => item.kind === 'mine')) {
     emitEvent(room, 'mine_explosion', mineExplosion, 1600)
     if (!await wait(room, 1600, token)) return
@@ -1972,8 +1978,25 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
         if (await playLandingResolutions()) showResult()
       })
     } else {
-      playLandingResolutions().then(resolved => {
-        if (resolved) showResult()
+      emitEvent(room, 'skill_result', {
+        playerId: current.id,
+        playerName: current.name,
+        color: current.color,
+        name: current.specialSkill.name,
+        message: result.message,
+        ok: result.ok,
+      }, 2000)
+      wait(room, 2000, token).then(async resultVisible => {
+        if (!resultVisible) return
+        room.currentEvent = null
+        if (result.requiresRoll) {
+          startRoll(room, current.id, current.isAI, true)
+        } else {
+          if (!await playLandingResolutions()) return
+          endTurnAfterSkill(room.game)
+          if (!await runDestructionSequence(room, token)) return
+          finishSequenceAndBeginTurn(room)
+        }
       })
     }
   })
