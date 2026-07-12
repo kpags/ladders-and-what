@@ -260,7 +260,7 @@
       "id": "luisa",
       "name": "Luisa",
       "assets_dir": "assets/gifs/clash_with/characters/luisa",
-      "is_active": true,
+      "is_active": false,
       "modes": [
         "clash_with"
       ],
@@ -282,7 +282,7 @@
       "id": "ritcher",
       "name": "Ritcher",
       "assets_dir": "assets/gifs/clash_with/characters/ritcher",
-      "is_active": true,
+      "is_active": false,
       "modes": [
         "clash_with"
       ],
@@ -304,7 +304,7 @@
       "id": "speed",
       "name": "Speed",
       "assets_dir": "assets/gifs/clash_with/characters/speed",
-      "is_active": true,
+      "is_active": false,
       "modes": [
         "clash_with"
       ],
@@ -326,7 +326,7 @@
       "id": "young-jack",
       "name": "Young Jack",
       "assets_dir": "assets/gifs/clash_with/characters/young_jack",
-      "is_active": true,
+      "is_active": false,
       "modes": [
         "clash_with"
       ],
