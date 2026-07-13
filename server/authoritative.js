@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateClashSkill, activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashMoveOptions, clashVisibleSpaces, CLASH_MOVE_EVENT_MS, CLASH_TURN_MS, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateClashSkill, activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashAttackPresentation, clashMoveOptions, clashVisibleSpaces, CLASH_MOVE_EVENT_MS, CLASH_TURN_MS, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 import { createDestructionSkipState, updateDestructionSkipVote } from './destructionSkip.js'
@@ -203,7 +203,7 @@ function broadcastGame(room, type = 'game_state') {
       room: roomView(room),
       game,
       turnDeadline: room.turnDeadline,
-      currentEvent: room.currentEvent,
+      currentEvent: eventForViewer(room, room.currentEvent, player.id),
       escapeBriefing: escapeBriefingView(room.escapeBriefing),
       serverNow: Date.now(),
     })
@@ -255,8 +255,31 @@ function emitEvent(room, eventType, data, duration) {
     startedAt: Date.now(),
   }
   room.currentEvent = event
-  broadcast(room, { type: 'game_event', revision: revise(room), event, serverNow: Date.now() })
+  const revision = revise(room)
+  for (const player of room.players) {
+    const socket = sockets.get(player.id)
+    if (socket) send(socket, { type: 'game_event', revision, event: eventForViewer(room, event, player.id), serverNow: Date.now() })
+  }
+  for (const spectatorId of room.spectators || []) {
+    const socket = sockets.get(spectatorId)
+    if (socket) send(socket, { type: 'game_event', revision, event, serverNow: Date.now() })
+  }
   return event
+}
+
+function eventForViewer(room, event, viewerId) {
+  if (!event || event.type !== 'clash_attack') return event
+  const presentation = clashAttackPresentation(room.game, viewerId, event.data)
+  if (presentation.kind === 'full') return event
+  return {
+    ...event,
+    type: 'clash_direction_cue',
+    data: {
+      directionDegrees: presentation.directionDegrees,
+      weaponName: event.data.weaponName,
+      modeName: event.data.modeName,
+    },
+  }
 }
 
 function reject(socket, message) {

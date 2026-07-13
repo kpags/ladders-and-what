@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getBoardSpaceBounds, getBoardSpacePosition } from '../src/boardLayout.js'
-import { activateClashSkill, applyWhatEffects, clashMoveOptions, CLASH_BOARD_SPACES, CLASH_PLAYER_SPAWN_SPACES, CLASH_SKILL_COOLDOWN_MS, createGameState, skipClashStunnedTurn, takeClashAttack, takeClashItem, takeClashMove } from '../src/gameRules.js'
+import { activateClashSkill, applyWhatEffects, clashAttackPresentation, clashMoveOptions, CLASH_BOARD_SPACES, CLASH_PLAYER_SPAWN_SPACES, CLASH_SKILL_COOLDOWN_MS, createGameState, moveClashGhost, skipClashStunnedTurn, takeClashAttack, takeClashItem, takeClashMove } from '../src/gameRules.js'
 
 const root = resolve(import.meta.dirname, '..')
 const boards = JSON.parse(readFileSync(resolve(root, 'data/boards.json'), 'utf8'))
@@ -118,6 +118,28 @@ test('Clash movement reaches two guide squares in every direction', () => {
   ]))
 })
 
+test('Clash attack feedback is private unless an involved player is visible', () => {
+  const noMansLand = boards.find(board => board.name === "No Man's Land")
+  const state = createGameState(noMansLand, [
+    { id: 'attacker', name: 'Attacker' },
+    { id: 'target', name: 'Target' },
+    { id: 'distant', name: 'Distant' },
+    { id: 'nearby', name: 'Nearby' },
+  ], 0)
+  state.players.find(player => player.id === 'attacker').space = 1
+  state.players.find(player => player.id === 'target').space = 2
+  state.players.find(player => player.id === 'distant').space = 225
+  state.players.find(player => player.id === 'nearby').space = 3
+  const attack = { playerId: 'attacker', targetId: 'target', sourceSpace: 1, targetSpace: 2 }
+
+  assert.equal(clashAttackPresentation(state, 'attacker', attack).kind, 'full')
+  assert.equal(clashAttackPresentation(state, 'target', attack).kind, 'full')
+  assert.equal(clashAttackPresentation(state, 'nearby', attack).kind, 'full')
+  assert.deepEqual(clashAttackPresentation(state, 'distant', attack), { kind: 'direction', directionDegrees: 135 })
+  state.players.find(player => player.id === 'distant').eliminated = true
+  assert.equal(clashAttackPresentation(state, 'distant', attack).kind, 'full')
+})
+
 test('Clash supply rounds replace board drops and spent weapons disappear', () => {
   const noMansLand = boards.find(board => board.name === "No Man's Land")
   const state = createGameState(noMansLand, [
@@ -205,6 +227,29 @@ test('Clash melee attacks move the attacker in front of the target', () => {
   assert.equal(blocked.message, 'Melee weapon is cooling down.')
 })
 
+test('Clash blood remains on the death square when a ghost moves', () => {
+  const noMansLand = boards.find(board => board.name === "No Man's Land")
+  const state = createGameState(noMansLand, [
+    { id: 'attacker', name: 'Attacker' },
+    { id: 'target', name: 'Target' },
+    { id: 'survivor', name: 'Survivor' },
+  ], 0)
+  state.players[0].space = 111
+  state.players[1].space = 113
+  state.players[1].health = 1
+  state.players[2].space = 225
+
+  const attack = takeClashAttack(state, 'attacker', 'target', 'Combat Knife', 'Single Attack', () => 0, 1_000)
+  assert.equal(attack.ok, true)
+  assert.equal(state.players[1].eliminated, true)
+  assert.equal(state.players[1].clashDeathSpace, 113)
+
+  const ghostMove = moveClashGhost(state, 'target', 114)
+  assert.equal(ghostMove.ok, true)
+  assert.equal(state.players[1].space, 114)
+  assert.equal(state.players[1].clashDeathSpace, 113)
+})
+
 test('Clash armed melee skills start cooldown only when consumed', () => {
   const noMansLand = boards.find(board => board.name === "No Man's Land")
   const state = createGameState(noMansLand, [
@@ -280,6 +325,19 @@ test('Clash immediate active skills start cooldown on activation', () => {
     assert.equal(result.ok, true, skillName)
     assert.equal(state.players[0].skillCooldownUntil, 1_000 + CLASH_SKILL_COOLDOWN_MS, skillName)
   }
+})
+
+test('Angel cannot activate Girl Scout at full health', () => {
+  const noMansLand = boards.find(board => board.name === "No Man's Land")
+  const state = createGameState(noMansLand, [
+    { id: 'angel', name: 'Angel', specialSkill: { name: 'Girl Scout' } },
+    { id: 'target', name: 'Target' },
+  ], 0)
+
+  const result = activateClashSkill(state, 'angel', 1_000)
+  assert.equal(result.ok, false)
+  assert.equal(result.message, 'Health is already full.')
+  assert.equal(state.players[0].skillCooldownUntil, 0)
 })
 
 test('Clash damage items affect players within one guide space of the thrown square', () => {

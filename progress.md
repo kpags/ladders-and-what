@@ -100,6 +100,11 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Validation passed server syntax, all 94 automated tests, `git diff --check`, a production build, bundled home/popup browser smoke, and a focused Room List route screenshot with no console errors.
 - Cleaned up Room List visibility so rooms require at least one connected human and finished games no longer appear; rooms with only AI/stale disconnected players are closed. Added a top-right Room List Create Room button beside Refresh and verified the create-room flow from that page.
 - Validation passed server syntax, all 94 automated tests, `git diff --check`, a production build, WebSocket room-list cleanup smoke, and a focused browser Room List/Create Room smoke.
+- Enlarged Clash With board models to fill their cells without overflow, applied character colors and `image.png` portraits to in-game player boxes, and removed orange square markers from red reveal-only rivals.
+- Scoped Clash movement/pickup audio to the moving player. Hidden third-party attacks now replace exact traces and hit/miss feedback with an approximate directional wave cue; involved players and viewers who can see either combatant retain full feedback.
+- Clash QA passed all 121 tests, server/client syntax checks, `git diff --check`, production build, the bundled web-game runner, and focused gameplay screenshots for model bounds, character-colored portrait boxes, Turn 2 red-only rival reveal, and the directional wave cue. The browser's only console failure was its sandboxed Google Fonts request.
+- Clash deaths now record their original square so blood remains there while the eliminated ghost moves; Clash blood uses the board's 15x15 positioning, and ghosts never receive approximate attack sound-direction indicators.
+- Angel's Girl Scout skill is disabled and labeled `Full Health` at 100 HP, with matching game-rule rejection. Validation passed all 123 tests, syntax checks, `git diff --check`, the bundled browser runner, focused Angel/ghost UI checks, and a production build.
 
 ## TODO
 

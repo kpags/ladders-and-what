@@ -217,6 +217,7 @@
     "name": "Big Daddy",
     "assets_dir": "assets/gifs/clash_with/characters/big_daddy",
     "is_active": true,
+    "color": "#FFECAB",
     "modes": [
       "clash_with"
     ],
@@ -239,6 +240,7 @@
       "name": "Angel",
       "assets_dir": "assets/gifs/clash_with/characters/angel",
       "is_active": true,
+      "color": "#693A3A",
       "modes": [
         "clash_with"
       ],
@@ -261,6 +263,7 @@
       "name": "Luisa",
       "assets_dir": "assets/gifs/clash_with/characters/luisa",
       "is_active": false,
+      "color": "#698C4A",
       "modes": [
         "clash_with"
       ],
@@ -283,6 +286,7 @@
       "name": "Ritcher",
       "assets_dir": "assets/gifs/clash_with/characters/ritcher",
       "is_active": false,
+      "color": "#DEB062",
       "modes": [
         "clash_with"
       ],
@@ -305,6 +309,7 @@
       "name": "Speed",
       "assets_dir": "assets/gifs/clash_with/characters/speed",
       "is_active": false,
+      "color": "#C9C9C9",
       "modes": [
         "clash_with"
       ],
@@ -327,6 +332,7 @@
       "name": "Young Jack",
       "assets_dir": "assets/gifs/clash_with/characters/young_jack",
       "is_active": false,
+      "color": "#BAFFE9",
       "modes": [
         "clash_with"
       ],

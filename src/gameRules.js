@@ -83,6 +83,7 @@ export function createGameState(board, players, startedAt = Date.now(), options 
       weaponProtectThroughTurn: null,
       visionBoostThroughTurn: null,
       clashStunnedThroughTurn: null,
+      clashDeathSpace: null,
       clashDotEffects: [],
       clashMeleeCooldownUntil: 0,
       clashSkillArmed: null,
@@ -350,6 +351,24 @@ export function clashVisibleSpaces(player) {
   return new Set([player.space, ...clashSpacesWithinChebyshev(player.space, 2)])
 }
 
+export function clashAttackPresentation(state, viewerId, attack) {
+  const viewer = state?.players?.find(player => player.id === viewerId)
+  if (!viewer || state?.mode !== 'clash_with') return { kind: 'full' }
+  if (viewer.eliminated) return { kind: 'full' }
+  if (viewerId === attack?.playerId || viewerId === attack?.targetId) return { kind: 'full' }
+
+  const visibleSpaces = clashVisibleSpaces(viewer)
+  if (visibleSpaces.has(attack?.sourceSpace) || visibleSpaces.has(attack?.targetSpace)) return { kind: 'full' }
+
+  const viewerGrid = clashSpaceToGrid(viewer.space)
+  const sourceGrid = clashSpaceToGrid(attack?.sourceSpace || viewer.space)
+  const targetGrid = clashSpaceToGrid(attack?.targetSpace || attack?.sourceSpace || viewer.space)
+  const dx = ((sourceGrid.column + targetGrid.column) / 2) - viewerGrid.column
+  const dy = viewerGrid.row - ((sourceGrid.row + targetGrid.row) / 2)
+  const directionDegrees = Math.round(Math.atan2(dy, dx) * 180 / Math.PI / 45) * 45
+  return { kind: 'direction', directionDegrees }
+}
+
 export function clashMoveOptions(state, player = state.players[state.currentPlayerIndex]) {
   if (state.mode !== 'clash_with' || !player || player.eliminated || player.finished) return []
   const boosted = player.clashMoveBoostThroughTurn != null && state.turn <= player.clashMoveBoostThroughTurn
@@ -464,6 +483,7 @@ function applyClashDamage(state, target, amount, sourceText, rng = Math.random) 
   const before = target.health
   target.health = Math.max(0, target.health - amount)
   if (target.health <= 0) {
+    target.clashDeathSpace ??= target.space
     target.eliminated = true
     target.finished = true
     target.rank = null
@@ -629,6 +649,9 @@ export function activateClashSkill(state, playerId, now = Date.now()) {
   if (player.skillCooldownUntil > now) return { ok: false, message: 'Skill is still cooling down.' }
 
   const skill = player.specialSkill.name
+  if (skill === 'Girl Scout' && player.health >= CLASH_MAX_HEALTH) {
+    return { ok: false, message: 'Health is already full.' }
+  }
   let message = `${player.name} activated ${skill}.`
   let reveal = null
   if (skill === 'Dad Strength') {
