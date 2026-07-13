@@ -2,12 +2,27 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
+import { activeGameModes, boardIndicesForMode, boardIsAvailable, characterIndicesForMode, gameModeIsActive, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { getBoardSpaceBounds, getBoardSpacePosition } from '../src/boardLayout.js'
 
 const root = resolve(import.meta.dirname, '..')
 const characters = JSON.parse(readFileSync(resolve(root, 'data/characters.json'), 'utf8'))
 const boards = JSON.parse(readFileSync(resolve(root, 'data/boards.json'), 'utf8'))
+const gameModes = JSON.parse(readFileSync(resolve(root, 'data/game_modes.json'), 'utf8'))
+
+test('only explicitly active game modes are selectable', () => {
+  assert.equal(gameModeIsActive({ is_active: true }), true)
+  assert.equal(gameModeIsActive({ is_active: false }), false)
+  assert.equal(gameModeIsActive({}), false)
+  assert.equal(gameModeIsActive({ is_active: 'true' }), false)
+  assert.deepEqual(activeGameModes(gameModes).map(mode => mode.key), [
+    'standard',
+    'run_away',
+    'guess_what',
+    'escape_from',
+    'clash_with',
+  ])
+})
 
 test('character modes define the playable roster', () => {
   assert.deepEqual(characterIndicesForMode(characters, 'standard'), [0, 1, 2, 3, 4, 5, 6, 7, 8])

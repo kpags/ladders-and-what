@@ -392,6 +392,28 @@ input[type=range] { height:30px; }
 .dice-roll-overlay { position:fixed; z-index:48; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1rem; pointer-events:none; background:radial-gradient(circle,#07182fbe,transparent 48%); }
 .guess-what-overlay { position:fixed; z-index:55; inset:0; display:grid; place-items:center; padding:1rem; background:radial-gradient(circle at 50% 40%,#14295ee6,#030816f2 68%); }
 .guess-what-card { width:min(680px,calc(100vw - 2rem)); padding:clamp(1rem,3vw,2rem); border:4px solid #c3e8ff; border-radius:22px; background:linear-gradient(145deg,#102b58f5,#071123fa); box-shadow:0 12px 0 #020711,0 0 45px #3c8cff55; color:#f7fbff; text-align:center; }
+.guess-wheel-board-overlay { position:absolute; z-index:70; inset:0; display:grid; place-items:center; padding:4%; overflow:hidden; background:radial-gradient(circle,#14295ed9,#030816ee 72%); }
+.guess-wheel-card { width:min(78%,430px); padding:clamp(.55rem,2.2vw,1.15rem); border:clamp(2px,.45vw,4px) solid #c3e8ff; border-radius:clamp(12px,2.4vw,22px); background:linear-gradient(145deg,#102b58f5,#071123fa); box-shadow:0 8px 0 #020711,0 0 32px #3c8cff66; color:#f7fbff; text-align:center; }
+.guess-wheel-card > small { display:block; color:#7fc7ff; text-transform:uppercase; letter-spacing:.08em; font:clamp(.55rem,1.7vw,.9rem) 'Luckiest Guy'; }
+.guess-wheel-card > strong { display:block; margin:.15em 0 .25em; color:#fff4c7; font:clamp(1rem,3.8vw,2rem) 'Luckiest Guy'; }
+.guess-wheel-card > p { margin:.5em 0 .2em; font-size:clamp(.58rem,1.7vw,.9rem); }
+.guess-wheel-card > p.chosen { color:#fff09a; text-transform:uppercase; font-family:'Luckiest Guy'; animation:guess-wheel-result-text .3s steps(2,end) infinite; }
+.guess-wheel-stage { position:relative; width:min(68%,270px); aspect-ratio:1; margin:auto; filter:drop-shadow(0 7px 8px #000a); }
+.guess-wheel { position:absolute; inset:4%; overflow:hidden; border:clamp(4px,.8vw,7px) solid #f8e5b6; border-radius:50%; background:conic-gradient(#8be49d 0 33.333%,#ffd36f 33.333% 66.666%,#ff827c 66.666% 100%); box-shadow:inset 0 0 0 3px #111a31; animation:guess-wheel-spin var(--guess-wheel-duration,3000ms) cubic-bezier(.12,.68,.18,1) var(--guess-wheel-spin-delay,0ms) forwards; }
+.guess-wheel::before { content:""; position:absolute; z-index:1; inset:0; border-radius:50%; opacity:0; animation:guess-wheel-section-blink .3s steps(2,end) var(--guess-wheel-highlight-delay,var(--guess-wheel-duration,3000ms)) 5; }
+.guess-wheel.selected-easy::before { background:conic-gradient(#fffbd8e6 0 33.333%,transparent 33.333% 100%); }
+.guess-wheel.selected-medium::before { background:conic-gradient(transparent 0 33.333%,#fffbd8e6 33.333% 66.666%,transparent 66.666% 100%); }
+.guess-wheel.selected-hard::before { background:conic-gradient(transparent 0 66.666%,#fffbd8e6 66.666% 100%); }
+.guess-wheel::after { content:""; position:absolute; z-index:2; inset:41%; border:3px solid #f8e5b6; border-radius:50%; background:#112442; box-shadow:0 2px 8px #000a; }
+.guess-wheel span { position:absolute; z-index:1; color:#101522; text-transform:uppercase; font:clamp(.55rem,2.1vw,1rem) 'Luckiest Guy'; text-shadow:0 1px #fff8; }
+.guess-wheel span.easy { top:23%; right:10%; transform:rotate(60deg); }
+.guess-wheel span.medium { bottom:10%; left:50%; transform:translateX(-50%) rotate(180deg); }
+.guess-wheel span.hard { top:23%; left:10%; transform:rotate(-60deg); }
+.guess-wheel-pointer { position:absolute; z-index:4; top:-1%; left:50%; width:0; height:0; border-left:clamp(8px,1.6vw,14px) solid transparent; border-right:clamp(8px,1.6vw,14px) solid transparent; border-top:clamp(18px,3vw,27px) solid #fff1b8; filter:drop-shadow(0 3px 1px #101522); transform:translateX(-50%); }
+.guess-wheel-probabilities { display:flex; justify-content:center; gap:clamp(.35rem,1.5vw,.8rem); color:#c8d9ef; font-size:clamp(.48rem,1.4vw,.75rem); font-weight:900; }
+@keyframes guess-wheel-spin { from { transform:rotate(0deg); } to { transform:rotate(var(--guess-wheel-stop)); } }
+@keyframes guess-wheel-section-blink { 0%,100% { opacity:.95; } 50% { opacity:.12; } }
+@keyframes guess-wheel-result-text { 50% { opacity:.45; } }
 .guess-what-card > small,.guess-what-card > header span { color:#7fc7ff; text-transform:uppercase; letter-spacing:.08em; font:1rem 'Luckiest Guy'; }
 .guess-what-card h2 { margin:.65rem 0 1.25rem; font:clamp(1.45rem,3.4vw,2.35rem)/1.2 'Luckiest Guy'; }
 .guess-difficulty-options { display:grid; grid-template-columns:repeat(3,1fr); gap:.7rem; }

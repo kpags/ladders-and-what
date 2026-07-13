@@ -177,6 +177,10 @@ class AudioManager {
     this.random('guess_what/questions', { channel: 'guess-what' })
   }
 
+  guessWhatWheel() {
+    this.play(fileFrom(soundFiles, '/guess_what/spin_the_wheel.mp3'), { channel: 'guess-what' })
+  }
+
   guessWhatAnswer(correct) {
     const prefix = correct ? 'correct_answer' : 'wrong_answer'
     const files = Object.entries(soundFiles)

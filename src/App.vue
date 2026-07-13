@@ -39,7 +39,7 @@ import uncleLastGif from '../assets/gifs/escape_from/dead_forest/entities/uncle/
 import { audioManager } from './audioManager'
 import { getBoardSpaceBounds, getBoardSpacePosition, getVisualSurroundingSpaces } from './boardLayout'
 import { CLASH_BOARD_COLUMNS, CLASH_BOARD_SPACES, CLASH_MAX_HEALTH, CLASH_MOVE_REAPPEAR_DELAY_MS } from './gameRules'
-import { boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
+import { activeGameModes, boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
 
 const boardImages = import.meta.glob('../assets/boards/**/template.{png,jpg,jpeg,webp}', {
   eager: true,
@@ -108,7 +108,8 @@ const muted = ref(false)
 const selected = ref(0)
 const playerCharacter = ref(0)
 const selectedBoard = ref(0)
-const selectedMode = ref(gameModes[0]?.key || 'standard')
+const selectableGameModes = activeGameModes(gameModes)
+const selectedMode = ref(selectableGameModes[0]?.key || '')
 const playerNameDraft = ref('')
 const editingPlayerName = ref(false)
 const clientId = localStorage.getItem('ladders-client-id') || createClientId()
@@ -216,14 +217,14 @@ const displayedHealth = ref({})
 const escapeEncounterSpace = ref(null)
 const escapePickupNotice = ref(null)
 const visionRevealProgress = ref({})
-const guessWhatDifficulty = ref(null)
+const guessWhatWheel = ref(null)
 const guessWhatQuestion = ref(null)
 const guessWhatResult = ref(null)
 let clockTimer
 let diceTimer
 let operatorTimer
 
-const defaultModeKey = gameModes[0]?.key || 'standard'
+const defaultModeKey = selectableGameModes[0]?.key || ''
 const CLASH_MELEE_SLASH_MS = 1640
 const CLASH_MELEE_ATTACKED_MS = 4100
 const CLASH_DIRECTION_KEYS = new Set([
@@ -244,7 +245,7 @@ const turnSeconds = computed(() => turnDeadline.value ? Math.max(0, Math.ceil((t
 const controlledGamePlayer = computed(() => game.value?.players.find(player => player.id === clientId))
 const isControlledTurn = computed(() => Boolean(game.value && controlledGamePlayer.value?.id === game.value.players[game.value.currentPlayerIndex]?.id))
 const isLobbyHost = computed(() => onlineRoom.value?.hostId === clientId)
-const selectedGameMode = computed(() => gameModes.find(mode => mode.key === selectedMode.value) || gameModes[0])
+const selectedGameMode = computed(() => selectableGameModes.find(mode => mode.key === selectedMode.value) || selectableGameModes[0])
 const bloodiedSpaces = computed(() => [...new Set(
   (game.value?.players || [])
     .filter(player => player.eliminated)
@@ -275,6 +276,25 @@ const skillTargetSeconds = computed(() => skillTargetDeadline.value ? Math.max(0
 const guessWhatSeconds = computed(() => guessWhatQuestion.value
   ? Math.max(0, Math.ceil((guessWhatQuestion.value.expiresAt - (now.value + serverClockOffset)) / 1000))
   : 0)
+const guessWhatWheelStyle = computed(() => {
+  if (!guessWhatWheel.value) return {}
+  const centers = { easy: 60, medium: 180, hard: 300 }
+  const center = centers[guessWhatWheel.value.selectedDifficulty] ?? 0
+  const fullTurns = 5 + (Number(guessWhatWheel.value.eventId) % 3)
+  const elapsed = Math.max(0, Number(guessWhatWheel.value.elapsedAtReceipt) || 0)
+  const spinDuration = guessWhatWheel.value.spinDuration || 3000
+  return {
+    '--guess-wheel-stop': `${fullTurns * 360 + ((360 - center) % 360)}deg`,
+    '--guess-wheel-duration': `${spinDuration}ms`,
+    '--guess-wheel-reveal-duration': `${guessWhatWheel.value.revealDuration || 1500}ms`,
+    '--guess-wheel-spin-delay': `${-Math.min(elapsed, spinDuration)}ms`,
+    '--guess-wheel-highlight-delay': `${spinDuration - elapsed}ms`,
+  }
+})
+const guessWhatWheelRevealing = computed(() => Boolean(
+  guessWhatWheel.value
+  && (now.value + serverClockOffset) >= guessWhatWheel.value.startedAt + (guessWhatWheel.value.spinDuration || 3000),
+))
 const clashViewPlayer = computed(() => {
   if (game.value?.mode !== 'clash_with') return null
   return controlledGamePlayer.value
@@ -589,7 +609,7 @@ function clearGamePresentation() {
   escapeEncounterSpace.value = null
   escapePickupNotice.value = null
   visionRevealProgress.value = {}
-  guessWhatDifficulty.value = null
+  guessWhatWheel.value = null
   guessWhatQuestion.value = null
   guessWhatResult.value = null
   movingPlayerId.value = null
@@ -666,17 +686,23 @@ async function handleServerEvent(event) {
   } else if (event.type === 'move_announcement') {
     moveOverlay.value = event.data
     window.setTimeout(() => { moveOverlay.value = null }, remaining)
-  } else if (event.type === 'guess_what_difficulty') {
+  } else if (event.type === 'guess_what_wheel') {
     guessWhatQuestion.value = null
     guessWhatResult.value = null
-    guessWhatDifficulty.value = { ...event.data, eventId: event.id }
-    audioManager.guessWhatQuestion()
+    guessWhatWheel.value = {
+      ...event.data,
+      eventId: event.id,
+      startedAt: event.startedAt,
+      elapsedAtReceipt: Math.max(0, (Date.now() + serverClockOffset) - event.startedAt),
+    }
+    audioManager.guessWhatWheel()
   } else if (event.type === 'guess_what_question') {
-    guessWhatDifficulty.value = null
+    guessWhatWheel.value = null
     guessWhatResult.value = null
     guessWhatQuestion.value = { ...event.data, eventId: event.id }
+    audioManager.guessWhatQuestion()
   } else if (event.type === 'guess_what_answer_selected') {
-    guessWhatDifficulty.value = null
+    guessWhatWheel.value = null
     guessWhatResult.value = null
     guessWhatQuestion.value = {
       ...event.data,
@@ -685,7 +711,7 @@ async function handleServerEvent(event) {
       expiresAt: event.startedAt,
     }
   } else if (event.type === 'guess_what_answer') {
-    guessWhatDifficulty.value = null
+    guessWhatWheel.value = null
     guessWhatQuestion.value = null
     guessWhatResult.value = { ...event.data, eventId: event.id }
     audioManager.guessWhatAnswer(event.data.correct)
@@ -1031,7 +1057,7 @@ function applyGameSnapshot(message) {
   roomCode.value = message.room.code
   localStorage.setItem('ladders-room-code', message.room.code)
   selectedBoard.value = message.room.boardIndex
-  selectedMode.value = message.room.modeKey || boards[message.room.boardIndex]?.type || gameModes[0]?.key
+  selectedMode.value = message.room.modeKey || boards[message.room.boardIndex]?.type || defaultModeKey
   const previousPlayer = game.value?.players.find(player => player.id === clientId)
   const previousWinnerId = game.value?.winner?.id
   const wasGameOver = game.value?.gameOver
@@ -1169,7 +1195,7 @@ function handleSocketMessage(event) {
     onlineRoom.value = message.room
     roomCode.value = message.room.code
     selectedBoard.value = message.room.boardIndex
-    selectedMode.value = message.room.modeKey || boards[message.room.boardIndex]?.type || gameModes[0]?.key
+    selectedMode.value = message.room.modeKey || boards[message.room.boardIndex]?.type || defaultModeKey
     game.value = message.game
     visibleLog.value = [...(message.game?.log || [])]
     visualSpaces.value[message.playerId] = message.to
@@ -1216,7 +1242,7 @@ function handleSocketMessage(event) {
     roomCode.value = message.room.code
     localStorage.setItem('ladders-room-code', message.room.code)
     selectedBoard.value = message.room.boardIndex
-    selectedMode.value = message.room.modeKey || boards[message.room.boardIndex]?.type || gameModes[0]?.key
+    selectedMode.value = message.room.modeKey || boards[message.room.boardIndex]?.type || defaultModeKey
     const me = message.room.players.find(player => player.id === clientId)
     if (me) {
       playerCharacter.value = me.characterIndex
@@ -1766,11 +1792,6 @@ function placeMine(space) {
   if (!minePlacement.value) return
   minePlacement.value = null
   sendLobby({ type: 'place_mine', space })
-}
-
-function chooseGuessWhatDifficulty(difficulty) {
-  if (guessWhatDifficulty.value?.playerId !== clientId) return
-  sendLobby({ type: 'choose_guess_what_difficulty', difficulty })
 }
 
 function answerGuessWhat(answer) {
@@ -2721,7 +2742,7 @@ onUnmounted(() => {
             <label class="mode-heading">
               <span>Game mode</span>
               <select :value="selectedMode" :disabled="!isLobbyHost" @change="changeGameMode">
-                <option v-for="mode in gameModes" :key="mode.key" :value="mode.key">{{ mode.name }}</option>
+                <option v-for="mode in selectableGameModes" :key="mode.key" :value="mode.key">{{ mode.name }}</option>
               </select>
             </label>
             <div class="room-settings-row">
@@ -2908,27 +2929,6 @@ onUnmounted(() => {
         <div v-if="penaltyOverlay" class="penalty-overlay" role="status">
           <strong>Penalty</strong>
           <small>{{ penaltyOverlay.message }}</small>
-        </div>
-        <div v-if="guessWhatDifficulty" class="guess-what-overlay" role="dialog" aria-modal="true" aria-labelledby="guess-difficulty-title">
-          <section class="guess-what-card difficulty-card">
-            <small>Question square</small>
-            <h2 id="guess-difficulty-title">Choose a difficulty</h2>
-            <p>{{ guessWhatDifficulty.playerId === clientId ? 'Pick your challenge.' : `Waiting for ${guessWhatDifficulty.playerName}.` }}</p>
-            <div class="guess-difficulty-options">
-              <button
-                v-for="difficulty in ['easy', 'medium', 'hard']"
-                :key="difficulty"
-                type="button"
-                :class="difficulty"
-                :disabled="guessWhatDifficulty.playerId !== clientId || !guessWhatDifficulty.counts[difficulty]"
-                @click="chooseGuessWhatDifficulty(difficulty)"
-              >
-                <strong>{{ difficulty }}</strong>
-                <span>{{ guessWhatDifficulty.counts[difficulty] }} available</span>
-                <small>{{ guessWhatDifficulty.timers?.[difficulty] || (difficulty === 'easy' ? 7 : difficulty === 'medium' ? 10 : 15) }}s · {{ difficulty === 'easy' ? '3+' : difficulty === 'medium' ? '5+' : '7+' }} moves</small>
-              </button>
-            </div>
-          </section>
         </div>
         <div v-if="guessWhatQuestion" class="guess-what-overlay" role="dialog" aria-modal="true" aria-labelledby="guess-question-title">
           <section class="guess-what-card question-card" :class="guessWhatQuestion.difficulty">
@@ -3162,6 +3162,39 @@ onUnmounted(() => {
           >
             <div class="game-board" :class="{ 'escape-board': game.mode === 'escape_from', 'clash-board': game.mode === 'clash_with', 'clash-stunned-view': clashVisionBlurred, 'dead-forest-board': game.board.name === 'Dead Forest', 'encounter-active': escapeOverlay && escapeOverlay.type !== 'exit' }">
               <img :src="boardPicture(game.board)" :alt="`${game.board.name} gameplay board`">
+              <div
+                v-if="guessWhatWheel"
+                class="guess-wheel-board-overlay"
+                role="status"
+                aria-live="polite"
+                :aria-label="`Spinning the difficulty wheel for ${guessWhatWheel.playerName}`"
+              >
+                <section class="guess-wheel-card">
+                  <small>Question square</small>
+                  <strong>Difficulty Wheel</strong>
+                  <div class="guess-wheel-stage">
+                    <span class="guess-wheel-pointer" aria-hidden="true"></span>
+                    <div
+                      class="guess-wheel"
+                      :class="`selected-${guessWhatWheel.selectedDifficulty}`"
+                      :style="guessWhatWheelStyle"
+                      aria-hidden="true"
+                    >
+                      <span class="easy">Easy</span>
+                      <span class="medium">Medium</span>
+                      <span class="hard">Hard</span>
+                    </div>
+                  </div>
+                  <p :class="{ chosen: guessWhatWheelRevealing }">
+                    {{ guessWhatWheelRevealing
+                      ? `${guessWhatWheel.selectedDifficulty.toUpperCase()} selected!`
+                      : `Spinning for ${guessWhatWheel.playerName}...` }}
+                  </p>
+                  <div class="guess-wheel-probabilities" aria-hidden="true">
+                    <span>Easy 20%</span><span>Medium 50%</span><span>Hard 30%</span>
+                  </div>
+                </section>
+              </div>
               <div v-if="escapePickupNotice" class="escape-pickup-notice" :class="escapePickupNotice.pickupType" role="status">
                 {{ escapePickupNotice.text }}
               </div>

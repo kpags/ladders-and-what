@@ -1,5 +1,13 @@
 export const UNAVAILABLE_BOARD_NAMES = new Set()
 
+export function gameModeIsActive(mode) {
+  return mode?.is_active === true
+}
+
+export function activeGameModes(gameModes) {
+  return gameModes.filter(gameModeIsActive)
+}
+
 export function characterIsActive(character) {
   return character?.is_active === true
 }

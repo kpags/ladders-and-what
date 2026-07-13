@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
 import { activateClashSkill, activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashAttackPresentation, clashMoveOptions, clashVisibleSpaces, CLASH_MOVE_EVENT_MS, CLASH_TURN_MS, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
-import { boardIndicesForMode, boardIsAvailable, characterIndicesForMode, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
+import { activeGameModes, boardIndicesForMode, boardIsAvailable, characterIndicesForMode, gameModeIsActive, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
+import { chooseGuessWhatDifficulty } from '../src/guessWhatWheel.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
 import { createDestructionSkipState, updateDestructionSkipVote } from './destructionSkip.js'
 import {
@@ -18,6 +19,8 @@ const MAX_SPECTATORS = 6
 const TURN_MS = 15_000
 const boards = JSON.parse(readFileSync(new URL('../data/boards.json', import.meta.url), 'utf8'))
 const gameModes = JSON.parse(readFileSync(new URL('../data/game_modes.json', import.meta.url), 'utf8'))
+const selectableGameModes = activeGameModes(gameModes)
+const DEFAULT_MODE_KEY = selectableGameModes[0]?.key || ''
 const characters = JSON.parse(readFileSync(new URL('../data/characters.json', import.meta.url), 'utf8'))
 const questionnaires = JSON.parse(readFileSync(new URL('../data/guess_what_questions.json', import.meta.url), 'utf8'))
 const parkourWhats = boards.find(board => board.name === 'Nature')?.whats
@@ -53,6 +56,8 @@ const ESCAPE_SOCIAL_SOUND_MS = 3_200
 const GUESS_WHAT_TIMERS = { easy: 7_000, medium: 10_000, hard: 15_000 }
 const GUESS_WHAT_BASE_MOVES = { easy: 3, medium: 5, hard: 7 }
 const GUESS_WHAT_WRONG_MOVES = { easy: -4, medium: -3, hard: -2 }
+const GUESS_WHAT_WHEEL_MS = 3_000
+const GUESS_WHAT_WHEEL_REVEAL_MS = 1_500
 
 function questionnaireSet(board) {
   const set = questionnaires[board?.questionnaire]
@@ -962,24 +967,27 @@ function guessWhatCounts(game) {
 
 function openGuessWhatDifficulty(room, player, token) {
   const counts = guessWhatCounts(room.game)
-  const available = Object.keys(counts).filter(difficulty => counts[difficulty] > 0)
-  if (!available.length) {
+  const difficulty = chooseGuessWhatDifficulty(counts)
+  if (!difficulty) {
     room.pendingGuessWhat = null
     finishSequenceAndBeginTurn(room)
     return
   }
-  room.pendingGuessWhat = { stage: 'difficulty', playerId: player.id, token }
-  emitEvent(room, 'guess_what_difficulty', {
+  room.pendingGuessWhat = { stage: 'wheel', playerId: player.id, token, difficulty }
+  emitEvent(room, 'guess_what_wheel', {
     playerId: player.id,
     playerName: player.name,
+    selectedDifficulty: difficulty,
     counts,
     timers: guessWhatTimerSeconds(room.game),
-  }, 86_400_000)
-  if (player.isAI) {
-    room.guessWhatTimer = setTimeout(() => {
-      chooseGuessWhatDifficulty(room, player.id, available[Math.floor(Math.random() * available.length)])
-    }, 650)
-  }
+    probabilities: { easy: 20, medium: 50, hard: 30 },
+    spinDuration: GUESS_WHAT_WHEEL_MS,
+    revealDuration: GUESS_WHAT_WHEEL_REVEAL_MS,
+  }, GUESS_WHAT_WHEEL_MS + GUESS_WHAT_WHEEL_REVEAL_MS)
+  room.guessWhatTimer = setTimeout(
+    () => openGuessWhatQuestion(room, player.id, difficulty),
+    GUESS_WHAT_WHEEL_MS + GUESS_WHAT_WHEEL_REVEAL_MS,
+  )
 }
 
 async function finishGuessWhatMovement(room, result, token) {
@@ -1025,12 +1033,10 @@ async function runGuessWhatRollSequence(room, result, token) {
   finishGuessWhatMovement(room, result, token)
 }
 
-function chooseGuessWhatDifficulty(room, requesterId, requestedDifficulty) {
+function openGuessWhatQuestion(room, requesterId, requestedDifficulty) {
   const pending = room.pendingGuessWhat
   const difficulty = String(requestedDifficulty || '').toLowerCase()
-  if (!pending || pending.stage !== 'difficulty' || pending.playerId !== requesterId) {
-    return reject(sockets.get(requesterId), 'There is no difficulty choice for this player.')
-  }
+  if (!pending || pending.stage !== 'wheel' || pending.playerId !== requesterId || pending.difficulty !== difficulty) return
   const ids = room.game.remainingQuestionIds?.[difficulty] || []
   const duration = guessWhatTimerMs(room.game, difficulty)
   if (!duration || !ids.length) {
@@ -2030,6 +2036,7 @@ function startGame(room, requesterId) {
   if (room.phase !== 'lobby') return reject(sockets.get(requesterId), 'The game has already started.')
   if (room.players.length < 2) return reject(sockets.get(requesterId), 'Add at least one player or AI.')
   if (room.players.length > roomMaxPlayers(room)) return reject(sockets.get(requesterId), 'This game mode allows at most four players.')
+  if (!gameModes.some(mode => mode.key === room.modeKey && gameModeIsActive(mode))) return reject(sockets.get(requesterId), 'This game mode is unavailable.')
   const board = boards[room.boardIndex]
   if (!board || board.type !== room.modeKey || !boardIsAvailable(board)) return reject(sockets.get(requesterId), 'Choose an available board for this game mode.')
   if (!characterIndicesForMode(characters, room.modeKey).length) return reject(sockets.get(requesterId), 'No characters are available for this game mode.')
@@ -2146,8 +2153,8 @@ wss.on('connection', socket => {
         code: createCode(),
         phase: 'lobby',
         hostId: clientId,
-        modeKey: gameModes[0]?.key || 'standard',
-        boardIndex: firstBoardIndex(gameModes[0]?.key || 'standard'),
+        modeKey: DEFAULT_MODE_KEY,
+        boardIndex: firstBoardIndex(DEFAULT_MODE_KEY),
         exactMoveFor100: false,
         privateRoom: false,
         players: [],
@@ -2263,7 +2270,10 @@ wss.on('connection', socket => {
       }
     } else if (message.type === 'mode') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can select the game mode.')
-      else if (room.phase === 'lobby' && gameModes.some(mode => mode.key === message.modeKey)) {
+      else if (room.phase !== 'lobby') reject(socket, 'Game modes can only be changed in the lobby.')
+      else if (!gameModes.some(mode => mode.key === message.modeKey && gameModeIsActive(mode))) {
+        reject(socket, 'That game mode is unavailable.')
+      } else {
         if (message.modeKey === 'escape_from' && room.players.length > 4) {
           reject(socket, 'Escape From supports at most four players. Remove players first.')
           return
@@ -2341,7 +2351,7 @@ wss.on('connection', socket => {
     else if (message.type === 'stop_roll') stopRoll(room, clientId)
     else if (message.type === 'choose_escape_move') chooseEscapeMove(room, clientId, message.roll)
     else if (message.type === 'skip_escape_move') skipEscapeMoveChoice(room, clientId)
-    else if (message.type === 'choose_guess_what_difficulty') chooseGuessWhatDifficulty(room, clientId, message.difficulty)
+    else if (message.type === 'choose_guess_what_difficulty') reject(socket, 'Difficulty is selected by the wheel.')
     else if (message.type === 'answer_guess_what') answerGuessWhatQuestion(room, clientId, message.answer)
     else if (message.type === 'clash_move') clashMove(room, clientId, message.destination)
     else if (message.type === 'clash_attack') clashAttack(room, clientId, message)
