@@ -971,5 +971,208 @@
                 "description": "A powerful sniper rifle with a magazine capacity of 2 rounds. It deals 100 damage per bullet."
             }
         ]
+    },
+    {
+        "name": "War Blades",
+        "type": "showdown_with",
+        "picture": "assets/boards/war_blades/template.png",
+        "music": "war_blades",
+        "items": [
+            {
+                "name": "Small Green Potion",
+                "gif": "assets/gifs/showdown_with/war_blades/items/small_green_potion/gif",
+                "image": "assets/gifs/showdown_with/war_blades/items/small_green_potion/image",
+                "sounds_dir": "assets/sounds/showdown_with/war_blades/items/small_green_potion",
+                "effect": "heal",
+                "heal_amount": 20,
+                "drop_chance": 75,
+                "max_capacity": 1,
+                "description": "A potion that restores 20 health points when used."
+            },
+            {
+                "name": "Medium Green Potion",
+                "gif": "assets/gifs/showdown_with/war_blades/items/medium_green_potion/gif",
+                "image": "assets/gifs/showdown_with/war_blades/items/medium_green_potion/image",
+                "sounds_dir": "assets/sounds/showdown_with/war_blades/items/medium_green_potion",
+                "effect": "heal",
+                "heal_amount": 50,
+                "drop_chance": 75,
+                "max_capacity": 1,
+                "description": "A potion that restores 50 health points when used."
+            },
+            {
+                "name": "Large Green Potion",
+                "gif": "assets/gifs/showdown_with/war_blades/items/large_green_potion/gif",
+                "image": "assets/gifs/showdown_with/war_blades/items/large_green_potion/image",
+                "sounds_dir": "assets/sounds/showdown_with/war_blades/items/large_green_potion",
+                "effect": "heal",
+                "heal_amount": 80,
+                "drop_chance": 75,
+                "max_capacity": 1,
+                "description": "A potion that restores 80 health points when used."
+            }
+        ],
+        "weapons": [
+            {
+                "name": "Tidal Fang",
+                "image": "assets/gifs/showdown_with/war_blades/weapons/tidal_fang/image",
+                "sounds_dir": "assets/sounds/showdown_with/war_blades/weapons/tidal_fang",
+                "class": "water",
+                "drop_chance": 100,
+                "base_damage": 8,
+                "modes": [
+                    {
+                        "name": "Basic Attack",
+                        "description": "Performs a horizontal slash attack.",
+                        "required_mana": 0,
+                        "multiplier_damage": 0
+                    },
+                    {
+                        "name": "Power Attack",
+                        "description": "Performs 3 rapid straight attacks in a row in different angles.",
+                        "required_mana": 5,
+                        "multiplier_damage": 1
+                    },
+                    {
+                        "name": "Block",
+                        "description": "Blocks the enemy's attack and reduces damage taken by 50%.",
+                        "required_mana": 0,
+                        "multiplier_damage": 0
+                    },
+                    {
+                        "name": "Surging Waves",
+                        "description": "Performs 2 heavy rotational slash attacks that deals additional damage when hitting the enemy.",
+                        "required_mana": 30,
+                        "multiplier_damage": 1.5
+                    },
+                    {
+                        "name": "Rapid Tsunami",
+                        "description": "Performs a super-sonic speed slash attack that deals additional damage when hitting the enemy.",
+                        "required_mana": 50,
+                        "multiplier_damage": 2.5
+                    }
+                ]
+            },
+            {
+                "name": "Blue Sabre",
+                "image": "assets/gifs/showdown_with/war_blades/weapons/blue_sabre/image",
+                "sounds_dir": "assets/sounds/showdown_with/war_blades/weapons/blue_sabre",
+                "class": "water",
+                "drop_chance": 75,
+                "base_damage": 12,
+                "modes": [
+                    {
+                        "name": "Basic Attack",
+                        "description": "Performs a vertical slash attack.",
+                        "required_mana": 0,
+                        "multiplier_damage": 0
+                    },
+                    {
+                        "name": "Power Attack",
+                        "description": "Performs heavy horizontal slash attack.",
+                        "required_mana": 8,
+                        "multiplier_damage": 1.2
+                    },
+                    {
+                        "name": "Block",
+                        "description": "Blocks the enemy's attack and reduces damage taken by 50% and has a 5% chance to stun the enemy.",
+                        "required_mana": 0,
+                        "multiplier_damage": 0
+                    },
+                    {
+                        "name": "Calm Waves",
+                        "description": "Reduce damage taken by 80% for each of the next 3 attacks by the enemy.",
+                        "required_mana": 35,
+                        "multiplier_damage": 0
+                    },
+                    {
+                        "name": "Sea Javelins",
+                        "description": "Showers the enemy with 5 javelins in water form that deals heavy additional damage.",
+                        "required_mana": 50,
+                        "multiplier_damage": 5
+                    }
+                ]
+            },
+            {
+                "name": "Blazing Wrath",
+                "image": "assets/gifs/showdown_with/war_blades/weapons/blazing_wrath/image",
+                "sounds_dir": "assets/sounds/showdown_with/war_blades/weapons/blazing_wrath",
+                "class": "fire",
+                "drop_chance": 100,
+                "base_damage": 8,
+                "modes": [
+                    {
+                        "name": "Basic Attack",
+                        "description": "Performs a horizontal slash attack.",
+                        "required_mana": 0,
+                        "multiplier_damage": 0
+                    },
+                    {
+                        "name": "Power Attack",
+                        "description": "Performs heavy straight slash attack.",
+                        "required_mana": 8,
+                        "multiplier_damage": 1.1
+                    },
+                    {
+                        "name": "Block",
+                        "description": "Blocks the enemy's attack and reduces damage taken by 50%.",
+                        "required_mana": 0,
+                        "multiplier_damage": 0
+                    },
+                    {
+                        "name": "Fireball",
+                        "description": "Launches a fireball that deals additional damage to the enemy.",
+                        "required_mana": 25,
+                        "multiplier_damage": 1.2
+                    },
+                    {
+                        "name": "Scorching Ground",
+                        "description": "Scorches the ground, dealing heavy damage to anything it passes through.",
+                        "required_mana": 50,
+                        "multiplier_damage": 2.5
+                    }
+                ]
+            },
+            {
+                "name": "Dragon's Teeth",
+                "image": "assets/gifs/showdown_with/war_blades/weapons/dragons_teeth/image",
+                "sounds_dir": "assets/sounds/showdown_with/war_blades/weapons/dragons_teeth",
+                "class": "fire",
+                "drop_chance": 75,
+                "base_damage": 14,
+                "modes": [
+                    {
+                        "name": "Basic Attack",
+                        "description": "Performs a straight slash attack.",
+                        "required_mana": 0,
+                        "multiplier_damage": 0
+                    },
+                    {
+                        "name": "Power Attack",
+                        "description": "Performs 2 continuous heavy straight slash attacks.",
+                        "required_mana": 15,
+                        "multiplier_damage": 1.5
+                    },
+                    {
+                        "name": "Block",
+                        "description": "Blocks the enemy's attack and reduces damage taken by 50% and 2% chance to apply burn effect to the enemy for 3 seconds. Inflict 2 damage per second.",
+                        "required_mana": 5,
+                        "multiplier_damage": 0
+                    },
+                    {
+                        "name": "Ring Fire",
+                        "description": "Performs spinning attacks for 2 seconds that deals additional damage to the enemy.",
+                        "required_mana": 30,
+                        "multiplier_damage": 1.8
+                    },
+                    {
+                        "name": "Phoenix Wings",
+                        "description": "Performs rapid dash attacks moving from one side to another side infinitely for 3 seconds that deals additional damage to the enemy.",
+                        "required_mana": 50,
+                        "multiplier_damage": 2
+                    }
+                ]
+            }
+        ]
     }
 ]

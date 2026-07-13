@@ -23,5 +23,10 @@
     "name": "Clash with WHAT?!",
     "key": "clash_with",
     "description": "Turn-based Battle Royale! Gather weapons and be the last man standing."
+  },
+  {
+    "name": "Showdown with WHAT?!",
+    "key": "showdown_with",
+    "description": "Improved turn-based Battle Royale with Showdown every encounter! Gather weapons and be the last man standing."
   }
 ]
