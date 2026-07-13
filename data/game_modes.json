@@ -2,31 +2,37 @@
   {
     "name": "Ladders & WHAT?!",
     "key": "standard",
-    "description": "A standard board with ladders and whats."
+    "description": "A standard board with ladders and whats.",
+    "is_active": true
   },
   {
     "name": "Run Away from WHAT?!",
     "key": "run_away",
-    "description": "Run away from the destructive objects or you die!"
+    "description": "Run away from the destructive objects or you die!",
+    "is_active": true
   },
   {
     "name": "Guess WHAT?!",
     "key": "guess_what",
-    "description": "Keep moving or land on a question mark to answer a question. A boost awaits...if answered correctly."
+    "description": "Keep moving or land on a question mark to answer a question. A boost awaits...if answered correctly.",
+    "is_active": true
   },
   {
     "name": "Let's escape from WHAT?!",
     "key": "escape_from",
-    "description": "Team up with other players to find the keys to the exit and escape! While dealing with different entities."
+    "description": "Team up with other players to find the keys to the exit and escape! While dealing with different entities.",
+    "is_active": true
   },
   {
     "name": "Clash with WHAT?!",
     "key": "clash_with",
-    "description": "Turn-based Battle Royale! Gather weapons and be the last man standing."
+    "description": "Turn-based Battle Royale! Gather weapons and be the last man standing.",
+    "is_active": true
   },
   {
     "name": "Showdown with WHAT?!",
     "key": "showdown_with",
-    "description": "Improved turn-based Battle Royale with Showdown every encounter! Gather weapons and be the last man standing."
+    "description": "Improved turn-based Battle Royale with Showdown every encounter! Gather weapons and be the last man standing.",
+    "is_active": false
   }
 ]

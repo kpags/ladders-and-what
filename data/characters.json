@@ -349,5 +349,16 @@
           "type": "active"
         }
       ]
+    },
+     {
+      "id": "ghost_warrior",
+      "name": "Ghost Warrior",
+      "assets_dir": "assets/gifs/clash_with/characters/ghost_warrior",
+      "is_active": true,
+      "color": "#8F8F8F",
+      "modes": [
+        "showdown_with"
+      ],
+      "description": "Mysterious. Unknown. Silent."
     }
 ]

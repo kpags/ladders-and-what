@@ -977,6 +977,7 @@
         "type": "showdown_with",
         "picture": "assets/boards/war_blades/template.png",
         "music": "war_blades",
+        "max_players": 4,
         "items": [
             {
                 "name": "Small Green Potion",
@@ -987,7 +988,8 @@
                 "heal_amount": 20,
                 "drop_chance": 75,
                 "max_capacity": 1,
-                "description": "A potion that restores 20 health points when used."
+                "description": "A potion that restores 20 health points when used.",
+                "is_active": false
             },
             {
                 "name": "Medium Green Potion",
@@ -998,7 +1000,8 @@
                 "heal_amount": 50,
                 "drop_chance": 75,
                 "max_capacity": 1,
-                "description": "A potion that restores 50 health points when used."
+                "description": "A potion that restores 50 health points when used.",
+                "is_active": false
             },
             {
                 "name": "Large Green Potion",
@@ -1009,12 +1012,14 @@
                 "heal_amount": 80,
                 "drop_chance": 75,
                 "max_capacity": 1,
-                "description": "A potion that restores 80 health points when used."
+                "description": "A potion that restores 80 health points when used.",
+                "is_active": false
             }
         ],
         "weapons": [
             {
                 "name": "Tidal Fang",
+                "is_active": false,
                 "image": "assets/gifs/showdown_with/war_blades/weapons/tidal_fang/image",
                 "sounds_dir": "assets/sounds/showdown_with/war_blades/weapons/tidal_fang",
                 "class": "water",
@@ -1055,6 +1060,7 @@
             },
             {
                 "name": "Blue Sabre",
+                "is_active": false,
                 "image": "assets/gifs/showdown_with/war_blades/weapons/blue_sabre/image",
                 "sounds_dir": "assets/sounds/showdown_with/war_blades/weapons/blue_sabre",
                 "class": "water",
@@ -1095,6 +1101,7 @@
             },
             {
                 "name": "Blazing Wrath",
+                "is_active": true,
                 "image": "assets/gifs/showdown_with/war_blades/weapons/blazing_wrath/image",
                 "sounds_dir": "assets/sounds/showdown_with/war_blades/weapons/blazing_wrath",
                 "class": "fire",
@@ -1135,6 +1142,7 @@
             },
             {
                 "name": "Dragon's Teeth",
+                "is_active": false,
                 "image": "assets/gifs/showdown_with/war_blades/weapons/dragons_teeth/image",
                 "sounds_dir": "assets/sounds/showdown_with/war_blades/weapons/dragons_teeth",
                 "class": "fire",
