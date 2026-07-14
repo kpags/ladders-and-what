@@ -2334,6 +2334,10 @@ function sendClashAttack(targetId) {
 
 function handleBoardTokenClick(player) {
   if (game.value?.mode === 'clash_with') {
+    if (player.id === clientId) {
+      playTurn()
+      return
+    }
     if (
       !clashAttackPending.value
       && clashActionMode.value === 'attack'
