@@ -262,7 +262,7 @@
       "id": "luisa",
       "name": "Luisa",
       "assets_dir": "assets/gifs/clash_with/characters/luisa",
-      "is_active": false,
+      "is_active": true,
       "color": "#698C4A",
       "modes": [
         "clash_with"
