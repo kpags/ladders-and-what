@@ -38,6 +38,7 @@ import baldLastGif from '../assets/gifs/escape_from/dead_forest/entities/bald/la
 import uncleLastGif from '../assets/gifs/escape_from/dead_forest/entities/uncle/last_frame.png'
 import { audioManager } from './audioManager'
 import { getBoardSpaceBounds, getBoardSpacePosition, getVisualSurroundingSpaces } from './boardLayout'
+import { clashMeleeAssetDirection } from './clashMedia'
 import { CLASH_BOARD_COLUMNS, CLASH_BOARD_SPACES, CLASH_MAX_HEALTH, CLASH_MOVE_REAPPEAR_DELAY_MS } from './gameRules'
 import { activeGameModes, boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
 
@@ -227,6 +228,7 @@ let operatorTimer
 const defaultModeKey = selectableGameModes[0]?.key || ''
 const CLASH_MELEE_SLASH_MS = 1640
 const CLASH_MELEE_ATTACKED_MS = 4100
+const CLASH_MELEE_MODEL_MS = 600
 const CLASH_DIRECTION_KEYS = new Set([
   'north',
   'south',
@@ -902,8 +904,9 @@ async function handleServerEvent(event) {
     clashAttackPending.value = false
     audioManager.clashWeapon(event.data.weaponName, event.data.modeName, clashListenerVolume(event.data.sourceSpace))
     setClashFacing(event.data.playerId, event.data.sourceSpace, event.data.targetSpace)
-    if (event.data.weaponClass === 'melee') clearClashPlayerAction(event.data.playerId)
-    else {
+    if (event.data.weaponClass === 'melee') {
+      setClashPlayerAction(event.data.playerId, 'melee', Math.max(250, Math.min(remaining, CLASH_MELEE_MODEL_MS)))
+    } else {
       const actionDuration = audioManager.clashWeaponDuration(event.data.weaponName, event.data.modeName, Math.min(remaining, 1200))
       setClashPlayerAction(event.data.playerId, event.data.weaponClass === 'pistol' ? 'secondary_fire' : 'primary_fire', Math.max(250, Math.min(remaining, actionDuration)))
     }
@@ -1862,7 +1865,7 @@ function clashMedia(path, kind = 'gif') {
 }
 
 function clashMediaKindForAction(action) {
-  return action === 'sprint' ? 'gif' : 'image'
+  return action === 'sprint' || action === 'melee' ? 'gif' : 'image'
 }
 
 function characterSkillByType(character, type) {
@@ -1885,7 +1888,9 @@ function clashCharacterAsset(characterOrPlayer, action = 'idle', direction = nul
     return image ? { src: image, directional: true } : null
   }
   const kind = clashMediaKindForAction(action)
-  const safeDirection = CLASH_DIRECTION_KEYS.has(direction) ? direction : null
+  const safeDirection = action === 'melee'
+    ? clashMeleeAssetDirection(direction)
+    : CLASH_DIRECTION_KEYS.has(direction) ? direction : null
   if (safeDirection) {
     const directional = clashMedia(`${assetsDir}/${action}/${safeDirection}`, kind)
     if (directional) return { src: directional, directional: true }
@@ -1956,14 +1961,14 @@ function clashFacingStyle(player) {
   if (game.value?.mode !== 'clash_with') return null
   const sprite = clashPlayerSpriteInfo(player)
   if (!sprite) return null
-  const scale = {
+  const scale = clashPlayerAction(player) === 'melee' ? 1 : ({
     'big-daddy': 1.89,
     angel: 1.01,
     luisa: 1.09,
     ritcher: 1.05,
     speed: 1.02,
     'young-jack': 1.06,
-  }[player.characterId || player.id] || 1
+  }[player.characterId || player.id] || 1)
   const direction = clashPlayerDirection(player)
   const flip = !sprite.directional && direction.includes('west') ? -scale : scale
   return { transform: `scaleX(${flip}) scaleY(${scale})` }
@@ -1979,12 +1984,6 @@ function setClashPlayerAction(playerId, action, duration = 900) {
       clashCharacterActions.value = current
     }
   }, duration)
-}
-
-function clearClashPlayerAction(playerId) {
-  const current = { ...clashCharacterActions.value }
-  delete current[playerId]
-  clashCharacterActions.value = current
 }
 
 function clashInventoryImage(entry) {

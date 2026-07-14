@@ -133,6 +133,28 @@ test('Angel Clash character assets use the canonical directional folder structur
   }
 })
 
+test('every Clash melee asset directory provides the four cardinal GIFs', () => {
+  const characterRoot = resolve(root, 'assets/gifs/clash_with/characters')
+  const meleeDirectories = readdirSync(characterRoot, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => resolve(characterRoot, entry.name, 'melee'))
+    .filter(path => existsSync(path))
+
+  assert.ok(meleeDirectories.length > 0)
+  for (const directory of meleeDirectories) {
+    for (const direction of ['north', 'south', 'east', 'west']) {
+      const path = resolve(directory, `${direction}.gif`)
+      assert.equal(existsSync(path), true, path)
+      const buffer = readFileSync(path)
+      const frames = graphicControlExtensions(buffer)
+      assert.ok(frames.length > 0, path)
+      assert.ok(frames.every(frame => frame.transparent), path)
+      assert.deepEqual(graphicSize(buffer, path), [512, 512], path)
+      assert.equal(buffer.includes(Buffer.from('NETSCAPE2.0')), false, path)
+    }
+  }
+})
+
 test('Clash movement puff has transparent frames after background cleanup', () => {
   const puffGif = resolve(root, 'assets/gifs/clash_with/characters/move_puff.gif')
   const frames = graphicControlExtensions(readFileSync(puffGif))

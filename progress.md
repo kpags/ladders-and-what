@@ -105,6 +105,10 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Clash QA passed all 121 tests, server/client syntax checks, `git diff --check`, production build, the bundled web-game runner, and focused gameplay screenshots for model bounds, character-colored portrait boxes, Turn 2 red-only rival reveal, and the directional wave cue. The browser's only console failure was its sandboxed Google Fonts request.
 - Clash deaths now record their original square so blood remains there while the eliminated ghost moves; Clash blood uses the board's 15x15 positioning, and ghosts never receive approximate attack sound-direction indicators.
 - Angel's Girl Scout skill is disabled and labeled `Full Health` at 100 HP, with matching game-rule rejection. Validation passed all 123 tests, syntax checks, `git diff --check`, the bundled browser runner, focused Angel/ghost UI checks, and a production build.
+- Clash melee attacks now play each character's dynamically discovered `melee` GIF: north/northeast/northwest use `north.gif`, south/southeast/southwest use `south.gif`, and east/west use their matching files. The animation uses the existing contained character-model sizing and falls back to idle for characters without melee assets.
+- Melee validation passed all 128 tests, production build, `git diff --check`, the bundled web-game runner, and focused gameplay QA confirming Big Daddy's northeast attack resolves to `melee/north.gif` without escaping its board square.
+- Normalized all current Clash melee GIFs to transparent 512x512 canvases with centered, near-edge model bounds and removed their infinite-loop extensions. Melee presentation now uses a one-cycle 600ms action scale instead of inheriting oversized character-specific idle scaling.
+- Transparent melee QA passed all 128 tests plus focused asset tests, visual inspection of processed Angel/Big Daddy GIFs, the bundled runner, and an in-board Big Daddy northeast melee screenshot with no matte or square overflow.
 
 ## TODO
 

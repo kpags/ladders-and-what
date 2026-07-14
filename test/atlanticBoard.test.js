@@ -3,11 +3,24 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getBoardSpaceBounds, getBoardSpacePosition } from '../src/boardLayout.js'
+import { clashMeleeAssetDirection } from '../src/clashMedia.js'
 import { activateClashSkill, applyWhatEffects, clashAttackPresentation, clashMoveOptions, CLASH_BOARD_SPACES, CLASH_PLAYER_SPAWN_SPACES, CLASH_SKILL_COOLDOWN_MS, createGameState, moveClashGhost, skipClashStunnedTurn, takeClashAttack, takeClashItem, takeClashMove } from '../src/gameRules.js'
 
 const root = resolve(import.meta.dirname, '..')
 const boards = JSON.parse(readFileSync(resolve(root, 'data/boards.json'), 'utf8'))
 const atlantic = boards.find(board => board.name === 'Atlantic')
+
+test('Clash melee attacks map eight-way facing to four directional assets', () => {
+  assert.equal(clashMeleeAssetDirection('north'), 'north')
+  assert.equal(clashMeleeAssetDirection('north_east'), 'north')
+  assert.equal(clashMeleeAssetDirection('north_west'), 'north')
+  assert.equal(clashMeleeAssetDirection('south'), 'south')
+  assert.equal(clashMeleeAssetDirection('south_east'), 'south')
+  assert.equal(clashMeleeAssetDirection('south_west'), 'south')
+  assert.equal(clashMeleeAssetDirection('east'), 'east')
+  assert.equal(clashMeleeAssetDirection('west'), 'west')
+  assert.equal(clashMeleeAssetDirection(''), null)
+})
 
 test('Atlantic is registered as a Standard board with valid assets', () => {
   assert.ok(atlantic)
