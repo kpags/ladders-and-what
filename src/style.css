@@ -210,9 +210,9 @@ input[type=range] { height:30px; }
 .lobby-char-arrow.right { right:7px; }
 .lobby-char-arrow:hover { filter:brightness(1.12); transform:translateY(-2px); }
 .ai-label { position:absolute; z-index:4; top:8px; left:8px; padding:.2rem .5rem; border:2px solid #0b1524; border-radius:7px; background:#35a7ec; color:white; font:1rem 'Luckiest Guy'; }
-.remove-ai { position:absolute; z-index:11; top:7px; right:49px; width:31px; height:31px; display:grid; place-items:center; padding:0; border:2px solid #210c0c; border-radius:50%; background:#d83e3a; color:white; font:bold 1.5rem/1 sans-serif; }
+.remove-ai { position:absolute; z-index:11; top:7px; right:7px; width:31px; height:31px; display:grid; place-items:center; padding:0; border:2px solid #210c0c; border-radius:50%; background:#d83e3a; color:white; font:bold 1.5rem/1 sans-serif; }
 .remove-ai:hover { filter:brightness(1.15); transform:scale(1.08); }
-.kick-player { position:absolute; z-index:11; top:7px; right:50px; width:28px; height:28px; display:grid; place-items:center; padding:0; border:2px solid #310909; border-radius:50%; background:#e23d3d; box-shadow:0 3px 0 #310909; color:#fff; font:bold 1.25rem/1 sans-serif; }
+.kick-player { position:absolute; z-index:11; top:7px; right:7px; width:28px; height:28px; display:grid; place-items:center; padding:0; border:2px solid #310909; border-radius:50%; background:#e23d3d; box-shadow:0 3px 0 #310909; color:#fff; font:bold 1.25rem/1 sans-serif; }
 .kick-player:hover { filter:brightness(1.15); transform:translateY(-1px); }
 .lobby-player.empty { opacity:.75; }
 .empty-mark { margin:auto; color:#706285; font:7rem/1 'Luckiest Guy'; }
@@ -936,8 +936,7 @@ input[type=range] { height:30px; }
   .lobby-message-box { top:42px; right:5px; width:calc(100% - 10px); padding:.42rem; }
   .lobby-message-box textarea { min-height:62px; font-size:.82rem; }
   .lobby-message-bubble { top:12px; max-width:calc(100% - 60px); padding:.32rem .45rem; border-width:2px; font-size:.68rem; }
-  .remove-ai { right:42px; }
-  .kick-player { right:43px; }
+  .remove-ai,.kick-player { right:5px; }
   .lobby-character-tooltip { top:6px; width:calc(100% - 12px); max-height:150px; overflow:auto; padding:.55rem .45rem; }
   .lobby-character-tooltip strong { font-size:.92rem; }
   .lobby-character-tooltip small { font-size:.72rem; }
