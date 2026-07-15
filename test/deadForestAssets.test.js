@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { CLASH_MOVE_EVENT_MS, CLASH_MOVE_PUFF_MS } from '../src/gameRules.js'
 
 const root = resolve(import.meta.dirname, '..')
+const characters = JSON.parse(readFileSync(resolve(root, 'data/characters.json'), 'utf8'))
 const assets = [
   ['keys.gif', 12],
 ]
@@ -111,7 +112,20 @@ test('Clash melee effect animations use transparent GIF frames', () => {
   }
 })
 
-test('Angel Clash character assets use the canonical directional folder structure', () => {
+test('Clash character asset directories exactly match their configured casing', () => {
+  const characterRoot = resolve(root, 'assets/gifs/clash_with/characters')
+  const directoryNames = readdirSync(characterRoot, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => entry.name)
+
+  for (const character of characters.filter(item => item.modes?.includes('clash_with') && item.assets_dir)) {
+    const configuredName = character.assets_dir.split('/').at(-1)
+    const caseInsensitiveMatches = directoryNames.filter(name => name.toLowerCase() === configuredName.toLowerCase())
+    assert.deepEqual(caseInsensitiveMatches, [configuredName], `${character.name}: ${character.assets_dir}`)
+  }
+})
+
+test('active Clash character assets use the canonical directional folder structure', () => {
   const directions = [
     'north',
     'south',
@@ -123,12 +137,20 @@ test('Angel Clash character assets use the canonical directional folder structur
     'south_west',
   ]
   const pngActions = ['idle', 'primary_fire', 'secondary_fire', 'throw']
-  for (const action of pngActions) {
-    for (const direction of directions) {
-      const path = resolve(root, 'assets/gifs/clash_with/characters/angel', action, `${direction}.png`)
-      assert.equal(existsSync(path), true, path)
-      assert.equal(pngHasAlpha(readFileSync(path)), true, path)
-      assert.notDeepEqual(graphicSize(readFileSync(path), path), [768, 1376], path)
+  const activeCharacters = characters.filter(character => character.is_active === true && character.modes?.includes('clash_with'))
+
+  for (const character of activeCharacters) {
+    const characterRoot = resolve(root, character.assets_dir)
+    const lobbyImage = resolve(characterRoot, 'image.png')
+    assert.equal(existsSync(lobbyImage), true, lobbyImage)
+    assert.equal(pngHasAlpha(readFileSync(lobbyImage)), true, lobbyImage)
+    for (const action of pngActions) {
+      for (const direction of directions) {
+        const path = resolve(characterRoot, action, `${direction}.png`)
+        assert.equal(existsSync(path), true, path)
+        assert.equal(pngHasAlpha(readFileSync(path)), true, path)
+        if (character.id === 'angel') assert.notDeepEqual(graphicSize(readFileSync(path), path), [768, 1376], path)
+      }
     }
   }
 })
