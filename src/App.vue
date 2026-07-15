@@ -1962,7 +1962,7 @@ function clashFacingStyle(player) {
   const sprite = clashPlayerSpriteInfo(player)
   if (!sprite) return null
   const scale = clashPlayerAction(player) === 'melee' ? 1 : ({
-    'big-daddy': 1.89,
+    'big-daddy': 1,
     angel: 1.01,
     luisa: 1.09,
     ritcher: 1.05,
