@@ -110,6 +110,7 @@ Original prompt: Add game-mode selection to the lobby from data/game_modes.json,
 - Normalized all current Clash melee GIFs to transparent 512x512 canvases with centered, near-edge model bounds and removed their infinite-loop extensions. Melee presentation now uses a one-cycle 600ms action scale instead of inheriting oversized character-specific idle scaling.
 - Transparent melee QA passed all 128 tests plus focused asset tests, visual inspection of processed Angel/Big Daddy GIFs, the bundled runner, and an in-board Big Daddy northeast melee screenshot with no matte or square overflow.
 - Clicking the controlled Clash character on the board now toggles the same Move action as the header Move button, while opponent clicks retain attack targeting. Browser QA confirmed 8 matching move options and second-click toggle-off behavior; all 128 tests pass.
+- Bomber Jack mines now resolve through the shared landing chain: owners pushed forward and opponents pushed backward trigger a WHAT at their destination, and skill-driven landings trigger the mine explosion, push animation, and any resulting WHAT in order. Validation passed all 132 tests, syntax checks, `git diff --check`, a temporary-directory production build, and the bundled browser smoke.
 
 ## TODO
 

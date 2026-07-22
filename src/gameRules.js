@@ -988,11 +988,15 @@ function triggerHiddenMine(state, player, {
   addLog(state, selfTriggered
     ? `${player.name} triggered their own hidden mine and was blasted forward to space ${player.space}.`
     : `${player.name} landed on a hidden mine and was blown back to space ${player.space}.`)
-  if (!selfTriggered && applyQuestionAfterPush && state.board.question_marks.includes(player.space)) {
+  if (applyQuestionAfterPush) {
     const precedingChain = [...state.lastQuestionChain]
     const mineResolution = { kind: 'mine', ...state.lastMineExplosion, destination: player.space }
-    resolveLanding(state, player)
-    state.lastQuestionChain = [...precedingChain, mineResolution, ...state.lastQuestionChain]
+    let followingChain = []
+    if (state.board.question_marks.includes(player.space)) {
+      resolveLanding(state, player)
+      followingChain = [...state.lastQuestionChain]
+    }
+    state.lastQuestionChain = [...precedingChain, mineResolution, ...followingChain]
   }
   return state.lastMineExplosion
 }
@@ -1352,7 +1356,6 @@ function movePlayer(state, player, destination, allowExactBounce = false) {
         triggerHiddenMine(state, player, {
           landedSpace: square,
           maxBackwardDistance: 2,
-          applyQuestionAfterPush: false,
           duringMove: true,
         })
         return player.space
@@ -1563,7 +1566,6 @@ function resolveLanding(state, player) {
     triggerHiddenMine(state, player, {
       landedSpace: ladder.to,
       pushOrigin: ladder.from,
-      applyQuestionAfterPush: false,
       ladder,
     })
   }
@@ -1883,18 +1885,21 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
   const resolveSkillLanding = (landingPlayer, landingSpace) => {
     const isQuestion = state.board.question_marks.includes(landingPlayer.space)
     const isLadderBottom = state.board.ladders.some(ladder => ladder.from === landingPlayer.space)
-    if (!isQuestion && !isLadderBottom) return
+    const isHiddenMine = hiddenMineIndexAt(state, landingPlayer.space) >= 0
+    if (!isQuestion && !isLadderBottom && !isHiddenMine) return
     resolveLanding(state, landingPlayer)
-    const afterQuestions = state.lastQuestionChain.at(-1)?.destination ?? landingSpace
-    const connectedLadder = state.board.ladders.find(item => item.from === afterQuestions)
+    const questionChain = state.lastQuestionChain.map(item => ({
+      ...item,
+      what: item.what ? { ...item.what } : undefined,
+    }))
+    const mineTriggered = questionChain.some(item => item.kind === 'mine')
+    const afterQuestions = questionChain.at(-1)?.destination ?? landingSpace
+    const connectedLadder = !mineTriggered && state.board.ladders.find(item => item.from === afterQuestions)
     landingResolutions.push({
       playerId: landingPlayer.id,
       playerName: landingPlayer.name,
       landingSpace,
-      questionChain: state.lastQuestionChain.map(item => ({
-        ...item,
-        what: item.what ? { ...item.what } : undefined,
-      })),
+      questionChain,
       ladder: connectedLadder ? { ...connectedLadder } : null,
     })
   }

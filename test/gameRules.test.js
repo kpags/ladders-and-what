@@ -177,6 +177,62 @@ test('Hidden Mine applies a WHAT after blowing a player onto a question square',
   assert.equal(state.lastQuestionChain[1].what.name, 'Mine Surprise')
 })
 
+test('Hidden Mine applies a WHAT after blasting its owner forward', () => {
+  const state = createState([10, 30])
+  state.board.question_marks = [14]
+  state.board.whats = [{
+    name: 'Owner Surprise',
+    spawn_locations: { start: 1, end: 99 },
+    effects: [{ effect: 'lose_turn', turns: 1, description: 'Lose a turn.' }],
+  }]
+  state.hiddenMines = [{ ownerId: 'player-1', space: 12 }]
+  state.nextExplosionTurn = 99
+
+  withMockRandom(0.99, () => takeTurn(state, 2))
+
+  assert.equal(state.players[0].space, 14)
+  assert.equal(state.players[0].skipTurns, 1)
+  assert.equal(state.lastQuestionChain[0].kind, 'mine')
+  assert.equal(state.lastQuestionChain[1].what.name, 'Owner Surprise')
+})
+
+test('Hidden Mine applies a WHAT after a mid-move pushback', () => {
+  const state = createState([15, 10])
+  state.board.question_marks = [11]
+  state.board.whats = [{
+    name: 'Interrupted Surprise',
+    spawn_locations: { start: 1, end: 99 },
+    effects: [{ effect: 'lose_turn', turns: 1, description: 'Lose a turn.' }],
+  }]
+  state.hiddenMines = [{ ownerId: 'player-1', space: 12 }]
+  state.currentPlayerIndex = 1
+  state.nextExplosionTurn = 99
+
+  withMockRandom(0.99, () => takeTurn(state, 5))
+
+  assert.equal(state.players[1].space, 11)
+  assert.equal(state.players[1].skipTurns, 1)
+  assert.equal(state.lastQuestionChain[0].kind, 'mine')
+  assert.equal(state.lastQuestionChain[1].what.name, 'Interrupted Surprise')
+})
+
+test('movement skills trigger a mine when another player lands on it', () => {
+  const state = createState([12, 18, 50])
+  state.players[0].specialSkill = { name: 'Switcheroo' }
+  state.players[0].skillCooldownUntil = 0
+  state.hiddenMines = [{ ownerId: 'player-3', space: 12 }]
+
+  const result = withMockRandom(0, () => activateSkill(state, 1))
+
+  assert.equal(result.ok, true)
+  assert.equal(state.players[1].space, 11)
+  assert.deepEqual(state.hiddenMines, [])
+  assert.equal(state.lastMineExplosion.playerId, 'player-2')
+  const targetLanding = result.landingResolutions.find(item => item.playerId === 'player-2')
+  assert.equal(targetLanding.questionChain[0].kind, 'mine')
+  assert.equal(targetLanding.questionChain[0].landedSpace, 12)
+})
+
 test('Hidden Mine interrupts movement and limits mid-move pushback to two spaces', () => {
   const state = createState([15, 10])
   state.hiddenMines = [{ ownerId: 'player-1', space: 12 }]

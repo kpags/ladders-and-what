@@ -786,6 +786,7 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
 
   const questionChain = room.game.lastQuestionChain || []
   let resolvedSpace = rollLanding
+  let ladderHandledByMine = false
   const exactBounce = room.game.lastExactBounce
   if (exactBounce?.playerId === player.id && !player.eliminated) {
     emitEvent(room, 'exact_bounce', exactBounce, 3000)
@@ -804,6 +805,17 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
 
   for (const resolution of questionChain) {
     if (resolution.kind === 'mine') {
+      if (resolution.ladder) {
+        emitEvent(room, 'ladder', {
+          playerId: player.id,
+          from: resolution.ladder.from,
+          to: resolution.ladder.to,
+        }, 1600)
+        if (!await wait(room, 1600, token)) return
+        triggerAiReactions(room, player.id, 'ladder')
+        resolvedSpace = resolution.ladder.to
+        ladderHandledByMine = true
+      }
       emitEvent(room, 'mine_explosion', resolution, 1600)
       if (!await wait(room, 1600, token)) return
       emitEvent(room, 'mine_push', resolution, 900)
@@ -839,6 +851,7 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
   }
 
   const ladder = !player.eliminated
+    && !ladderHandledByMine
     && (!mineExplosion || mineExplosion.ladder?.from === resolvedSpace)
     && room.game.board.ladders.find(item => item.from === resolvedSpace)
   if (ladder) {
@@ -1909,7 +1922,30 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
     const result = activateSkill(room.game, Date.now(), targetId)
     const playOneLandingResolution = async landingResolution => {
       let resolvedSpace = landingResolution.landingSpace ?? result.movement?.to
+      let ladderHandledByMine = false
       for (const resolution of landingResolution.questionChain) {
+        if (resolution.kind === 'mine') {
+          if (resolution.ladder) {
+            emitEvent(room, 'ladder', {
+              playerId: landingResolution.playerId,
+              from: resolution.ladder.from,
+              to: resolution.ladder.to,
+            }, 1600)
+            if (!await wait(room, 1600, token)) return false
+            triggerAiReactions(room, landingResolution.playerId, 'ladder')
+            resolvedSpace = resolution.ladder.to
+            ladderHandledByMine = true
+          }
+          emitEvent(room, 'mine_explosion', resolution, 1600)
+          if (!await wait(room, 1600, token)) return false
+          emitEvent(room, 'mine_push', resolution, 900)
+          if (!await wait(room, 900, token)) return false
+          triggerAiReactions(room, landingResolution.playerId, 'negative')
+          const settleDelay = Math.floor(Math.random() * 501)
+          if (settleDelay && !await wait(room, settleDelay, token)) return false
+          resolvedSpace = resolution.destination
+          continue
+        }
         if (resolution.kind === 'what') {
           const landingPlayer = room.game.players.find(item => item.id === landingResolution.playerId)
           const nextSpace = await playWhatEffects(
@@ -1941,7 +1977,7 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
         resolvedSpace = resolution.destination
       }
 
-      const ladder = landingResolution.ladder
+      const ladder = !ladderHandledByMine && landingResolution.ladder
       if (ladder) {
         emitEvent(room, 'ladder', {
           playerId: landingResolution.playerId,
