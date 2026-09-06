@@ -34,5 +34,11 @@
     "key": "showdown_with",
     "description": "Improved turn-based Battle Royale with Showdown every encounter! Gather weapons and be the last man standing.",
     "is_active": false
+  },
+  {
+    "name": "Shoot the WHAT?!",
+    "key": "shoot_the",
+    "description": "Take turns to reach the finish line or prevent other players from doing so.",
+    "is_active": true
   }
 ]
