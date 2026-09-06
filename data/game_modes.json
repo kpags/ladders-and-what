@@ -37,7 +37,7 @@
   },
   {
     "name": "Shoot the WHAT?!",
-    "key": "shoot_the",
+    "key": "shoot_the_what",
     "description": "Take turns to reach the finish line or prevent other players from doing so.",
     "is_active": true
   }

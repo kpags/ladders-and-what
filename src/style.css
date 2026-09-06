@@ -710,6 +710,35 @@ input[type=range] { height:30px; }
 .blood-splat { --splat-rotation:0deg; position:absolute; z-index:4; width:3.4%; aspect-ratio:1; transform:translate(-50%,-50%) rotate(var(--splat-rotation)); pointer-events:none; filter:drop-shadow(0 1px 1px #150002cc); animation:blood-splat-in 360ms cubic-bezier(.2,.9,.25,1.2) both; }
 .blood-splat::before { content:""; position:absolute; inset:13% 10% 14%; background:radial-gradient(circle at 42% 36%,#ba2027 0 13%,#79080f 43%,#3b0207 75%); clip-path:polygon(49% 0,61% 21%,82% 9%,76% 33%,100% 43%,76% 53%,90% 78%,65% 70%,52% 100%,39% 73%,10% 88%,23% 59%,0 46%,27% 36%,18% 12%,41% 25%); }
 .blood-splat::after { content:""; position:absolute; inset:0; background:radial-gradient(circle at 13% 24%,#71070d 0 5%,transparent 6%),radial-gradient(circle at 88% 18%,#8b0b12 0 4%,transparent 5%),radial-gradient(circle at 84% 82%,#5f050b 0 6%,transparent 7%),radial-gradient(circle at 18% 78%,#920d14 0 3.5%,transparent 4.5%); }
+.shoot-board-fog { position:absolute; z-index:15; inset:0; pointer-events:none; background:radial-gradient(ellipse at 28% 22%,#26313a42 0 10%,transparent 38%),radial-gradient(ellipse at 75% 70%,#11182077 0 15%,transparent 48%),linear-gradient(#020509b3,#06090db3); backdrop-filter:blur(1.8px); animation:shoot-board-fog 4.5s ease-in-out infinite alternate; }
+.shoot-target-option { position:absolute; z-index:16; box-sizing:border-box; width:var(--shoot-target-size, 6.48%); height:var(--shoot-target-size, 6.48%); border:2px dashed #ffdf4a; border-radius:50%; background:#e11d2d88; transform:translate(-50%,-50%); cursor:crosshair; }
+.shoot-target-option:hover { background:#e11d2d88; box-shadow:0 0 14px #ffdd3c; }
+.shoot-target-option.selected { border:3px solid #fff04e; background:#ffd629b8; box-shadow:0 0 0 2px #7a4d00,0 0 18px #ffe45a; }
+.shoot-target-option.other { z-index:17; pointer-events:none; }
+.shoot-bomb-impact-marker { position:absolute; z-index:27; width:var(--shoot-target-size,6.48%); height:var(--shoot-target-size,6.48%); border:3px solid #ff2632; border-radius:50%; background:#ff1e2c35; transform:translate(-50%,-50%); pointer-events:none; animation:shoot-bomb-target-blink .75s steps(1,end) 2 both; }
+.shoot-missile { position:absolute; z-index:28; width:var(--shoot-missile-size,7.02%); height:var(--shoot-missile-size,7.02%); object-fit:contain; object-position:center; transform:translate(-50%,-50%); pointer-events:none; filter:drop-shadow(0 3px 3px #000b); animation:shoot-missile-drop 1.5s ease-in both; }
+.shoot-explosion { position:absolute; z-index:29; width:var(--shoot-explosion-size,9%); height:var(--shoot-explosion-size,9%); object-fit:contain; object-position:center; transform:translate(-50%,-50%); pointer-events:none; }
+.shoot-overlay { position:fixed; z-index:90; top:50%; left:50%; padding:1.2rem 2rem; border:3px solid #f5c94d; border-radius:14px; background:#120b16ed; color:#fff7dc; font:1.6rem 'Luckiest Guy',sans-serif; text-align:center; transform:translate(-50%,-50%); box-shadow:0 12px 40px #000; }
+.shoot-overlay-coin { z-index:250; inset:0; display:grid; place-items:center; padding:0; border:0; border-radius:0; background:#020711; transform:none; box-shadow:none; }
+.shoot-overlay-coin .coin-flip { margin:0; }
+.shoot-team-label { position:absolute; left:6px; bottom:6px; padding:.12rem .3rem; border-radius:5px; color:#fff; font:700 .62rem system-ui; }
+.shoot-team-label.team-A { background:#0879e7; }.shoot-team-label.team-B { background:#e9342d; }
+.shoot-team-actions { position:absolute; left:5px; top:5px; z-index:5; display:flex; gap:3px; }.shoot-team-actions button { min-width:23px; padding:2px; font-size:.7rem; }
+.shoot-row-label { position:absolute; z-index:12; top:-.72rem; left:.4rem; padding:.14rem .48rem; border:2px solid #111827; border-radius:6px; background:#f7d34d; color:#101726; font:.8rem 'Luckiest Guy'; box-shadow:0 2px 0 #111827; }
+.lobby-player[draggable="true"] { cursor:grab; }.lobby-player[draggable="true"]:active { cursor:grabbing; opacity:.65; }.lobby-player:has(.shoot-row-label) { overflow:visible; }
+.lobby-player.shoot-drag-active { outline:4px solid #ffe16b; outline-offset:3px; opacity:.62; transform:scale(.97); }
+.lobby-player.shoot-drop-target { outline:4px dashed #ffe16b; outline-offset:4px; background:#ffe16b33; box-shadow:0 0 24px #ffe16bcc; }
+.lobby-player.shoot-room-team-A.empty,.lobby-player.shoot-room-team-B.empty { border-style:dashed; opacity:1; }
+.shoot-room-team-A.occupied { --player-color:#0879e7; background:radial-gradient(circle at 50% 40%,#0879e788,#06142b 70%); border-color:#0879e7; }.shoot-room-team-B.occupied { --player-color:#e9342d; background:radial-gradient(circle at 50% 40%,#e9342d88,#2b090b 70%); border-color:#e9342d; }
+.shoot-team-scoreboard { display:grid; grid-template-columns:1fr 1fr; gap:.55rem; padding:.65rem; border:3px solid #293448; border-radius:12px; background:#080e19dd; }
+.shoot-team-scoreboard section { display:grid; gap:.35rem; }.shoot-team-scoreboard section > strong { padding:.28rem; border-radius:7px; color:#fff; text-align:center; font:1rem 'Luckiest Guy'; }.shoot-team-scoreboard .team-A > strong { background:#0879e7; }.shoot-team-scoreboard .team-B > strong { background:#e9342d; }
+.shoot-team-scoreboard article { display:grid; grid-template-columns:32px 1fr; align-items:center; gap:.35rem; min-height:48px; padding:.3rem; border:2px solid #39485c; border-radius:8px; background:#101a28; }.shoot-team-scoreboard article.current { box-shadow:0 0 12px #ffc21b; }.shoot-team-scoreboard article.eliminated { border-color:#616775; background:#3b3e46; box-shadow:none; filter:grayscale(1); opacity:.78; }.shoot-team-scoreboard article.eliminated .console-pawn { background:#767b85; filter:grayscale(1); }.shoot-team-scoreboard article.eliminated b,.shoot-team-scoreboard article.eliminated small { color:#d0d2d6; }.shoot-team-scoreboard article b,.shoot-team-scoreboard article small { display:block; }.shoot-team-scoreboard article small { color:#b7c0cf; font-size:.72rem; }
+.shoot-match-score { grid-column:1 / -1; padding:.25rem; color:#ffe16b; text-align:center; font:2rem/1 'Luckiest Guy'; letter-spacing:.12em; }
+.shoot-overlay .coin-flip { width:76px; height:76px; margin:0 auto .6rem; display:grid; place-items:center; border:5px solid #ffe16b; border-radius:50%; background:linear-gradient(135deg,#0879e7 0 50%,#e9342d 50%); color:#fff; font:1.4rem 'Luckiest Guy'; animation:shoot-coin-toss 3s ease-in-out both; transform-style:preserve-3d; }
+@keyframes shoot-coin-toss { 0% { transform:translateY(60px) rotateY(0); } 45% { transform:translateY(-140px) rotateY(1080deg); } 100% { transform:translateY(0) rotateY(2160deg); } }
+@keyframes shoot-board-fog { from { opacity:.73; filter:brightness(.8); } to { opacity:.88; filter:brightness(1.08); } }
+@keyframes shoot-missile-drop { from { transform:translate(-50%,-470%) scale(1); opacity:.12; } to { transform:translate(-50%,-50%) scale(.5); opacity:1; } }
+@keyframes shoot-bomb-target-blink { 0%,49% { opacity:1; } 50%,100% { opacity:0; } }
 .game-board > img.destruction-effect { position:absolute; z-index:10; width:18%; height:18%; object-fit:contain; mix-blend-mode:screen; transform:translate(-50%,-50%); pointer-events:none; will-change:transform; }
 .game-board > img.destruction-effect.ghost-town-zombie { width:9.25%; height:9.15%; }
 .hidden-mine { position:absolute; z-index:7; transform:translate(-50%,-50%); font-size:clamp(14px,2.1vw,28px); filter:drop-shadow(0 2px 2px #000); pointer-events:none; }
@@ -728,6 +757,9 @@ input[type=range] { height:30px; }
 }
 .board-token.eliminated { display:none; }
 .board-token { position:absolute; z-index:5; width:clamp(22px,2.7vw,40px); aspect-ratio:1; display:grid; place-items:center; border:3px solid #080b13; border-radius:50% 50% 28% 28%; background:var(--token-color); box-shadow:inset -5px -6px 7px #00142a66,inset 3px 3px 5px #ffffff66,0 4px 5px #000a; transform:translate(-50%,-50%); transition:left var(--token-move-ms,.44s) ease,top var(--token-move-ms,.44s) ease; }
+.game-board .board-token.shoot-token { width:6%; min-width:0; max-width:none; border-width:2px; }
+.game-board .board-token.shoot-boost { z-index:9; animation:shoot-token-boost .48s ease-in-out both; }
+@keyframes shoot-token-boost { 0% { filter:drop-shadow(0 0 0 #ffe65a); transform:translate(-50%,-50%) scale(1); } 52% { filter:drop-shadow(0 0 9px #ffe65a); transform:translate(-50%,-50%) scale(1.26); } 100% { filter:drop-shadow(0 0 2px #ffe65a); transform:translate(-50%,-50%) scale(1); } }
 .board-token.owned { cursor:pointer; }
 .board-token span { font:bold clamp(.42rem,.8vw,.7rem)/1 sans-serif; }
 .emoji-picker { position:absolute; z-index:20; bottom:calc(100% + 9px); left:50%; display:flex; flex-direction:column; gap:3px; padding:4px; border:2px solid #293448; border-radius:14px; background:#07101eef; box-shadow:0 4px 10px #000b; transform:translateX(-50%); }

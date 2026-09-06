@@ -971,5 +971,84 @@
                 "description": "A powerful sniper rifle with a magazine capacity of 2 rounds. It deals 100 damage per bullet."
             }
         ]
+    },
+    {
+        "name": "Land of the Dead",
+        "picture": "assets/boards/land_of_the_dead/template.png",
+        "type": "shoot_the_what",
+        "music": "land_of_the_dead",
+        "ladders": [
+            { "from": 4, "to": 18, "direction": "up" },
+            { "from": 12, "to": 28, "direction": "up" },
+            { "from": 23, "to": 38, "direction": "up" },
+            { "from": 29, "to": 47, "direction": "up" },
+            { "from": 42, "to": 58, "direction": "up" },
+            { "from": 59, "to": 61, "direction": "up" },
+            { "from": 65, "to": 76, "direction": "up" },
+            { "from": 86, "to": 94, "direction": "up" },
+            { "from": 89, "to": 69, "direction": "up" },
+            { "from": 16, "to": 5, "direction": "down" },
+            { "from": 36, "to": 25, "direction": "down" },
+            { "from": 67, "to": 55, "direction": "down" },
+            { "from": 88, "to": 68, "direction": "down" },
+            { "from": 83, "to": 79, "direction": "down" }
+        ],
+        "boosts": [
+            {
+                "square": 7,
+                "direction": "right",
+                "boost": 2
+            },
+            {
+                "square": 14,
+                "direction": "left",
+                "boost": 1
+            },
+            {
+                "square": 19,
+                "direction": "left",
+                "boost": 1
+            },
+            {
+                "square": 26,
+                "direction": "right",
+                "boost": 3
+            },
+            {
+                "square": 31,
+                "direction": "left",
+                "boost": 3
+            },
+            {
+                "square": 45,
+                "direction": "right",
+                "boost": 2
+            },
+            {
+                "square": 57,
+                "direction": "left",
+                "boost": 1
+            },
+            {
+                "square": 64,
+                "direction": "right",
+                "boost": 2
+            },
+            {
+                "square": 77,
+                "direction": "left",
+                "boost": 1
+            },
+            {
+                "square": 85,
+                "direction": "right",
+                "boost": 1
+            },
+            {
+                "square": 91,
+                "direction": "left",
+                "boost": 3
+            }
+        ]
     }
 ]

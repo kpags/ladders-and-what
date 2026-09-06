@@ -4,6 +4,8 @@ import characters from '../data/characters.json'
 import boards from '../data/boards.json'
 import gameModes from '../data/game_modes.json'
 import explosionGif from '../assets/gifs/run_away/explosion.gif'
+import shootExplosionGif from '../assets/gifs/shoot_the_what/explosion.gif'
+import shootMissileImage from '../assets/pictures/shoot_the_what/missile.png'
 import zombieGif from '../assets/gifs/run_away/zombie.gif'
 import escapeMedkitGif from '../assets/gifs/escape_from/medkit.gif'
 import escapeKeyGif from '../assets/gifs/escape_from/quiet_mansion/transparent/keys.gif'
@@ -37,7 +39,7 @@ import jeanLastGif from '../assets/gifs/escape_from/dead_forest/entities/jean/la
 import baldLastGif from '../assets/gifs/escape_from/dead_forest/entities/bald/last_frame.png'
 import uncleLastGif from '../assets/gifs/escape_from/dead_forest/entities/uncle/last_frame.png'
 import { audioManager } from './audioManager'
-import { getBoardSpaceBounds, getBoardSpacePosition, getVisualSurroundingSpaces } from './boardLayout'
+import { getBoardGuideCellBounds, getBoardSpaceBounds, getBoardSpacePosition, getVisualSurroundingSpaces } from './boardLayout'
 import { clashMeleeAssetDirection } from './clashMedia'
 import { CLASH_BOARD_COLUMNS, CLASH_BOARD_SPACES, CLASH_MAX_HEALTH, CLASH_MOVE_REAPPEAR_DELAY_MS } from './gameRules'
 import { activeGameModes, boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
@@ -175,6 +177,13 @@ const destructionOverlay = ref(null)
 const destructionSpace = ref(null)
 const destructionSkipState = ref(null)
 const escapeBriefing = ref(null)
+const shootOverlay = ref(null)
+const shootMissileTarget = ref(null)
+const shootEffect = ref(null)
+const shootBoostPlayerId = ref(null)
+const shootTargetDeadline = ref(null)
+const shootLobbyActivePlayerId = ref(null)
+const shootLobbyDropKey = ref(null)
 const sighOverlay = ref(null)
 const ripOverlay = ref(null)
 const minePlacement = ref(null)
@@ -248,17 +257,18 @@ const controlledGamePlayer = computed(() => game.value?.players.find(player => p
 const isControlledTurn = computed(() => Boolean(game.value && controlledGamePlayer.value?.id === game.value.players[game.value.currentPlayerIndex]?.id))
 const isLobbyHost = computed(() => onlineRoom.value?.hostId === clientId)
 const selectedGameMode = computed(() => selectableGameModes.find(mode => mode.key === selectedMode.value) || selectableGameModes[0])
-const bloodiedSpaces = computed(() => [...new Set(
-  (game.value?.players || [])
+const bloodiedSpaces = computed(() => [...new Set([
+  ...(game.value?.shoot?.bloodiedSpaces || []),
+  ...(game.value?.players || [])
     .filter(player => player.eliminated)
     .map(player => game.value?.mode === 'clash_with' ? (player.clashDeathSpace ?? player.space) : player.space)
     .filter(space => space >= 1 && space <= (game.value?.mode === 'clash_with' ? CLASH_BOARD_SPACES : 99)),
-)].sort((a, b) => a - b))
+])].sort((a, b) => a - b))
 const availableBoards = computed(() => boards
   .map((board, index) => ({ ...board, sourceIndex: index }))
   .filter(board => board.type === selectedMode.value && boardIsAvailable(board)))
 const selectedLobbyBoard = computed(() => availableBoards.value.find(board => board.sourceIndex === selectedBoard.value) || availableBoards.value[0] || null)
-const lobbyPlayers = computed(() => (onlineRoom.value?.players || []).map(player => ({
+const lobbyRosterPlayers = computed(() => (onlineRoom.value?.players || []).map(player => ({
   ...player,
   character: {
     ...characters[player.characterIndex % characters.length],
@@ -266,8 +276,59 @@ const lobbyPlayers = computed(() => (onlineRoom.value?.players || []).map(player
     specialSkill: characterSkillByType(characters[player.characterIndex % characters.length], 'active'),
   },
 })))
-const lobbySlotCount = computed(() => selectedMode.value === 'escape_from' ? 4 : 6)
-const lobbyMaxPlayers = computed(() => lobbySlotCount.value)
+const shootLobbyRowSize = computed(() => Math.max(3,
+  ...lobbyRosterPlayers.value.filter(player => ['A', 'B'].includes(player.team)).map(player => Number(player.teamSlot || 0) + 1)))
+const lobbyPlayers = computed(() => {
+  if (selectedMode.value !== 'shoot_the_what') return lobbyRosterPlayers.value
+  const size = shootLobbyRowSize.value
+  const row = team => {
+    const entries = Array(size).fill(null)
+    for (const player of lobbyRosterPlayers.value.filter(item => item.team === team)) entries[player.teamSlot] = player
+    return entries
+  }
+  return [...row('A'), ...row('B')]
+})
+const lobbyPlayerCount = computed(() => lobbyRosterPlayers.value.length)
+const shootTargeting = computed(() => game.value?.mode === 'shoot_the_what'
+  && game.value?.shoot?.bombingDue
+  && game.value?.shoot?.targetingActive
+  && controlledGamePlayer.value?.team === game.value?.shoot?.bomberTeam)
+const shootOwnTarget = computed(() => {
+  const target = Number(game.value?.shoot?.targets?.[clientId])
+  return Number.isInteger(target) ? target : null
+})
+const shootTargetSpaces = computed(() => {
+  if (!shootTargeting.value) return []
+
+  // Once this Bomber commits a target, leave only that target visible until it
+  // is toggled off. Teammates' committed targets are rendered separately.
+  if (shootOwnTarget.value != null) return [shootOwnTarget.value]
+
+  const targets = game.value?.shoot?.targets || {}
+  const boostSquares = new Set((game.value?.board?.boosts || []).map(boost => Number(boost.square)))
+  return Array.from({ length: 99 }, (_, index) => index + 1).filter(space => !boostSquares.has(space)
+    && !Object.entries(targets).some(([, target]) => Math.abs(Number(target) - space) <= 3))
+})
+const shootBoardObscured = computed(() => game.value?.mode === 'shoot_the_what'
+  && controlledGamePlayer.value?.team === game.value?.shoot?.bomberTeam
+  && game.value?.shoot?.phase !== 'revealing')
+const shootTargetSeconds = computed(() => shootTargetDeadline.value
+  ? Math.max(0, Math.ceil((shootTargetDeadline.value - (now.value + serverClockOffset)) / 1000))
+  : 0)
+const shootBomberSecrecy = computed(() => game.value?.mode === 'shoot_the_what'
+  && controlledGamePlayer.value?.team === game.value?.shoot?.bomberTeam
+  && game.value?.shoot?.phase === 'escaper')
+const shootOtherTargets = computed(() => shootTargeting.value
+  ? Object.entries(game.value?.shoot?.targets || {})
+    .filter(([playerId]) => playerId !== clientId)
+    .map(([, space]) => Number(space))
+  : [])
+const shootTeamPlayers = computed(() => ({
+  A: (game.value?.players || []).filter(player => player.team === 'A'),
+  B: (game.value?.players || []).filter(player => player.team === 'B'),
+}))
+const lobbySlotCount = computed(() => selectedMode.value === 'escape_from' ? 4 : selectedMode.value === 'shoot_the_what' ? shootLobbyRowSize.value * 2 : 6)
+const lobbyMaxPlayers = computed(() => selectedMode.value === 'escape_from' ? 4 : 6)
 const exactMoveSettingAvailable = computed(() => selectedMode.value === 'standard' || selectedMode.value === 'run_away')
 const availableRoomList = computed(() => roomList.value.filter(room => room.phase === 'lobby'))
 const inGameRoomList = computed(() => roomList.value.filter(room => room.phase === 'playing'))
@@ -573,6 +634,8 @@ function clearGamePresentation() {
   destructionSpace.value = null
   destructionSkipState.value = null
   escapeBriefing.value = null
+  shootBoostPlayerId.value = null
+  shootTargetDeadline.value = null
   sighOverlay.value = null
   ripOverlay.value = null
   minePlacement.value = null
@@ -648,6 +711,41 @@ async function handleServerEvent(event) {
       }
     }, 45)
     if (diceDual.value) displayedOperator.value = '±'
+  } else if (event.type === 'shoot_coin_toss') {
+    shootOverlay.value = { kind: 'coin', team: event.data.team }
+    window.setTimeout(() => { shootOverlay.value = null }, remaining)
+  } else if (event.type === 'shoot_coin_result') {
+    shootOverlay.value = { kind: 'coin-result', text: `Team ${event.data.team} starts as the bombers` }
+    window.setTimeout(() => { shootOverlay.value = null }, remaining)
+  } else if (event.type === 'shoot_bombers_turn') {
+    shootOverlay.value = { kind: 'bomber-turn', text: "Bombers' Turn" }
+    window.setTimeout(() => { shootOverlay.value = null }, remaining)
+  } else if (event.type === 'shoot_targeting') {
+    shootOverlay.value = { kind: 'targeting', text: 'Bombers: choose your targets' }
+    shootTargetDeadline.value = event.data.expiresAt
+    window.setTimeout(() => { if (shootOverlay.value?.kind === 'targeting') shootOverlay.value = null }, remaining)
+    window.setTimeout(() => { shootTargetDeadline.value = null }, remaining)
+  } else if (event.type === 'shoot_no_bombs') {
+    shootOverlay.value = { kind: 'notice', text: 'No bombs dropped' }
+    window.setTimeout(() => { shootOverlay.value = null }, remaining)
+  } else if (event.type === 'shoot_missile') {
+    shootMissileTarget.value = event.data.target
+    shootEffect.value = 'missile'
+    audioManager.shootMissile()
+    window.setTimeout(() => { shootMissileTarget.value = null }, remaining)
+  } else if (event.type === 'shoot_explosion') {
+    shootMissileTarget.value = event.data.target
+    shootEffect.value = 'explosion'
+    audioManager.shootExplosion()
+    window.setTimeout(() => { shootMissileTarget.value = null; shootEffect.value = null }, remaining)
+  } else if (event.type === 'shoot_boost') {
+    shootBoostPlayerId.value = event.data.playerId
+    window.setTimeout(() => {
+      if (shootBoostPlayerId.value === event.data.playerId) shootBoostPlayerId.value = null
+    }, remaining)
+  } else if (event.type === 'shoot_round_result') {
+    shootOverlay.value = { kind: 'result', text: `Team ${event.data.winnerTeam} wins round ${event.data.round}` }
+    window.setTimeout(() => { shootOverlay.value = null }, remaining)
   } else if (event.type === 'run_away_dice_locked') {
     audioManager.diceResult()
     window.clearInterval(diceTimer)
@@ -1250,7 +1348,9 @@ function handleSocketMessage(event) {
     if (me) {
       playerCharacter.value = me.characterIndex
       if (!editingPlayerName.value) {
-        playerNameDraft.value = me.customName || characters[me.characterIndex % characters.length].name
+        playerNameDraft.value = me.customName || (message.room.modeKey === 'shoot_the_what'
+          ? shootLobbyName(me)
+          : characters[me.characterIndex % characters.length].name)
       }
     }
     if (message.room.phase === 'lobby') page.value = 'lobby'
@@ -1447,6 +1547,64 @@ function closeEscapeBriefing() {
   }
 }
 
+function assignShootTeam(player, team) {
+  if (isLobbyHost.value) sendLobby({ type: 'shoot_team', playerId: player.id, team })
+}
+
+function shootLobbyName(player) {
+  const names = player.team === 'A'
+    ? ['AlmostFree', 'CatchMeLoL', 'ImOuttaHere']
+    : ['DoorDenied', 'StayInside', 'GotchaBro']
+  return names[player.teamSlot] || `Team ${player.team} Player ${(player.teamSlot || 0) + 1}`
+}
+
+function startShootTeamDrag(event, player) {
+  if (!isLobbyHost.value || selectedMode.value !== 'shoot_the_what') return
+  shootLobbyActivePlayerId.value = player.id
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', player.id)
+  }
+}
+
+function dropShootTeam(event, team, slot) {
+  if (!isLobbyHost.value || selectedMode.value !== 'shoot_the_what') return
+  const playerId = shootLobbyActivePlayerId.value || event.dataTransfer?.getData('text/plain')
+  shootLobbyDropKey.value = null
+  if (playerId) sendLobby({ type: 'shoot_team', playerId, team, slot })
+  shootLobbyActivePlayerId.value = null
+}
+
+function endShootTeamDrag() {
+  shootLobbyActivePlayerId.value = null
+  shootLobbyDropKey.value = null
+}
+
+function markShootDropZone(team, slot) {
+  if (isLobbyHost.value && shootLobbyActivePlayerId.value) shootLobbyDropKey.value = `${team}:${slot}`
+}
+
+function tapShootLobbySlot(player, team, slot) {
+  if (!isLobbyHost.value || selectedMode.value !== 'shoot_the_what') return
+  if (!shootLobbyActivePlayerId.value) {
+    if (player) shootLobbyActivePlayerId.value = player.id
+    return
+  }
+  if (player?.id === shootLobbyActivePlayerId.value && player.team === team && player.teamSlot === slot) {
+    endShootTeamDrag()
+    return
+  }
+  dropShootTeam({ dataTransfer: null }, team, slot)
+}
+
+function selectShootTarget(space) {
+  if (shootTargeting.value) sendLobby({ type: 'shoot_target', space })
+}
+
+function deployShootBombs() {
+  if (shootTargeting.value) sendLobby({ type: 'shoot_deploy' })
+}
+
 async function shareInvite() {
   const url = `${location.origin}${location.pathname}?room=${roomCode.value}`
   const text = `Join my Ladders... And What?! room: ${roomCode.value}`
@@ -1504,6 +1662,24 @@ function boardSpaceBounds(space) {
   return getBoardSpaceBounds(game.value?.board, space)
 }
 
+function shootSquareStyle(space) {
+  const bounds = getBoardGuideCellBounds(game.value?.board, space)
+  if (!bounds) return { ...boardSpacePosition(space), '--shoot-square-size': '9%', '--shoot-target-size': '6.48%', '--shoot-missile-size': '7.02%', '--shoot-explosion-size': '9%' }
+  const width = Number.parseFloat(bounds.width)
+  const height = Number.parseFloat(bounds.height)
+  const size = Math.min(width, height)
+  return {
+    left: `${Number((Number.parseFloat(bounds.x) + width / 2).toFixed(3))}%`,
+    top: `${Number((Number.parseFloat(bounds.y) + height / 2).toFixed(3))}%`,
+    '--shoot-square-size': `${Number(size.toFixed(3))}%`,
+    '--shoot-target-size': `${Number((size * .72).toFixed(3))}%`,
+    // The missile artwork is tightly cropped while the normalized explosion
+    // has a deliberate 72% visible footprint inside its transparent canvas.
+    '--shoot-missile-size': `${Number((size * .78).toFixed(3))}%`,
+    '--shoot-explosion-size': `${Number(size.toFixed(3))}%`,
+  }
+}
+
 function destructionCellPosition(space) {
   if (game.value?.board?.name === 'Ghost Town') {
     return {
@@ -1542,14 +1718,16 @@ function tokenPosition(space, playerIndex) {
   const clashWith = game.value?.mode === 'clash_with'
   const safePlayerIndex = Math.max(0, playerIndex)
   const offsetScale = clashWith ? 0.28 : volcano ? 0.72 : ghostTown ? 0.55 : guessWhat ? 0.45 : (quietMansion || deadForest) ? 0.35 : 1
-  const [rawOffsetX, rawOffsetY] = offsets[safePlayerIndex % offsets.length]
+  const [rawOffsetX, rawOffsetY] = game.value?.mode === 'shoot_the_what' ? [0, 0] : offsets[safePlayerIndex % offsets.length]
   const offsetX = rawOffsetX * offsetScale
   const offsetY = rawOffsetY * offsetScale
   const position = boardSpacePosition(space)
   return {
     left: `calc(${position.left} + ${offsetX}%)`,
     top: `calc(${position.top} + ${offsetY}%)`,
-    '--token-color': game.value.players[safePlayerIndex]?.color || '#ffffff',
+    '--token-color': game.value?.mode === 'shoot_the_what'
+      ? (game.value.players[safePlayerIndex]?.team === 'A' ? '#0879e7' : '#e9342d')
+      : (game.value.players[safePlayerIndex]?.color || '#ffffff'),
   }
 }
 
@@ -2464,8 +2642,8 @@ onMounted(() => {
       board: selectedLobbyBoard.value?.name || null,
       availableBoards: availableBoards.value.map(board => board.name),
       exactMoveFor100: Boolean(onlineRoom.value.exactMoveFor100),
-      players: lobbyPlayers.value.length,
-      canStart: isLobbyHost.value && lobbyPlayers.value.length >= 2 && Boolean(selectedLobbyBoard.value),
+      players: lobbyPlayerCount.value,
+      canStart: isLobbyHost.value && lobbyPlayerCount.value >= 2 && Boolean(selectedLobbyBoard.value),
     } : null,
     game: game.value ? {
       mode: game.value.mode,
@@ -2628,14 +2806,23 @@ onUnmounted(() => {
               <p>Waiting for <b>chaos</b> to begin...</p>
             </div>
 
-            <div class="player-slots">
+            <div class="player-slots" :style="selectedMode === 'shoot_the_what' ? { gridTemplateColumns: `repeat(${shootLobbyRowSize}, minmax(0, 1fr))` } : null">
               <article
                 v-for="slot in lobbySlotCount"
                 :key="slot"
                 class="lobby-player"
-                :class="lobbyPlayers[slot - 1] ? 'occupied' : 'empty'"
-                :style="lobbyPlayers[slot - 1] ? { '--player-color': lobbyPlayers[slot - 1].character.color } : null"
+                :class="[lobbyPlayers[slot - 1] ? 'occupied' : 'empty', selectedMode === 'shoot_the_what' ? `shoot-room-team-${slot <= shootLobbyRowSize ? 'A' : 'B'}` : '', selectedMode === 'shoot_the_what' && shootLobbyActivePlayerId === lobbyPlayers[slot - 1]?.id ? 'shoot-drag-active' : '', selectedMode === 'shoot_the_what' && shootLobbyDropKey === `${slot <= shootLobbyRowSize ? 'A' : 'B'}:${(slot - 1) % shootLobbyRowSize}` ? 'shoot-drop-target' : '']"
+                :style="lobbyPlayers[slot - 1] ? { '--player-color': selectedMode === 'shoot_the_what' ? (lobbyPlayers[slot - 1].team === 'B' ? '#e9342d' : '#0879e7') : lobbyPlayers[slot - 1].character.color } : null"
+                :draggable="Boolean(isLobbyHost && selectedMode === 'shoot_the_what' && lobbyPlayers[slot - 1])"
+                @dragstart="lobbyPlayers[slot - 1] && startShootTeamDrag($event, lobbyPlayers[slot - 1])"
+                @dragend="endShootTeamDrag"
+                @dragover.prevent="selectedMode === 'shoot_the_what' && isLobbyHost"
+                @dragenter.prevent="markShootDropZone(slot <= shootLobbyRowSize ? 'A' : 'B', (slot - 1) % shootLobbyRowSize)"
+                @dragleave="shootLobbyDropKey = null"
+                @drop.prevent="dropShootTeam($event, slot <= shootLobbyRowSize ? 'A' : 'B', (slot - 1) % shootLobbyRowSize)"
+                @click="tapShootLobbySlot(lobbyPlayers[slot - 1], slot <= shootLobbyRowSize ? 'A' : 'B', (slot - 1) % shootLobbyRowSize)"
               >
+                <span v-if="selectedMode === 'shoot_the_what' && (slot === 1 || slot === shootLobbyRowSize + 1)" class="shoot-row-label">Team {{ slot === 1 ? 'A' : 'B' }}</span>
                 <template v-if="lobbyPlayers[slot - 1]">
                   <span v-if="activeLobbyMessages[lobbyPlayers[slot - 1].id]" class="lobby-message-bubble">
                     {{ activeLobbyMessages[lobbyPlayers[slot - 1].id].text }}
@@ -2678,25 +2865,26 @@ onUnmounted(() => {
                   >×</button>
                   <span v-if="lobbyPlayers[slot - 1].isAI" class="ai-label">AI</span>
                   <span v-if="lobbyPlayers[slot - 1].id === onlineRoom?.hostId" class="host-crown">♛</span>
-                  <button v-if="(lobbyPlayers[slot - 1].id === clientId || (isLobbyHost && lobbyPlayers[slot - 1].isAI)) && lobbyCharacterIndices.length" type="button" class="lobby-char-arrow left" @click.stop.prevent="changeLobbySlotCharacter(lobbyPlayers[slot - 1], -1)">‹</button>
+                  <button v-if="selectedMode !== 'shoot_the_what' && (lobbyPlayers[slot - 1].id === clientId || (isLobbyHost && lobbyPlayers[slot - 1].isAI)) && lobbyCharacterIndices.length" type="button" class="lobby-char-arrow left" @click.stop.prevent="changeLobbySlotCharacter(lobbyPlayers[slot - 1], -1)">‹</button>
                   <div
                     class="lobby-pawn"
                     :class="{
                       owned: lobbyPlayers[slot - 1].id === clientId,
-                      'has-tooltip': lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character),
-                      'has-image': Boolean(lobbyCharacterImage(lobbyPlayers[slot - 1].character)),
+                      'has-tooltip': selectedMode !== 'shoot_the_what' && (lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character)),
+                      'has-image': selectedMode !== 'shoot_the_what' && Boolean(lobbyCharacterImage(lobbyPlayers[slot - 1].character)),
                     }"
-                    :tabindex="lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? 0 : null"
-                    :role="characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? 'button' : null"
-                    :aria-label="characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? `Show ${lobbyPlayers[slot - 1].character.name} skills` : null"
-                    :aria-describedby="lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? `lobby-character-tip-${slot}` : null"
+                    :tabindex="selectedMode !== 'shoot_the_what' && (lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character)) ? 0 : null"
+                    :role="selectedMode !== 'shoot_the_what' && characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? 'button' : null"
+                    :aria-label="selectedMode !== 'shoot_the_what' && characterHasSkillInfo(lobbyPlayers[slot - 1].character) ? `Show ${lobbyPlayers[slot - 1].character.name} skills` : null"
+                    :aria-describedby="selectedMode !== 'shoot_the_what' && (lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character)) ? `lobby-character-tip-${slot}` : null"
                   >
-                    <img v-if="lobbyCharacterImage(lobbyPlayers[slot - 1].character)" :src="lobbyCharacterImage(lobbyPlayers[slot - 1].character)" :alt="lobbyPlayers[slot - 1].character.name">
+                    <span v-if="selectedMode === 'shoot_the_what'">{{ lobbyPlayers[slot - 1].team }}</span>
+                    <img v-else-if="lobbyCharacterImage(lobbyPlayers[slot - 1].character)" :src="lobbyCharacterImage(lobbyPlayers[slot - 1].character)" :alt="lobbyPlayers[slot - 1].character.name">
                     <span v-else>{{ lobbyPlayers[slot - 1].character.face }}</span>
                   </div>
-                  <button v-if="(lobbyPlayers[slot - 1].id === clientId || (isLobbyHost && lobbyPlayers[slot - 1].isAI)) && lobbyCharacterIndices.length" type="button" class="lobby-char-arrow right" @click.stop.prevent="changeLobbySlotCharacter(lobbyPlayers[slot - 1], 1)">›</button>
+                  <button v-if="selectedMode !== 'shoot_the_what' && (lobbyPlayers[slot - 1].id === clientId || (isLobbyHost && lobbyPlayers[slot - 1].isAI)) && lobbyCharacterIndices.length" type="button" class="lobby-char-arrow right" @click.stop.prevent="changeLobbySlotCharacter(lobbyPlayers[slot - 1], 1)">›</button>
                   <div
-                    v-if="lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character)"
+                    v-if="selectedMode !== 'shoot_the_what' && (lobbyPlayers[slot - 1].id === clientId || characterHasSkillInfo(lobbyPlayers[slot - 1].character))"
                     :id="`lobby-character-tip-${slot}`"
                     class="lobby-character-tooltip"
                     role="tooltip"
@@ -2722,22 +2910,22 @@ onUnmounted(() => {
                     @blur="updateLobbyPlayerName"
                     @keydown.enter="$event.currentTarget.blur()"
                   >
-                  <strong v-else>{{ lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name }}</strong>
+                  <strong v-else>{{ selectedMode === 'shoot_the_what' ? (lobbyPlayers[slot - 1].customName || shootLobbyName(lobbyPlayers[slot - 1])) : (lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name) }}</strong>
                   <small>✓ Ready</small>
                 </template>
                 <template v-else>
                   <div class="empty-mark">?</div>
-                  <strong>Empty slot</strong>
-                  <small>Waiting...</small>
+                  <strong>{{ selectedMode === 'shoot_the_what' ? 'Team slot' : 'Empty slot' }}</strong>
+                  <small>{{ selectedMode === 'shoot_the_what' && isLobbyHost ? (shootLobbyActivePlayerId ? 'Tap or drop here' : 'Tap a player to move') : 'Waiting...' }}</small>
                 </template>
               </article>
             </div>
 
             <div class="room-actions">
               <button class="game-button purple" @click="shareInvite">♟ Invite</button>
-              <button class="game-button ai-button" :disabled="!isLobbyHost || lobbyPlayers.length >= lobbyMaxPlayers || !lobbyCharacterIndices.length" @click="addAiPlayer">＋ Add AI</button>
+              <button class="game-button ai-button" :disabled="!isLobbyHost || lobbyPlayerCount >= lobbyMaxPlayers || !lobbyCharacterIndices.length" @click="addAiPlayer">＋ Add AI</button>
               <button class="game-button exit" @click="leaveOnlineRoom()">↪ Exit room</button>
-              <button class="game-button green" :disabled="!isLobbyHost || lobbyPlayers.length < 2 || lobbyPlayers.length > lobbyMaxPlayers || !selectedLobbyBoard" @click="requestStartGame">▶ Start game</button>
+              <button class="game-button green" :disabled="!isLobbyHost || lobbyPlayerCount < 2 || lobbyPlayerCount > lobbyMaxPlayers || !selectedLobbyBoard || (selectedMode === 'shoot_the_what' && (!lobbyRosterPlayers.some(player => player.team === 'A') || !lobbyRosterPlayers.some(player => player.team === 'B') || lobbyRosterPlayers.filter(player => player.team === 'A').length > 3 || lobbyRosterPlayers.filter(player => player.team === 'B').length > 3))" @click="requestStartGame">▶ Start game</button>
             </div>
           </section>
 
@@ -2872,8 +3060,11 @@ onUnmounted(() => {
               @click="closeEscapeBriefing"
             >{{ escapeBriefing.voterIds.includes(clientId) ? '✓' : '×' }}</button>
             <small>{{ game.board.name }}</small>
-            <h2 id="escape-briefing-title">Escape Instructions</h2>
-            <ol>
+            <h2 id="escape-briefing-title">{{ game.mode === 'shoot_the_what' ? 'Shoot the WHAT?! Instructions' : 'Escape Instructions' }}</h2>
+            <ul v-if="game.mode === 'shoot_the_what'">
+              <li>First team to win 3 of 5 rounds wins.</li><li>The A/B coin toss chooses the opening Bomber team.</li><li>Roles switch in rounds 3 and 5.</li><li>Escapers reach S100 using dice, ladders, and boosts.</li><li>Bombers deploy one bomb per occupied slot every third global turn.</li><li>Good luck!</li>
+            </ul>
+            <ol v-else>
               <li>Work together to collect all <b>{{ game.board.keys_count }} {{ escapeKeyName.toLowerCase() }}</b> scattered on the board. Each player can collect two. If killed, all collected items will be dropped.</li>
               <li>Once all {{ escapeKeyName.toLowerCase() }} are collected, head to <b>Square 100</b> to unlock and escape the place. It can only be unlocked if all holders are on Square 100, and everyone can only escape if all living players are there.</li>
               <li>Entities are scattered on the board, ready to pounce and attack. Prepare your weapon with the <b>Arm Weapon</b> button or <kbd>G</kbd>. It protects you for the next two turns, so use it wisely!</li>
@@ -3087,6 +3278,7 @@ onUnmounted(() => {
           <strong>{{ whatOverlay.name }}</strong>
           <p><b>{{ whatOverlay.playerName }}</b>: {{ whatOverlay.displayDescription }}</p>
         </div>
+        <div v-if="shootOverlay" class="shoot-overlay" :class="`shoot-overlay-${shootOverlay.kind}`" role="status"><div v-if="shootOverlay.kind === 'coin'" class="coin-flip">{{ shootOverlay.team || '?' }}</div><strong v-else>{{ shootOverlay.text }}</strong></div>
         <header class="game-hud" :class="{ 'escape-hud': game.mode === 'escape_from' }">
           <button class="game-exit" @click="leaveOnlineRoom()">← {{ isSpectating ? 'Stop watching' : 'Exit' }}</button>
           <button class="game-settings-button" type="button" @click="openGameSettings" aria-label="Open settings">⚙ Settings</button>
@@ -3096,8 +3288,8 @@ onUnmounted(() => {
           </div>
           <div class="turn-banner" v-if="!game.gameOver">
             <small class="turn-count">Turn {{ game.turn }}</small>
-            <strong :style="{ color: game.players[game.currentPlayerIndex].color }">
-              {{ game.players[game.currentPlayerIndex].name }}
+            <strong :style="{ color: shootBomberSecrecy ? '#d7c9a8' : game.players[game.currentPlayerIndex].color }">
+              {{ shootBomberSecrecy ? 'Escapers moving' : game.players[game.currentPlayerIndex].name }}
             </strong>
           </div>
           <div v-if="game.mode === 'escape_from'" class="escape-key-status">
@@ -3112,19 +3304,21 @@ onUnmounted(() => {
             </strong>
           </div>
           <div v-if="!game.gameOver" class="turn-timer" :class="{ urgent: turnSeconds <= 5 }">
-            <small>Time left</small>
-              <strong>{{ game.mode === 'escape_from' && escapeMoveChoice ? escapeMoveSeconds : game.mode === 'escape_from' && directionChoice ? directionSeconds : turnSeconds }}s</strong>
+            <small>{{ game.mode === 'shoot_the_what' && game.shoot?.phase === 'targeting' ? 'Target time' : 'Time left' }}</small>
+              <strong>{{ game.mode === 'shoot_the_what' && game.shoot?.phase === 'targeting' ? shootTargetSeconds : game.mode === 'escape_from' && escapeMoveChoice ? escapeMoveSeconds : game.mode === 'escape_from' && directionChoice ? directionSeconds : turnSeconds }}s</strong>
           </div>
           <div class="hud-dice-panel">
             <button
               v-if="!game.gameOver"
               class="game-button yellow"
-              :disabled="turnBusy || !isControlledTurn || (game.mode === 'clash_with' && controlledClashStunned)"
-              @click="playTurn"
+              :disabled="game.mode === 'shoot_the_what' ? (shootTargeting ? false : (turnBusy || !isControlledTurn)) : (turnBusy || !isControlledTurn || (game.mode === 'clash_with' && controlledClashStunned))"
+              @click="game.mode === 'shoot_the_what' && shootTargeting ? deployShootBombs() : playTurn()"
             >
               {{
-                isControlledTurn
-                  ? (game.mode === 'clash_with' ? 'Move' : game.mode === 'escape_from' ? 'Pick Moves' : controlledGamePlayer?.specialRollPending ? 'Parkour Roll' : controlledGamePlayer?.rerollPending ? 'Reroll' : 'Roll dice')
+                shootTargeting
+                  ? 'Deploy'
+                  : isControlledTurn
+                    ? (game.mode === 'clash_with' ? 'Move' : game.mode === 'escape_from' ? 'Pick Moves' : controlledGamePlayer?.specialRollPending ? 'Parkour Roll' : controlledGamePlayer?.rerollPending ? 'Reroll' : 'Roll dice')
                   : `${game.players[game.currentPlayerIndex].name}'s turn`
               }}
             </button>
@@ -3165,6 +3359,7 @@ onUnmounted(() => {
           >
             <div class="game-board" :class="{ 'escape-board': game.mode === 'escape_from', 'clash-board': game.mode === 'clash_with', 'clash-stunned-view': clashVisionBlurred, 'dead-forest-board': game.board.name === 'Dead Forest', 'encounter-active': escapeOverlay && escapeOverlay.type !== 'exit' }">
               <img :src="boardPicture(game.board)" :alt="`${game.board.name} gameplay board`">
+              <div v-if="shootBoardObscured" class="shoot-board-fog" aria-hidden="true"></div>
               <div
                 v-if="guessWhatWheel"
                 class="guess-wheel-board-overlay"
@@ -3349,6 +3544,20 @@ onUnmounted(() => {
                 :style="boardSpacePosition(space)"
                 @click="sendClashUseTargetedItem(space)"
               ></button>
+              <button
+                v-for="space in shootTargetSpaces"
+                :key="`shoot-target-${space}`"
+                class="shoot-target-option"
+                :class="{ selected: game.shoot?.targets?.[clientId] === space }"
+                type="button"
+                :style="shootSquareStyle(space)"
+                :aria-label="`Target square ${space}`"
+                @click="selectShootTarget(space)"
+              ></button>
+              <span v-for="space in shootOtherTargets" :key="`shoot-other-target-${space}`" class="shoot-target-option selected other" :style="shootSquareStyle(space)" aria-hidden="true"></span>
+              <span v-if="shootMissileTarget && shootEffect === 'missile'" class="shoot-bomb-impact-marker" :style="shootSquareStyle(shootMissileTarget)" aria-hidden="true"></span>
+              <img v-if="shootMissileTarget && shootEffect === 'missile'" class="shoot-missile" :src="shootMissileImage" :style="shootSquareStyle(shootMissileTarget)" alt="">
+              <img v-if="shootMissileTarget && shootEffect === 'explosion'" class="shoot-explosion" :src="shootExplosionGif" :style="shootSquareStyle(shootMissileTarget)" alt="">
               <img
                 v-for="key in game.mode === 'escape_from' ? game.keys.filter(item => !item.holderId && item.space != null && escapeObjectVisible(item.space)) : []"
                 :key="key.id"
@@ -3448,7 +3657,7 @@ onUnmounted(() => {
                 aria-hidden="true"
               ></span>
               <div
-                v-for="player in game.players.filter(player => game.mode !== 'clash_with' || clashPlayerVisible(player))"
+                v-for="player in game.players.filter(player => (game.mode !== 'clash_with' || clashPlayerVisible(player)) && !player.hiddenFromBomber && (game.mode !== 'shoot_the_what' || player.team === game.shoot?.escaperTeam))"
                 :key="player.id"
                 class="board-token"
                 :class="{
@@ -3470,7 +3679,9 @@ onUnmounted(() => {
                   'clash-puff-vanish': clashPuffMove(player)?.stage === 'vanish',
                   'clash-targetable': game.mode === 'clash_with' && !clashAttackPending && clashActionMode === 'attack' && visibleClashTargets.some(target => target.id === player.id),
                   'sound-picker-open': emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board',
-                  'social-active': game.mode === 'escape_from' && Boolean(activeReactions[player.id])
+                  'social-active': game.mode === 'escape_from' && Boolean(activeReactions[player.id]),
+                  'shoot-token': game.mode === 'shoot_the_what',
+                  'shoot-boost': game.mode === 'shoot_the_what' && shootBoostPlayerId === player.id
                 }"
                 :style="[tokenPosition(visualSpace(player), game.players.findIndex(item => item.id === player.id)), clashTokenMotionStyle(player)]"
                 :title="`${player.name}: space ${player.space}`"
@@ -3492,7 +3703,17 @@ onUnmounted(() => {
           </div>
 
           <aside class="game-console" :class="{ 'clash-console': game.mode === 'clash_with' }">
-            <div class="player-order">
+            <div v-if="game.mode === 'shoot_the_what'" class="shoot-team-scoreboard">
+              <section v-for="team in ['A', 'B']" :key="team" :class="`team-${team}`">
+                <strong>Team {{ team }}</strong>
+                <article v-for="player in shootTeamPlayers[team]" :key="player.id" :class="{ current: !shootBomberSecrecy && player.id === game.players[game.currentPlayerIndex]?.id, eliminated: player.eliminated }">
+                  <span class="console-pawn" :style="{ '--player-color': team === 'A' ? '#0879e7' : '#e9342d' }">{{ player.face }}</span>
+                  <div><b>{{ player.name }}</b><small>{{ player.eliminated ? 'Eliminated' : `Space ${visualSpace(player)}` }}</small></div>
+                </article>
+              </section>
+              <strong class="shoot-match-score">{{ game.shoot?.wins?.A || 0 }} - {{ game.shoot?.wins?.B || 0 }}</strong>
+            </div>
+            <div v-else class="player-order">
               <article
                 v-for="(player, index) in game.players"
                 :key="player.id"
@@ -3526,7 +3747,7 @@ onUnmounted(() => {
               </article>
             </div>
 
-            <div v-if="!game.gameOver && controlledGamePlayer && game.mode !== 'guess_what' && (game.mode !== 'clash_with' || controlledGamePlayer.clashPendingPickup)" class="skill-panel">
+            <div v-if="!game.gameOver && controlledGamePlayer && !['guess_what', 'shoot_the_what'].includes(game.mode) && (game.mode !== 'clash_with' || controlledGamePlayer.clashPendingPickup)" class="skill-panel">
               <template v-if="game.mode === 'clash_with'">
                 <div v-if="controlledGamePlayer.clashPendingPickup" class="clash-pickup-choice">
                   <strong>Found {{ controlledGamePlayer.clashPendingPickup.weapon.name }}</strong>

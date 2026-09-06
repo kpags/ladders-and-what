@@ -21,6 +21,7 @@ test('only explicitly active game modes are selectable', () => {
     'guess_what',
     'escape_from',
     'clash_with',
+    'shoot_the_what',
   ])
 })
 
@@ -28,6 +29,7 @@ test('character modes define the playable roster', () => {
   assert.deepEqual(characterIndicesForMode(characters, 'standard'), [0, 1, 2, 3, 4, 5, 6, 7, 8])
   assert.deepEqual(characterIndicesForMode(characters, 'run_away'), [0, 1, 2, 3, 4, 5, 6, 7, 8])
   assert.deepEqual(characterIndicesForMode(characters, 'guess_what'), [0, 1, 2, 3, 4, 5, 6, 7, 8])
+  assert.deepEqual(characterIndicesForMode(characters, 'shoot_the_what'), [0, 1, 2, 3, 4, 5, 6, 7, 8])
   assert.deepEqual(characterIndicesForMode(characters, 'escape_from'), [9, 10, 11, 12])
 })
 

@@ -36,6 +36,14 @@ const NO_MANS_LAND_Y_BOUNDS = [
   [729.5, 809.5], [650.5, 729.5], [571.5, 650.5], [491.5, 571.5], [412.5, 491.5],
   [334.5, 412.5], [255.5, 334.5], [177, 255.5], [98, 177], [20.5, 98],
 ]
+const LAND_OF_THE_DEAD_X_BOUNDS = [10, 143, 267, 389, 508, 627, 749, 870, 991, 1115, 1244]
+const LAND_OF_THE_DEAD_Y_BOUNDS = [
+  [1119, 1244], [998, 1119], [874, 998], [750, 874], [624, 750],
+  [497, 624], [374, 497], [252, 374], [130, 252], [10, 130],
+]
+// The green guide strokes are four source pixels wide. Effects use the area
+// inside that stroke so they never cover the adjoining cell on template.png.
+const LAND_OF_THE_DEAD_GUIDE_INSET = 5
 
 function quietMansionPercent(value) {
   return `${Number((value / QUIET_MANSION_SIZE * 100).toFixed(3))}%`
@@ -51,6 +59,7 @@ export function getBoardSpacePosition(board, space) {
   const quietMansion = board?.name === 'Quiet Mansion'
   const deadForest = board?.name === 'Dead Forest'
   const noMansLand = board?.name === "No Man's Land"
+  const landOfTheDead = board?.name === 'Land of the Dead'
   const runAway = board?.type === 'run_away'
   const columns = noMansLand ? 15 : 10
   const row = Math.floor((space - 1) / columns)
@@ -109,6 +118,14 @@ export function getBoardSpacePosition(board, space) {
       top: quietMansionPercent((yBounds[0] + yBounds[1]) / 2),
     }
   }
+  if (landOfTheDead) {
+    const xBounds = LAND_OF_THE_DEAD_X_BOUNDS
+    const yBounds = LAND_OF_THE_DEAD_Y_BOUNDS[row]
+    return {
+      left: quietMansionPercent((xBounds[column] + xBounds[column + 1]) / 2),
+      top: quietMansionPercent((yBounds[0] + yBounds[1]) / 2),
+    }
+  }
   if (runAway) return { left: `${5 + column * 10}%`, top: `${95 - row * 10}%` }
   if (space === 100) return { left: `${volcano ? 11.1 : 8.8}%`, top: `${volcano ? 9 : 8.8}%` }
   return {
@@ -118,7 +135,7 @@ export function getBoardSpacePosition(board, space) {
 }
 
 export function getBoardSpaceBounds(board, space) {
-  if (!['Quiet Mansion', 'Dead Forest', "No Man's Land"].includes(board?.name)) return null
+  if (!['Quiet Mansion', 'Dead Forest', "No Man's Land", 'Land of the Dead'].includes(board?.name)) return null
   const columns = board.name === "No Man's Land" ? 15 : 10
   const row = Math.floor((space - 1) / columns)
   const positionInRow = (space - 1) % columns
@@ -127,13 +144,17 @@ export function getBoardSpaceBounds(board, space) {
     ? NO_MANS_LAND_X_BOUNDS
     : board.name === 'Dead Forest'
       ? DEAD_FOREST_X_BOUNDS
-      : QUIET_MANSION_X_BOUNDS[row]
+      : board.name === 'Land of the Dead'
+        ? LAND_OF_THE_DEAD_X_BOUNDS
+        : QUIET_MANSION_X_BOUNDS[row]
   const yBounds = board.name === "No Man's Land"
     ? NO_MANS_LAND_Y_BOUNDS[row]
     : board.name === 'Dead Forest'
       ? DEAD_FOREST_Y_BOUNDS[row]
-      : QUIET_MANSION_Y_BOUNDS[row]
-  if (board.name === 'Dead Forest' || board.name === "No Man's Land") {
+      : board.name === 'Land of the Dead'
+        ? LAND_OF_THE_DEAD_Y_BOUNDS[row]
+        : QUIET_MANSION_Y_BOUNDS[row]
+  if (board.name === 'Dead Forest' || board.name === "No Man's Land" || board.name === 'Land of the Dead') {
     const x = xBounds[column] / QUIET_MANSION_SIZE * 100
     const y = yBounds[0] / QUIET_MANSION_SIZE * 100
     const width = (xBounds[column + 1] - xBounds[column]) / QUIET_MANSION_SIZE * 100
@@ -151,6 +172,26 @@ export function getBoardSpaceBounds(board, space) {
     y: quietMansionPercent(yBounds[0]),
     width: quietMansionPercent(xBounds[column + 1] - xBounds[column]),
     height: quietMansionPercent(yBounds[1] - yBounds[0]),
+  }
+}
+
+export function getBoardGuideCellBounds(board, space) {
+  if (board?.name !== 'Land of the Dead') return getBoardSpaceBounds(board, space)
+  const row = Math.floor((space - 1) / 10)
+  const positionInRow = (space - 1) % 10
+  const column = row % 2 === 0 ? positionInRow : 9 - positionInRow
+  const left = LAND_OF_THE_DEAD_X_BOUNDS[column] + LAND_OF_THE_DEAD_GUIDE_INSET
+  const right = LAND_OF_THE_DEAD_X_BOUNDS[column + 1] - LAND_OF_THE_DEAD_GUIDE_INSET
+  const top = LAND_OF_THE_DEAD_Y_BOUNDS[row][0] + LAND_OF_THE_DEAD_GUIDE_INSET
+  const bottom = LAND_OF_THE_DEAD_Y_BOUNDS[row][1] - LAND_OF_THE_DEAD_GUIDE_INSET
+  const size = Math.min(right - left, bottom - top)
+  const x = left + ((right - left) - size) / 2
+  const y = top + ((bottom - top) - size) / 2
+  return {
+    x: quietMansionPercent(x),
+    y: quietMansionPercent(y),
+    width: quietMansionPercent(size),
+    height: quietMansionPercent(size),
   }
 }
 

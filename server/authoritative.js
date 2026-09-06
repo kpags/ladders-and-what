@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateClashSkill, activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashAttackPresentation, clashMoveOptions, clashVisibleSpaces, CLASH_MOVE_EVENT_MS, CLASH_TURN_MS, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateClashSkill, activateSkill, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashAttackPresentation, clashMoveOptions, clashVisibleSpaces, CLASH_MOVE_EVENT_MS, CLASH_TURN_MS, completeEscape, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, resolveShootBombs, shootRoundResult, shootTargetOptions, startShootRound, selectShootTarget, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { activeGameModes, boardIndicesForMode, boardIsAvailable, characterIndicesForMode, gameModeIsActive, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { chooseGuessWhatDifficulty } from '../src/guessWhatWheel.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
@@ -88,6 +88,42 @@ function firstBoardIndex(modeKey) {
 
 function roomMaxPlayers(room) {
   return room.modeKey === 'escape_from' ? 4 : 6
+}
+
+function normalizeShootTeams(room) {
+  if (room.modeKey !== 'shoot_the_what') return
+  const counts = () => ({ A: room.players.filter(player => player.team === 'A').length, B: room.players.filter(player => player.team === 'B').length })
+  for (const player of room.players) {
+    if (player.team === 'A' || player.team === 'B') continue
+    const current = counts()
+    player.team = current.A <= current.B ? 'A' : 'B'
+  }
+  for (const team of ['A', 'B']) {
+    const used = new Set()
+    const members = room.players.filter(player => player.team === team).sort((a, b) => (a.teamSlot ?? 99) - (b.teamSlot ?? 99))
+    for (const player of members) {
+      let slot = Number(player.teamSlot)
+      if (!Number.isInteger(slot) || slot < 0 || used.has(slot)) {
+        slot = 0
+        while (used.has(slot)) slot++
+      }
+      player.teamSlot = slot
+      used.add(slot)
+    }
+  }
+}
+
+const SHOOT_TEAM_NAMES = {
+  A: ['AlmostFree', 'CatchMeLoL', 'ImOuttaHere'],
+  B: ['DoorDenied', 'StayInside', 'GotchaBro'],
+}
+
+function shootPlayerName(player) {
+  return SHOOT_TEAM_NAMES[player.team]?.[player.teamSlot] || `Team ${player.team} Player ${Number(player.teamSlot || 0) + 1}`
+}
+
+function canJoinShootTeam(room, team) {
+  return ['A', 'B'].includes(team)
 }
 
 function normalizeRoomCharacter(room, requestedIndex, fallbackOffset = 0) {
@@ -202,6 +238,16 @@ function broadcastGame(room, type = 'game_state') {
     if (!socket) continue
     const game = structuredClone(room.game)
     game.hiddenMines = game.hiddenMines.filter(mine => mine.ownerId === player.id)
+    if (game.mode === 'shoot_the_what' && game.shoot?.bomberTeam === player.team && game.shoot.phase !== 'revealing') {
+      const escaperNames = game.players
+        .filter(entry => entry.team === game.shoot.escaperTeam)
+        .map(entry => entry.name)
+      game.players = game.players.map(entry => entry.team === game.shoot.escaperTeam
+        ? { ...entry, space: null, hiddenFromBomber: true }
+        : entry)
+      game.log = game.log.filter(entry => !escaperNames.some(name => entry.includes(name)))
+      game.lastEvent = game.log[0] || 'Escaper movements are obscured.'
+    }
     send(socket, {
       type,
       revision,
@@ -263,7 +309,8 @@ function emitEvent(room, eventType, data, duration) {
   const revision = revise(room)
   for (const player of room.players) {
     const socket = sockets.get(player.id)
-    if (socket) send(socket, { type: 'game_event', revision, event: eventForViewer(room, event, player.id), serverNow: Date.now() })
+    const viewerEvent = eventForViewer(room, event, player.id)
+    if (socket && viewerEvent) send(socket, { type: 'game_event', revision, event: viewerEvent, serverNow: Date.now() })
   }
   for (const spectatorId of room.spectators || []) {
     const socket = sockets.get(spectatorId)
@@ -273,6 +320,12 @@ function emitEvent(room, eventType, data, duration) {
 }
 
 function eventForViewer(room, event, viewerId) {
+  const viewer = room.players.find(player => player.id === viewerId)
+  const eventPlayer = room.game?.players.find(player => player.id === event?.data?.playerId)
+  if (room.game?.mode === 'shoot_the_what'
+    && viewer?.team === room.game.shoot?.bomberTeam
+    && eventPlayer?.team === room.game.shoot?.escaperTeam
+    && ['dice_rolling', 'dice_stopped', 'movement', 'ladder', 'penalty', 'shoot_boost'].includes(event.type)) return null
   if (!event || event.type !== 'clash_attack') return event
   const presentation = clashAttackPresentation(room.game, viewerId, event.data)
   if (presentation.kind === 'full') return event
@@ -466,7 +519,90 @@ function finishSequenceAndBeginTurn(room) {
   room.guessWhatTimer = null
   room.pendingGuessWhat = null
   unlockRoomForNextTurn(room)
+  if (room.game?.mode === 'shoot_the_what' && room.game.shoot?.bombingDue) {
+    beginShootBombing(room)
+    return
+  }
   broadcastEscapePickupSpawn(room)
+  beginTurn(room)
+}
+
+function finishShootRound(room, winnerTeam) {
+  const result = shootRoundResult(room.game, winnerTeam)
+  room.busy = true
+  emitEvent(room, 'shoot_round_result', { ...result, wins: room.game.shoot.wins }, 3000)
+  const token = ++room.sequenceToken
+  wait(room, 3000, token).then(valid => {
+    if (!valid) return
+    room.currentEvent = null
+    if (result.complete) { room.busy = false; broadcastGame(room); return }
+    room.game.shoot.round++
+    startShootRound(room.game)
+    room.busy = false
+    broadcastGame(room)
+    beginTurn(room)
+  })
+}
+
+function beginShootTargeting(room) {
+  if (room.game?.mode !== 'shoot_the_what' || room.game.shoot?.phase !== 'bomber-transition') return
+  room.game.shoot.phase = 'targeting'
+  room.game.shoot.targetingActive = true
+  const bombers = room.game.players.filter(player => player.team === room.game.shoot.bomberTeam && !player.eliminated)
+  const expiresAt = Date.now() + 15_000
+  room.shootBombing = { expiresAt, bomberIds: bombers.map(player => player.id) }
+  emitEvent(room, 'shoot_targeting', { bomberTeam: room.game.shoot.bomberTeam, expiresAt }, 15_000)
+  room.turnTimer = setTimeout(() => deployShootBombs(room), 15_000)
+  for (const bomber of bombers.filter(player => player.isAI)) {
+    const options = shootTargetOptions(room.game, bomber.id)
+    if (options.length) selectShootTarget(room.game, bomber.id, options[Math.floor(Math.random() * options.length)])
+  }
+  broadcastGame(room)
+}
+
+function beginShootBombing(room) {
+  if (room.game?.mode !== 'shoot_the_what' || !room.game.shoot?.bombingDue) return
+  room.busy = true
+  room.game.shoot.phase = 'bomber-transition'
+  const token = ++room.sequenceToken
+  emitEvent(room, 'shoot_bombers_turn', { bomberTeam: room.game.shoot.bomberTeam }, 2000)
+  broadcastGame(room)
+  wait(room, 2000, token).then(valid => { if (valid) beginShootTargeting(room) })
+}
+
+async function deployShootBombs(room, requesterId = null) {
+  if (!room.shootBombing || room.game?.mode !== 'shoot_the_what') return
+  if (requesterId && !room.shootBombing.bomberIds.includes(requesterId)) return reject(sockets.get(requesterId), 'Only bombers can deploy.')
+  clearTimer(room.turnTimer)
+  room.turnTimer = null
+  const token = ++room.sequenceToken
+  const targets = (room.game.shoot.targetOrder || Object.keys(room.game.shoot.targets))
+    .map(playerId => room.game.shoot.targets[playerId])
+    .filter(Number.isFinite)
+  room.shootBombing = null
+  room.game.shoot.targetingActive = false
+  room.game.shoot.phase = 'revealing'
+  broadcastGame(room)
+  if (!targets.length) {
+    emitEvent(room, 'shoot_no_bombs', {}, 3000)
+    if (await wait(room, 3000, token)) { room.game.shoot.phase = 'escaper'; room.busy = false; broadcastGame(room); beginTurn(room) }
+    return
+  }
+  emitEvent(room, 'shoot_deploying', { targets }, 1000)
+  if (!await wait(room, 1000, token)) return
+  const eliminated = []
+  for (const target of targets) {
+    emitEvent(room, 'shoot_missile', { target }, 1500)
+    if (!await wait(room, 1500, token)) return
+    emitEvent(room, 'shoot_explosion', { target }, 1800)
+    if (!await wait(room, 1800, token)) return
+  }
+  for (const hit of resolveShootBombs(room.game)) eliminated.push(hit)
+  room.game.shoot.phase = 'escaper'
+  broadcastGame(room)
+  const escapers = room.game.players.filter(player => player.team === room.game.shoot.escaperTeam)
+  if (escapers.every(player => player.eliminated)) return finishShootRound(room, room.game.shoot.bomberTeam)
+  room.busy = false
   beginTurn(room)
 }
 
@@ -754,7 +890,33 @@ async function playWhatEffects(room, player, what, effects, resolvedSpace, token
   return resolvedSpace
 }
 
-async function runTurnSequence(room, player, startSpace, roll, token, specialRoll = false, diceAlreadyShown = false, movementOverride = null) {
+async function runShootTurnSequence(room, player, startSpace, roll, token, result) {
+  emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll, specialRoll: false }, 2000)
+  if (!await wait(room, 2000, token)) return
+
+  const landing = result?.landing ?? Math.max(1, Math.min(100, startSpace + roll))
+  const rollDuration = Math.abs(landing - startSpace) * 540
+  if (rollDuration > 0) {
+    emitEvent(room, 'movement', { playerId: player.id, from: startSpace, to: landing, kind: 'roll' }, rollDuration)
+    if (!await wait(room, rollDuration, token)) return
+  }
+  if (result?.ladder) {
+    emitEvent(room, 'ladder', { playerId: player.id, from: result.ladder.from, to: result.ladder.to }, 1600)
+    if (!await wait(room, 1600, token)) return
+  }
+  if (result?.boost) {
+    emitEvent(room, 'shoot_boost', { playerId: player.id, from: result.boost.from, to: result.boost.to }, 480)
+    if (!await wait(room, 480, token)) return
+    const boostDuration = Math.max(260, Math.abs(result.boost.to - result.boost.from) * 180)
+    emitEvent(room, 'movement', { playerId: player.id, from: result.boost.from, to: result.boost.to, kind: 'boost' }, boostDuration)
+    if (!await wait(room, boostDuration, token)) return
+  }
+  if (player.space === 100 && !player.eliminated) return finishShootRound(room, room.game.shoot.escaperTeam)
+  finishSequenceAndBeginTurn(room)
+}
+
+async function runTurnSequence(room, player, startSpace, roll, token, specialRoll = false, diceAlreadyShown = false, movementOverride = null, shootResult = null) {
+  if (room.game.mode === 'shoot_the_what') return runShootTurnSequence(room, player, startSpace, roll, token, shootResult)
   if (!diceAlreadyShown) {
     emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll, specialRoll }, 2000)
     if (!await wait(room, 2000, token)) return
@@ -764,11 +926,13 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
     signedSpaces: roll,
     direction: roll > 0 ? 'forward' : roll < 0 ? 'backward' : 'stay',
   }
-  emitEvent(room, 'move_announcement', {
-    playerId: player.id,
-    ...movement,
-  }, 2000)
-  if (!await wait(room, 2000, token)) return
+  if (room.game.mode !== 'shoot_the_what') {
+    emitEvent(room, 'move_announcement', {
+      playerId: player.id,
+      ...movement,
+    }, 2000)
+    if (!await wait(room, 2000, token)) return
+  }
 
   const traversal = room.game.lastTraversalElimination
   const mineExplosion = room.game.lastMineExplosion
@@ -882,6 +1046,11 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
   }
   if (player.finished && !player.eliminated && player.space === 100) {
     triggerAiReactions(room, player.id, 'finish')
+  }
+
+  if (room.game.mode === 'shoot_the_what' && player.space === 100 && !player.eliminated) {
+    finishShootRound(room, room.game.shoot.escaperTeam)
+    return
   }
 
   if (!await runDestructionSequence(room, token)) return
@@ -1246,9 +1415,9 @@ function stopRoll(room, requesterId, automatic = false) {
   }
   const roll = Math.floor(Math.random() * 6) + 1
   room.rolling = null
-  takeTurn(room.game, roll)
+  const turnResult = takeTurn(room.game, roll)
   const token = ++room.sequenceToken
-  runTurnSequence(room, current, startSpace, roll, token, specialRoll)
+  runTurnSequence(room, current, startSpace, roll, token, specialRoll, false, null, turnResult)
 }
 
 function chooseEscapeMove(room, requesterId, roll) {
@@ -1381,6 +1550,7 @@ function beginTurn(room) {
   }
 
   const current = room.game.players[room.game.currentPlayerIndex]
+  if (room.game.mode === 'shoot_the_what' && room.game.shoot?.bombingDue) return beginShootBombing(room)
   if (room.game.mode === 'escape_from' && current.isAI && canSkipEscapeMove(room.game, current)) {
     triggerEscapeAiSocial(room, 'lets_go')
   }
@@ -1460,7 +1630,7 @@ function beginTurn(room) {
       else startRoll(room, current.id, true)
     }, 550)
   } else {
-    const duration = room.game.mode === 'clash_with' ? CLASH_TURN_MS : TURN_MS
+    const duration = room.game.mode === 'clash_with' ? CLASH_TURN_MS : room.game.mode === 'shoot_the_what' ? 8_000 : TURN_MS
     room.turnDeadline = Date.now() + duration
     room.turnTimer = setTimeout(() => applyPenalty(room), duration)
   }
@@ -1747,11 +1917,36 @@ function voteToSkipDestruction(room, playerId, checked) {
 }
 
 function closeEscapeBriefing(room, playerId) {
-  if (room.game?.mode !== 'escape_from' || !voteToCloseEscapeBriefing(room.escapeBriefing, playerId)) return
+  if (!['escape_from', 'shoot_the_what'].includes(room.game?.mode) || !voteToCloseEscapeBriefing(room.escapeBriefing, playerId)) return
   const completed = !room.escapeBriefing.active
   if (completed) room.busy = false
   broadcastGame(room)
-  if (completed) beginTurn(room)
+  if (completed && room.game.mode === 'shoot_the_what') finishShootBriefing(room)
+  else if (completed) beginTurn(room)
+}
+
+function finishShootBriefing(room) {
+  if (room.game?.mode !== 'shoot_the_what' || room.shootStarted) return
+  room.shootStarted = true
+  clearTimer(room.shootBriefingTimer)
+  room.shootBriefingTimer = null
+  if (room.escapeBriefing) room.escapeBriefing.active = false
+  room.busy = true
+  const tossTeam = Math.random() < .5 ? 'A' : 'B'
+  startShootRound(room.game, tossTeam)
+  const token = ++room.sequenceToken
+  emitEvent(room, 'shoot_coin_toss', { team: tossTeam }, 3000)
+  wait(room, 3000, token).then(valid => {
+    if (!valid) return
+    emitEvent(room, 'shoot_coin_result', { team: tossTeam }, 2000)
+    wait(room, 2000, token).then(resultValid => {
+      if (!resultValid) return
+      room.currentEvent = null
+      room.busy = false
+      broadcastGame(room)
+      beginTurn(room)
+    })
+  })
 }
 
 function sendPlayerEmote(room, playerId, emoji) {
@@ -2071,6 +2266,14 @@ function startGame(room, requesterId) {
   if (room.hostId !== requesterId) return reject(sockets.get(requesterId), 'Only the host can start the game.')
   if (room.phase !== 'lobby') return reject(sockets.get(requesterId), 'The game has already started.')
   if (room.players.length < 2) return reject(sockets.get(requesterId), 'Add at least one player or AI.')
+  if (room.modeKey === 'shoot_the_what') {
+    normalizeShootTeams(room)
+    const teamA = room.players.filter(player => player.team === 'A').length
+    const teamB = room.players.filter(player => player.team === 'B').length
+    if (!teamA || !teamB || teamA > 3 || teamB > 3) {
+      return reject(sockets.get(requesterId), 'Shoot the WHAT?! needs 1–3 players on each team.')
+    }
+  }
   if (room.players.length > roomMaxPlayers(room)) return reject(sockets.get(requesterId), 'This game mode allows at most four players.')
   if (!gameModes.some(mode => mode.key === room.modeKey && gameModeIsActive(mode))) return reject(sockets.get(requesterId), 'This game mode is unavailable.')
   const board = boards[room.boardIndex]
@@ -2083,8 +2286,10 @@ function startGame(room, requesterId) {
       ...character,
       id: player.id,
       characterId: character.id,
-      name: player.isAI ? `${character.name} AI` : (player.customName || character.name),
+      name: room.modeKey === 'shoot_the_what' ? (player.customName || shootPlayerName(player)) : player.isAI ? `${character.name} AI` : (player.customName || character.name),
       isAI: player.isAI,
+      team: player.team,
+      teamSlot: player.teamSlot,
     }
   })
   room.game = createGameState(board, definitions, Date.now(), {
@@ -2092,12 +2297,15 @@ function startGame(room, requesterId) {
     questionnaire: questionnaireSet(board).questionnaire,
   })
   room.phase = 'playing'
-  room.escapeBriefing = room.game.mode === 'escape_from'
+  room.escapeBriefing = ['escape_from', 'shoot_the_what'].includes(room.game.mode)
     ? createEscapeBriefingState(room.players)
     : null
   room.busy = Boolean(room.escapeBriefing?.active)
   room.currentEvent = null
   broadcastGame(room, 'game_started')
+  if (room.game.mode === 'shoot_the_what') {
+    room.shootBriefingTimer = setTimeout(() => finishShootBriefing(room), 30_000)
+  }
   if (!room.busy) beginTurn(room)
 }
 
@@ -2228,6 +2436,7 @@ wss.on('connection', socket => {
       const characterIndex = normalizeRoomCharacter(room, message.characterIndex, room.players.length)
       if (characterIndex == null) return reject(socket, 'No characters are available for this game mode.')
       room.players.push({ id: clientId, characterIndex, isAI: false, connected: true })
+      normalizeShootTeams(room)
       broadcastRoom(room)
       return
     }
@@ -2318,6 +2527,7 @@ wss.on('connection', socket => {
         if (!['standard', 'run_away'].includes(room.modeKey)) room.exactMoveFor100 = false
         room.boardIndex = firstBoardIndex(room.modeKey)
         remapRoomCharacters(room)
+        normalizeShootTeams(room)
         broadcastRoom(room)
       }
     } else if (message.type === 'exact_move_for_100') {
@@ -2358,6 +2568,7 @@ wss.on('connection', socket => {
           const used = new Set(room.players.map(item => item.characterIndex))
           const characterIndex = available.find(index => !used.has(index)) ?? available[room.players.length % available.length]
           room.players.push({ id: `ai-${Date.now()}-${Math.random()}`, characterIndex, isAI: true, connected: true })
+          normalizeShootTeams(room)
           broadcastRoom(room)
         }
       }
@@ -2366,6 +2577,30 @@ wss.on('connection', socket => {
       else if (room.phase === 'lobby') {
         room.players = room.players.filter(item => item.id !== message.playerId || !item.isAI)
         broadcastRoom(room)
+      }
+    } else if (message.type === 'shoot_team') {
+      if (room.hostId !== clientId) reject(socket, 'Only the host can assign teams.')
+      else if (room.phase !== 'lobby' || room.modeKey !== 'shoot_the_what') reject(socket, 'Teams can only be assigned in the Shoot the WHAT?! lobby.')
+      else {
+        const player = room.players.find(item => item.id === message.playerId)
+        if (!player || !canJoinShootTeam(room, message.team)) {
+          reject(socket, 'That team is unavailable.')
+        } else {
+          normalizeShootTeams(room)
+          const targetSlot = Number(message.slot)
+          const sourceTeam = player.team
+          const sourceSlot = player.teamSlot
+          const validSlot = Number.isInteger(targetSlot) && targetSlot >= 0 ? targetSlot : 0
+          const displaced = room.players.find(item => item.id !== player.id && item.team === message.team && item.teamSlot === validSlot)
+          player.team = message.team
+          player.teamSlot = validSlot
+          if (displaced) {
+            displaced.team = sourceTeam
+            displaced.teamSlot = sourceSlot
+          }
+          normalizeShootTeams(room)
+          broadcastRoom(room)
+        }
       }
     } else if (message.type === 'kick_player') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can kick players.')
@@ -2383,6 +2618,13 @@ wss.on('connection', socket => {
         }
       }
     } else if (message.type === 'start_game') startGame(room, clientId)
+    else if (message.type === 'shoot_target') {
+      if (!room.shootBombing || room.game?.shoot?.phase !== 'targeting') return reject(socket, 'Bomb targets can only be selected during the targeting phase.')
+      const result = selectShootTarget(room.game, clientId, message.space)
+      if (!result.ok) reject(socket, result.message)
+      else broadcastGame(room)
+    }
+    else if (message.type === 'shoot_deploy') deployShootBombs(room, clientId)
     else if (message.type === 'start_roll') startRoll(room, clientId)
     else if (message.type === 'stop_roll') stopRoll(room, clientId)
     else if (message.type === 'choose_escape_move') chooseEscapeMove(room, clientId, message.roll)

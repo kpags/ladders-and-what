@@ -160,6 +160,14 @@ class AudioManager {
     this.random('ladders')
   }
 
+  shootMissile() {
+    this.play(fileFrom(soundFiles, '/shoot_the_what/missile_fired.mp3'), { channel: 'shoot-missile', volume: 0.9 })
+  }
+
+  shootExplosion() {
+    this.play(fileFrom(soundFiles, '/shoot_the_what/explosion.mp3'), { channel: 'shoot-explosion', volume: 0.95 })
+  }
+
   whatEncountered(effect) {
     const encountered = entriesFrom(soundFiles, 'question_mark').filter(url => /what_encountered/i.test(url))
     this.play(encountered[Math.floor(Math.random() * encountered.length)])
