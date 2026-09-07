@@ -4,8 +4,6 @@ import characters from '../data/characters.json'
 import boards from '../data/boards.json'
 import gameModes from '../data/game_modes.json'
 import explosionGif from '../assets/gifs/run_away/explosion.gif'
-import shootExplosionGif from '../assets/gifs/shoot_the_what/explosion.gif'
-import shootMissileImage from '../assets/pictures/shoot_the_what/missile.png'
 import zombieGif from '../assets/gifs/run_away/zombie.gif'
 import escapeMedkitGif from '../assets/gifs/escape_from/medkit.gif'
 import escapeKeyGif from '../assets/gifs/escape_from/quiet_mansion/transparent/keys.gif'
@@ -39,7 +37,7 @@ import jeanLastGif from '../assets/gifs/escape_from/dead_forest/entities/jean/la
 import baldLastGif from '../assets/gifs/escape_from/dead_forest/entities/bald/last_frame.png'
 import uncleLastGif from '../assets/gifs/escape_from/dead_forest/entities/uncle/last_frame.png'
 import { audioManager } from './audioManager'
-import { getBoardGuideCellBounds, getBoardSpaceBounds, getBoardSpacePosition, getVisualSurroundingSpaces } from './boardLayout'
+import { getBoardCellBounds, getBoardGuideCellBounds, getBoardSpaceBounds, getBoardSpacePosition, getVisualSurroundingSpaces } from './boardLayout'
 import { clashMeleeAssetDirection } from './clashMedia'
 import { CLASH_BOARD_COLUMNS, CLASH_BOARD_SPACES, CLASH_MAX_HEALTH, CLASH_MOVE_REAPPEAR_DELAY_MS } from './gameRules'
 import { activeGameModes, boardIsAvailable, characterIndicesForMode } from './lobbyCatalog'
@@ -178,8 +176,9 @@ const destructionSpace = ref(null)
 const destructionSkipState = ref(null)
 const escapeBriefing = ref(null)
 const shootOverlay = ref(null)
-const shootMissileTarget = ref(null)
-const shootEffect = ref(null)
+const shootRoundCountdown = ref(0)
+const shootExplosionTarget = ref(null)
+const shootImpactTarget = ref(null)
 const shootBoostPlayerId = ref(null)
 const shootTargetDeadline = ref(null)
 const shootLobbyActivePlayerId = ref(null)
@@ -233,6 +232,7 @@ const guessWhatResult = ref(null)
 let clockTimer
 let diceTimer
 let operatorTimer
+let shootRoundCountdownTimer
 
 const defaultModeKey = selectableGameModes[0]?.key || ''
 const CLASH_MELEE_SLASH_MS = 1640
@@ -257,13 +257,21 @@ const controlledGamePlayer = computed(() => game.value?.players.find(player => p
 const isControlledTurn = computed(() => Boolean(game.value && controlledGamePlayer.value?.id === game.value.players[game.value.currentPlayerIndex]?.id))
 const isLobbyHost = computed(() => onlineRoom.value?.hostId === clientId)
 const selectedGameMode = computed(() => selectableGameModes.find(mode => mode.key === selectedMode.value) || selectableGameModes[0])
-const bloodiedSpaces = computed(() => [...new Set([
-  ...(game.value?.shoot?.bloodiedSpaces || []),
-  ...(game.value?.players || [])
-    .filter(player => player.eliminated)
-    .map(player => game.value?.mode === 'clash_with' ? (player.clashDeathSpace ?? player.space) : player.space)
-    .filter(space => space >= 1 && space <= (game.value?.mode === 'clash_with' ? CLASH_BOARD_SPACES : 99)),
-])].sort((a, b) => a - b))
+const bloodiedSpaces = computed(() => {
+  const players = game.value?.players || []
+  const spaces = game.value?.mode === 'shoot_the_what'
+    ? players.filter(player => player.eliminated).map(player => player.space)
+    : players
+      .filter(player => player.eliminated)
+      .map(player => game.value?.mode === 'clash_with' ? (player.clashDeathSpace ?? player.space) : player.space)
+      .filter(space => space >= 1 && space <= (game.value?.mode === 'clash_with' ? CLASH_BOARD_SPACES : 99))
+  return [...new Set(spaces)].sort((a, b) => a - b)
+})
+const shootBombedSpaces = computed(() => {
+  const player = controlledGamePlayer.value
+  if (game.value?.mode !== 'shoot_the_what' || player?.team !== game.value.shoot?.escaperTeam) return []
+  return [...new Set(game.value.shoot?.bloodiedSpaces || [])]
+})
 const availableBoards = computed(() => boards
   .map((board, index) => ({ ...board, sourceIndex: index }))
   .filter(board => board.type === selectedMode.value && boardIsAvailable(board)))
@@ -312,6 +320,19 @@ const shootTargetSpaces = computed(() => {
 const shootBoardObscured = computed(() => game.value?.mode === 'shoot_the_what'
   && controlledGamePlayer.value?.team === game.value?.shoot?.bomberTeam
   && game.value?.shoot?.phase !== 'revealing')
+const shootS100Reveal = computed(() => shootBoardObscured.value
+  && game.value?.shoot?.roundWinner === game.value?.shoot?.escaperTeam)
+const shootFogStyle = computed(() => {
+  if (!shootS100Reveal.value) return null
+  const bounds = getBoardCellBounds(game.value?.board, 100)
+  if (!bounds) return null
+  return {
+    '--shoot-fog-reveal-x': bounds.x,
+    '--shoot-fog-reveal-y': bounds.y,
+    '--shoot-fog-reveal-width': bounds.width,
+    '--shoot-fog-reveal-height': bounds.height,
+  }
+})
 const shootTargetSeconds = computed(() => shootTargetDeadline.value
   ? Math.max(0, Math.ceil((shootTargetDeadline.value - (now.value + serverClockOffset)) / 1000))
   : 0)
@@ -605,6 +626,7 @@ function eventRemaining(event) {
 function clearGamePresentation() {
   window.clearInterval(diceTimer)
   window.clearInterval(operatorTimer)
+  window.clearInterval(shootRoundCountdownTimer)
   diceRolling.value = false
   diceStopped.value = false
   diceSpecial.value = false
@@ -634,6 +656,9 @@ function clearGamePresentation() {
   destructionSpace.value = null
   destructionSkipState.value = null
   escapeBriefing.value = null
+  shootOverlay.value = null
+  shootRoundCountdown.value = 0
+  shootImpactTarget.value = null
   shootBoostPlayerId.value = null
   shootTargetDeadline.value = null
   sighOverlay.value = null
@@ -711,17 +736,46 @@ async function handleServerEvent(event) {
       }
     }, 45)
     if (diceDual.value) displayedOperator.value = '±'
-  } else if (event.type === 'shoot_coin_toss') {
-    shootOverlay.value = { kind: 'coin', team: event.data.team }
-    window.setTimeout(() => { shootOverlay.value = null }, remaining)
-  } else if (event.type === 'shoot_coin_result') {
-    shootOverlay.value = { kind: 'coin-result', text: `Team ${event.data.team} starts as the bombers` }
-    window.setTimeout(() => { shootOverlay.value = null }, remaining)
+  } else if (event.type === 'shoot_wheel_spin') {
+    shootOverlay.value = { kind: 'wheel', eventId: event.id, rotation: event.data.rotation }
+    window.setTimeout(() => {
+      if (shootOverlay.value?.eventId === event.id) shootOverlay.value = null
+    }, remaining)
+  } else if (event.type === 'shoot_wheel_result') {
+    shootOverlay.value = { kind: 'wheel-result', eventId: event.id, team: event.data.team, rotation: event.data.rotation }
+    window.setTimeout(() => {
+      if (shootOverlay.value?.eventId === event.id) shootOverlay.value = null
+    }, remaining)
+  } else if (event.type === 'shoot_wheel_announcement') {
+    shootOverlay.value = { kind: 'wheel-announcement', eventId: event.id, text: `Team ${event.data.team} starts as the bombers` }
+    window.setTimeout(() => {
+      if (shootOverlay.value?.eventId === event.id) shootOverlay.value = null
+    }, remaining)
+  } else if (event.type === 'shoot_round_starting') {
+    window.clearInterval(shootRoundCountdownTimer)
+    shootOverlay.value = { kind: 'round-start', eventId: event.id, round: event.data.round }
+    const endsAt = event.startedAt + event.duration
+    const updateCountdown = () => {
+      shootRoundCountdown.value = Math.max(1, Math.ceil((endsAt - (Date.now() + serverClockOffset)) / 1000))
+    }
+    updateCountdown()
+    shootRoundCountdownTimer = window.setInterval(updateCountdown, 100)
+    window.setTimeout(() => {
+      window.clearInterval(shootRoundCountdownTimer)
+      if (shootOverlay.value?.eventId === event.id) shootOverlay.value = null
+    }, remaining)
   } else if (event.type === 'shoot_bombers_turn') {
-    shootOverlay.value = { kind: 'bomber-turn', text: "Bombers' Turn" }
+    shootOverlay.value = {
+      kind: 'bomber-turn',
+      text: controlledGamePlayer.value?.team === event.data.bomberTeam ? "Bombers' Turn" : 'Bombers selecting targets',
+    }
     window.setTimeout(() => { shootOverlay.value = null }, remaining)
   } else if (event.type === 'shoot_targeting') {
-    shootOverlay.value = { kind: 'targeting', text: 'Bombers: choose your targets' }
+    // Bombers receive the clickable board targets immediately; a persistent
+    // prompt over that interaction obscures the selection UI.
+    shootOverlay.value = controlledGamePlayer.value?.team === event.data.bomberTeam
+      ? null
+      : { kind: 'targeting', text: 'Bombers selecting targets' }
     shootTargetDeadline.value = event.data.expiresAt
     window.setTimeout(() => { if (shootOverlay.value?.kind === 'targeting') shootOverlay.value = null }, remaining)
     window.setTimeout(() => { shootTargetDeadline.value = null }, remaining)
@@ -729,15 +783,19 @@ async function handleServerEvent(event) {
     shootOverlay.value = { kind: 'notice', text: 'No bombs dropped' }
     window.setTimeout(() => { shootOverlay.value = null }, remaining)
   } else if (event.type === 'shoot_missile') {
-    shootMissileTarget.value = event.data.target
-    shootEffect.value = 'missile'
     audioManager.shootMissile()
-    window.setTimeout(() => { shootMissileTarget.value = null }, remaining)
+    shootImpactTarget.value = event.data.target
+    window.setTimeout(() => {
+      if (shootImpactTarget.value === event.data.target) shootImpactTarget.value = null
+    }, remaining)
   } else if (event.type === 'shoot_explosion') {
-    shootMissileTarget.value = event.data.target
-    shootEffect.value = 'explosion'
+    shootExplosionTarget.value = event.data.target
     audioManager.shootExplosion()
-    window.setTimeout(() => { shootMissileTarget.value = null; shootEffect.value = null }, remaining)
+    window.setTimeout(() => {
+      if (shootExplosionTarget.value === event.data.target) shootExplosionTarget.value = null
+    }, remaining)
+  } else if (event.type === 'shoot_escaper_eliminated') {
+    audioManager.shootDeath()
   } else if (event.type === 'shoot_boost') {
     shootBoostPlayerId.value = event.data.playerId
     window.setTimeout(() => {
@@ -895,7 +953,7 @@ async function handleServerEvent(event) {
     const player = game.value?.players.find(item => item.id === event.data.playerId)
     if (player) {
       resolvingPlayerId.value = player.id
-      await animateSpaceBySpace(player.id, event.data.from, event.data.to)
+      await animateSpaceBySpace(player.id, event.data.from, event.data.to, event.duration)
       resolvingPlayerId.value = null
     }
   } else if (event.type === 'ladder') {
@@ -1509,6 +1567,13 @@ function updateLobbyPlayerName() {
   sendLobby({ type: 'player_name', name })
 }
 
+function updateShootAiName(player, event) {
+  if (!isLobbyHost.value || selectedMode.value !== 'shoot_the_what' || !player.isAI) return
+  const name = String(event.target.value || '').trim().slice(0, 20)
+  event.target.value = name
+  sendLobby({ type: 'shoot_ai_name', playerId: player.id, name })
+}
+
 function selectLobbyBoard(index) {
   if (onlineRoom.value && !isLobbyHost.value) return
   selectedBoard.value = index
@@ -1543,6 +1608,9 @@ function toggleDestructionSkip(event) {
 
 function closeEscapeBriefing() {
   if (!escapeBriefing.value?.voterIds.includes(clientId)) {
+    // Shoot closes globally; hide it locally before the authoritative wheel
+    // snapshot returns so it cannot flash over the opening animation.
+    if (game.value?.mode === 'shoot_the_what') escapeBriefing.value = { ...escapeBriefing.value, active: false }
     sendLobby({ type: 'close_escape_briefing' })
   }
 }
@@ -1664,7 +1732,13 @@ function boardSpaceBounds(space) {
 
 function shootSquareStyle(space) {
   const bounds = getBoardGuideCellBounds(game.value?.board, space)
-  if (!bounds) return { ...boardSpacePosition(space), '--shoot-square-size': '9%', '--shoot-target-size': '6.48%', '--shoot-missile-size': '7.02%', '--shoot-explosion-size': '9%' }
+  if (!bounds) return {
+    ...boardSpacePosition(space),
+    '--shoot-square-size': '9%',
+    '--shoot-square-width': '9%',
+    '--shoot-square-height': '9%',
+    '--shoot-target-size': '6.48%',
+  }
   const width = Number.parseFloat(bounds.width)
   const height = Number.parseFloat(bounds.height)
   const size = Math.min(width, height)
@@ -1672,11 +1746,9 @@ function shootSquareStyle(space) {
     left: `${Number((Number.parseFloat(bounds.x) + width / 2).toFixed(3))}%`,
     top: `${Number((Number.parseFloat(bounds.y) + height / 2).toFixed(3))}%`,
     '--shoot-square-size': `${Number(size.toFixed(3))}%`,
+    '--shoot-square-width': `${Number(width.toFixed(3))}%`,
+    '--shoot-square-height': `${Number(height.toFixed(3))}%`,
     '--shoot-target-size': `${Number((size * .72).toFixed(3))}%`,
-    // The missile artwork is tightly cropped while the normalized explosion
-    // has a deliberate 72% visible footprint inside its transparent canvas.
-    '--shoot-missile-size': `${Number((size * .78).toFixed(3))}%`,
-    '--shoot-explosion-size': `${Number(size.toFixed(3))}%`,
   }
 }
 
@@ -1799,13 +1871,14 @@ function wait(milliseconds) {
   return new Promise(resolve => window.setTimeout(resolve, milliseconds))
 }
 
-async function animateSpaceBySpace(playerId, from, to) {
+async function animateSpaceBySpace(playerId, from, to, duration = Math.abs(to - from) * 540) {
   if (from === to) return
   movingPlayerId.value = playerId
   const direction = to > from ? 1 : -1
+  const stepDuration = Math.max(1, duration / Math.abs(to - from))
   for (let space = from + direction; direction > 0 ? space <= to : space >= to; space += direction) {
     visualSpaces.value[playerId] = space
-    await wait(540)
+    await wait(stepDuration)
   }
   movingPlayerId.value = null
 }
@@ -2910,6 +2983,18 @@ onUnmounted(() => {
                     @blur="updateLobbyPlayerName"
                     @keydown.enter="$event.currentTarget.blur()"
                   >
+                  <input
+                    v-else-if="selectedMode === 'shoot_the_what' && isLobbyHost && lobbyPlayers[slot - 1].isAI"
+                    class="lobby-player-name"
+                    :value="lobbyPlayers[slot - 1].customName || shootLobbyName(lobbyPlayers[slot - 1])"
+                    maxlength="20"
+                    :aria-label="`Edit ${shootLobbyName(lobbyPlayers[slot - 1])}'s player name`"
+                    title="Edit AI player name"
+                    @click.stop
+                    @keydown.stop
+                    @blur="updateShootAiName(lobbyPlayers[slot - 1], $event)"
+                    @keydown.enter="$event.currentTarget.blur()"
+                  >
                   <strong v-else>{{ selectedMode === 'shoot_the_what' ? (lobbyPlayers[slot - 1].customName || shootLobbyName(lobbyPlayers[slot - 1])) : (lobbyPlayers[slot - 1].customName || lobbyPlayers[slot - 1].character.name) }}</strong>
                   <small>✓ Ready</small>
                 </template>
@@ -3062,7 +3147,7 @@ onUnmounted(() => {
             <small>{{ game.board.name }}</small>
             <h2 id="escape-briefing-title">{{ game.mode === 'shoot_the_what' ? 'Shoot the WHAT?! Instructions' : 'Escape Instructions' }}</h2>
             <ul v-if="game.mode === 'shoot_the_what'">
-              <li>First team to win 3 of 5 rounds wins.</li><li>The A/B coin toss chooses the opening Bomber team.</li><li>Roles switch in rounds 3 and 5.</li><li>Escapers reach S100 using dice, ladders, and boosts.</li><li>Bombers deploy one bomb per occupied slot every third global turn.</li><li>Good luck!</li>
+              <li>First team to win 2 of 3 rounds wins.</li><li>The A/B/A/B wheel chooses the opening Bomber team.</li><li>Teams alternate Bomber and Escaper roles each round.</li><li>Escapers need one S100 finish with one or two Escapers, or two finishes with three.</li><li>Bombers win once the Escaper target is impossible.</li><li>Bombers deploy one bomb per occupied slot every third global turn.</li><li>Good luck!</li>
             </ul>
             <ol v-else>
               <li>Work together to collect all <b>{{ game.board.keys_count }} {{ escapeKeyName.toLowerCase() }}</b> scattered on the board. Each player can collect two. If killed, all collected items will be dropped.</li>
@@ -3278,7 +3363,19 @@ onUnmounted(() => {
           <strong>{{ whatOverlay.name }}</strong>
           <p><b>{{ whatOverlay.playerName }}</b>: {{ whatOverlay.displayDescription }}</p>
         </div>
-        <div v-if="shootOverlay" class="shoot-overlay" :class="`shoot-overlay-${shootOverlay.kind}`" role="status"><div v-if="shootOverlay.kind === 'coin'" class="coin-flip">{{ shootOverlay.team || '?' }}</div><strong v-else>{{ shootOverlay.text }}</strong></div>
+        <div v-if="shootOverlay" class="shoot-overlay" :class="`shoot-overlay-${shootOverlay.kind}`" role="status">
+          <div v-if="shootOverlay.kind === 'wheel' || shootOverlay.kind === 'wheel-result'" class="shoot-wheel-stage">
+            <span class="shoot-wheel-pointer" aria-hidden="true">▼</span>
+            <div class="shoot-wheel" :class="{ spinning: shootOverlay.kind === 'wheel' }" :style="{ '--shoot-wheel-rotation': `${shootOverlay.rotation}deg` }">
+              <b class="wheel-label top">A</b><b class="wheel-label right">B</b><b class="wheel-label bottom">A</b><b class="wheel-label left">B</b>
+            </div>
+          </div>
+          <template v-else-if="shootOverlay.kind === 'round-start'">
+            <strong>Starting Round {{ shootOverlay.round }} in</strong>
+            <b class="shoot-round-countdown">{{ shootRoundCountdown }}</b>
+          </template>
+          <strong v-else>{{ shootOverlay.text }}</strong>
+        </div>
         <header class="game-hud" :class="{ 'escape-hud': game.mode === 'escape_from' }">
           <button class="game-exit" @click="leaveOnlineRoom()">← {{ isSpectating ? 'Stop watching' : 'Exit' }}</button>
           <button class="game-settings-button" type="button" @click="openGameSettings" aria-label="Open settings">⚙ Settings</button>
@@ -3359,7 +3456,13 @@ onUnmounted(() => {
           >
             <div class="game-board" :class="{ 'escape-board': game.mode === 'escape_from', 'clash-board': game.mode === 'clash_with', 'clash-stunned-view': clashVisionBlurred, 'dead-forest-board': game.board.name === 'Dead Forest', 'encounter-active': escapeOverlay && escapeOverlay.type !== 'exit' }">
               <img :src="boardPicture(game.board)" :alt="`${game.board.name} gameplay board`">
-              <div v-if="shootBoardObscured" class="shoot-board-fog" aria-hidden="true"></div>
+              <div
+                v-if="shootBoardObscured"
+                class="shoot-board-fog"
+                :class="{ 'shoot-board-fog--s100-revealed': shootS100Reveal }"
+                :style="shootFogStyle"
+                aria-hidden="true"
+              ></div>
               <div
                 v-if="guessWhatWheel"
                 class="guess-wheel-board-overlay"
@@ -3555,9 +3658,11 @@ onUnmounted(() => {
                 @click="selectShootTarget(space)"
               ></button>
               <span v-for="space in shootOtherTargets" :key="`shoot-other-target-${space}`" class="shoot-target-option selected other" :style="shootSquareStyle(space)" aria-hidden="true"></span>
-              <span v-if="shootMissileTarget && shootEffect === 'missile'" class="shoot-bomb-impact-marker" :style="shootSquareStyle(shootMissileTarget)" aria-hidden="true"></span>
-              <img v-if="shootMissileTarget && shootEffect === 'missile'" class="shoot-missile" :src="shootMissileImage" :style="shootSquareStyle(shootMissileTarget)" alt="">
-              <img v-if="shootMissileTarget && shootEffect === 'explosion'" class="shoot-explosion" :src="shootExplosionGif" :style="shootSquareStyle(shootMissileTarget)" alt="">
+              <span v-for="space in shootBombedSpaces" :key="`shoot-bombed-${space}`" class="shoot-bombed-space" :style="shootSquareStyle(space)" aria-label="Bombed square"></span>
+              <span v-if="shootImpactTarget" class="shoot-impact-warning" :style="shootSquareStyle(shootImpactTarget)" aria-label="Incoming bomb"></span>
+              <span v-if="shootExplosionTarget" class="shoot-explosion-cell" :style="shootSquareStyle(shootExplosionTarget)" aria-hidden="true">
+                <img class="shoot-explosion" :src="explosionGif" alt="">
+              </span>
               <img
                 v-for="key in game.mode === 'escape_from' ? game.keys.filter(item => !item.holderId && item.space != null && escapeObjectVisible(item.space)) : []"
                 :key="key.id"
@@ -3615,7 +3720,8 @@ onUnmounted(() => {
                 v-for="space in bloodiedSpaces"
                 :key="`blood-${space}`"
                 class="blood-splat"
-                :style="bloodSplatPosition(space)"
+                :class="{ 'shoot-blood-splat': game.mode === 'shoot_the_what' }"
+                :style="game.mode === 'shoot_the_what' ? shootSquareStyle(space) : bloodSplatPosition(space)"
                 aria-hidden="true"
               ></span>
               <span

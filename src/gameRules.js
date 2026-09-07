@@ -150,8 +150,9 @@ export function startShootRound(state, tossTeam = state.shoot?.tossTeam) {
   if (state.mode !== 'shoot_the_what' || !state.shoot) return null
   const round = state.shoot.round
   state.shoot.tossTeam = tossTeam || (Math.random() < .5 ? 'A' : 'B')
-  const swapped = round === 3 || round === 4
-  state.shoot.bomberTeam = swapped ? (state.shoot.tossTeam === 'A' ? 'B' : 'A') : state.shoot.tossTeam
+  state.shoot.bomberTeam = round % 2 === 1
+    ? state.shoot.tossTeam
+    : (state.shoot.tossTeam === 'A' ? 'B' : 'A')
   state.shoot.escaperTeam = state.shoot.bomberTeam === 'A' ? 'B' : 'A'
   state.shoot.globalTurns = 0
   state.turn = 1
@@ -160,6 +161,7 @@ export function startShootRound(state, tossTeam = state.shoot?.tossTeam) {
   state.shoot.phase = 'escaper'
   state.shoot.targets = {}
   state.shoot.targetOrder = []
+  state.shoot.bloodiedSpaces = []
   state.shoot.roundWinner = null
   for (const player of state.players) {
     player.space = 1
@@ -175,13 +177,13 @@ export function startShootRound(state, tossTeam = state.shoot?.tossTeam) {
   return state.shoot
 }
 
-function shootAdvanceTurn(state) {
+export function advanceShootEscaperTurn(state) {
   const team = state.shoot.escaperTeam
   let next = state.currentPlayerIndex
   for (let attempts = 0; attempts < state.players.length; attempts++) {
     next = (next + 1) % state.players.length
     const player = state.players[next]
-    if (player.team === team && !player.eliminated) {
+    if (player.team === team && !player.eliminated && !player.finished) {
       state.currentPlayerIndex = next
       return player
     }
@@ -190,25 +192,48 @@ function shootAdvanceTurn(state) {
 }
 
 function resolveShootLanding(state, player) {
-  const ladder = state.board.ladders.find(item => item.from === player.space)
-  if (ladder) {
-    player.space = ladder.to
-    addLog(state, `${player.name} used a ladder from ${ladder.from} to ${ladder.to}.`)
+  const landingEvents = []
+  const resolved = new Set()
+  for (let step = 0; step < 12; step++) {
+    const boost = state.board.boosts?.find(item => item.square === player.space)
+    if (boost && !resolved.has(`boost:${boost.square}`)) {
+      const from = player.space
+      const row = Math.floor((from - 1) / 10)
+      const rowStart = row * 10 + 1
+      const rowEnd = rowStart + 9
+      const amount = Math.max(0, Number(boost.boost) || 0)
+      const numberDirection = boost.direction === 'right'
+        ? (row % 2 === 0 ? 1 : -1)
+        : (row % 2 === 0 ? -1 : 1)
+      player.space = Math.max(rowStart, Math.min(rowEnd, from + numberDirection * amount))
+      const event = { type: 'boost', ...boost, from, to: player.space }
+      landingEvents.push(event)
+      resolved.add(`boost:${boost.square}`)
+      addLog(state, `${player.name} received a ${boost.direction} boost to square ${player.space}.`)
+      continue
+    }
+
+    const ladder = state.board.ladders.find(item => item.from === player.space)
+    const ladderKey = ladder && `ladder:${ladder.from}:${ladder.to}`
+    if (ladder && !resolved.has(ladderKey)) {
+      player.space = ladder.to
+      landingEvents.push({ type: 'ladder', ...ladder })
+      resolved.add(ladderKey)
+      addLog(state, `${player.name} used a ladder from ${ladder.from} to ${ladder.to}.`)
+      continue
+    }
+    break
   }
-  const boost = state.board.boosts?.find(item => item.square === player.space)
-  if (boost) {
-    const from = player.space
-    const delta = boost.direction === 'left' ? -Number(boost.boost || 0) : Number(boost.boost || 0)
-    player.space = Math.max(1, Math.min(100, player.space + delta))
-    addLog(state, `${player.name} received a ${boost.direction} boost to square ${player.space}.`)
-    return { ladder, boost: { ...boost, from, to: player.space } }
+  return {
+    landingEvents,
+    ladder: landingEvents.find(event => event.type === 'ladder') || null,
+    boost: landingEvents.find(event => event.type === 'boost') || null,
   }
-  return { ladder, boost: null }
 }
 
 function completeShootEscaperTurn(state, player) {
   const escaperIds = state.players
-    .filter(entry => entry.team === state.shoot.escaperTeam && !entry.eliminated)
+    .filter(entry => entry.team === state.shoot.escaperTeam && !entry.eliminated && (!entry.finished || entry.id === player.id))
     .map(entry => entry.id)
   if (player.id !== escaperIds.at(-1)) return false
   state.shoot.globalTurns++
@@ -219,19 +244,45 @@ function completeShootEscaperTurn(state, player) {
 export function takeShootTurn(state, forcedRoll) {
   if (state.mode !== 'shoot_the_what' || state.gameOver || state.shoot?.bombingDue) return null
   const player = state.players[state.currentPlayerIndex]
-  if (!player || player.team !== state.shoot.escaperTeam || player.eliminated) return null
+  if (!player || player.team !== state.shoot.escaperTeam || player.eliminated || player.finished) return null
   const roll = Number(forcedRoll) || randomInteger(1, 6)
   const from = player.space
   player.space = Math.min(100, player.space + Math.max(1, Math.min(6, roll)))
   const landing = player.space
   state.lastRoll = roll
   const landingResolution = resolveShootLanding(state, player)
-  completeShootEscaperTurn(state, player)
+  if (player.space >= 100) {
+    player.finished = true
+    player.won = true
+    addLog(state, `${player.name} reached S100.`)
+  }
+  const completedGlobalTurn = completeShootEscaperTurn(state, player)
   addLog(state, `${player.name} rolled ${roll} and moved to square ${player.space}.`)
-  if (player.space >= 100) return { player, from, roll, landing, ...landingResolution, escaped: true, bombingDue: false }
-  state.shoot.bombingDue = state.shoot.globalTurns > 0 && state.shoot.globalTurns % 3 === 0
-  if (!state.shoot.bombingDue) shootAdvanceTurn(state)
-  return { player, from, roll, landing, ...landingResolution, escaped: false, bombingDue: state.shoot.bombingDue }
+  const escapedCount = state.players.filter(entry => entry.team === state.shoot.escaperTeam && entry.finished).length
+  if (escapedCount >= shootEscaperWinTarget(state)) {
+    return { player, from, roll, landing, ...landingResolution, escaped: true, bombingDue: false, roundWinner: state.shoot.escaperTeam }
+  }
+  // Bombers deploy only after an Escaper cycle completes. Rechecking the
+  // previous multiple of three on the first player of the next cycle would
+  // immediately reopen bombing and leave the room's phase sequence stuck.
+  state.shoot.bombingDue = completedGlobalTurn && state.shoot.globalTurns % 3 === 0
+  if (!state.shoot.bombingDue) advanceShootEscaperTurn(state)
+  return { player, from, roll, landing, ...landingResolution, escaped: player.finished, bombingDue: state.shoot.bombingDue }
+}
+
+export function shootEscaperWinTarget(state) {
+  const escaperCount = state.players.filter(player => player.team === state.shoot?.escaperTeam).length
+  return escaperCount <= 2 ? 1 : 2
+}
+
+export function shootRoundWinner(state) {
+  if (state.mode !== 'shoot_the_what' || !state.shoot) return null
+  const escapers = state.players.filter(player => player.team === state.shoot.escaperTeam)
+  const escaped = escapers.filter(player => player.finished).length
+  const target = shootEscaperWinTarget(state)
+  if (escaped >= target) return state.shoot.escaperTeam
+  const stillAbleToEscape = escapers.filter(player => !player.eliminated && !player.finished).length
+  return escaped + stillAbleToEscape < target ? state.shoot.bomberTeam : null
 }
 
 export function shootTargetOptions(state, playerId) {
@@ -257,25 +308,36 @@ export function selectShootTarget(state, playerId, space) {
   return { ok: true, target }
 }
 
+export function resolveShootBombTarget(state, target) {
+  if (state.mode !== 'shoot_the_what' || !state.shoot?.bombingDue || !Number.isFinite(target)) return []
+  const eliminated = []
+  // Retain every dropped bomb for the Escaper-side impact markers, whether
+  // or not an Escaper occupied the target square.
+  if (!state.shoot.bloodiedSpaces.includes(target)) state.shoot.bloodiedSpaces.push(target)
+  for (const player of state.players) {
+    if (player.team === state.shoot.escaperTeam && !player.eliminated && player.space === target) {
+      player.eliminated = true
+      eliminated.push({ playerId: player.id, playerName: player.name, space: target })
+    }
+  }
+  return eliminated
+}
+
+export function completeShootBombing(state) {
+  if (state.mode !== 'shoot_the_what' || !state.shoot) return
+  state.shoot.targets = {}
+  state.shoot.targetOrder = []
+  state.shoot.bombingDue = false
+  state.shoot.targetingActive = false
+}
+
 export function resolveShootBombs(state) {
   if (state.mode !== 'shoot_the_what' || !state.shoot?.bombingDue) return []
   const targets = (state.shoot.targetOrder || Object.keys(state.shoot.targets))
     .map(playerId => state.shoot.targets[playerId])
     .filter(Number.isFinite)
-  const eliminated = []
-  for (const target of targets) {
-    for (const player of state.players) {
-      if (player.team === state.shoot.escaperTeam && !player.eliminated && player.space === target) {
-        player.eliminated = true
-        eliminated.push({ playerId: player.id, playerName: player.name, space: target })
-        state.shoot.bloodiedSpaces.push(target)
-      }
-    }
-  }
-  state.shoot.targets = {}
-  state.shoot.targetOrder = []
-  state.shoot.bombingDue = false
-  state.shoot.targetingActive = false
+  const eliminated = targets.flatMap(target => resolveShootBombTarget(state, target))
+  completeShootBombing(state)
   return eliminated
 }
 
@@ -283,7 +345,7 @@ export function shootRoundResult(state, winnerTeam) {
   if (state.mode !== 'shoot_the_what' || !state.shoot) return null
   state.shoot.roundWinner = winnerTeam
   state.shoot.wins[winnerTeam]++
-  const complete = state.shoot.wins[winnerTeam] >= 3 || state.shoot.round >= 5
+  const complete = state.shoot.wins[winnerTeam] >= 2 || state.shoot.round >= 3
   if (complete) {
     state.gameOver = true
     state.winner = { name: `Team ${winnerTeam}`, team: winnerTeam, color: winnerTeam === 'A' ? '#0879e7' : '#e9342d' }
@@ -1973,9 +2035,9 @@ export function penalizeTurn(state) {
     const player = state.players[state.currentPlayerIndex]
     const from = player.space
     player.space = Math.max(1, from - 1)
-    completeShootEscaperTurn(state, player)
-    state.shoot.bombingDue = state.shoot.globalTurns > 0 && state.shoot.globalTurns % 3 === 0
-    if (!state.shoot.bombingDue) shootAdvanceTurn(state)
+    const completedGlobalTurn = completeShootEscaperTurn(state, player)
+    state.shoot.bombingDue = completedGlobalTurn && state.shoot.globalTurns % 3 === 0
+    if (!state.shoot.bombingDue) advanceShootEscaperTurn(state)
     const message = `${player.name} ran out of time and moved back from square ${from} to square ${player.space}.`
     addLog(state, message)
     return { player, from, destination: player.space, cooldownAddedMs: 0, message }

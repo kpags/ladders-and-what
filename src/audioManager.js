@@ -168,6 +168,10 @@ class AudioManager {
     this.play(fileFrom(soundFiles, '/shoot_the_what/explosion.mp3'), { channel: 'shoot-explosion', volume: 0.95 })
   }
 
+  shootDeath() {
+    this.random('shoot_the_what/death')
+  }
+
   whatEncountered(effect) {
     const encountered = entriesFrom(soundFiles, 'question_mark').filter(url => /what_encountered/i.test(url))
     this.play(encountered[Math.floor(Math.random() * encountered.length)])

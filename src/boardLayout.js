@@ -134,7 +134,7 @@ export function getBoardSpacePosition(board, space) {
   }
 }
 
-export function getBoardSpaceBounds(board, space) {
+export function getBoardCellBounds(board, space) {
   if (!['Quiet Mansion', 'Dead Forest', "No Man's Land", 'Land of the Dead'].includes(board?.name)) return null
   const columns = board.name === "No Man's Land" ? 15 : 10
   const row = Math.floor((space - 1) / columns)
@@ -159,12 +159,11 @@ export function getBoardSpaceBounds(board, space) {
     const y = yBounds[0] / QUIET_MANSION_SIZE * 100
     const width = (xBounds[column + 1] - xBounds[column]) / QUIET_MANSION_SIZE * 100
     const height = (yBounds[1] - yBounds[0]) / QUIET_MANSION_SIZE * 100
-    const size = Math.min(width, height)
     return {
-      x: `${Number((x + (width - size) / 2).toFixed(3))}%`,
-      y: `${Number((y + (height - size) / 2).toFixed(3))}%`,
-      width: `${Number(size.toFixed(3))}%`,
-      height: `${Number(size.toFixed(3))}%`,
+      x: `${Number(x.toFixed(3))}%`,
+      y: `${Number(y.toFixed(3))}%`,
+      width: `${Number(width.toFixed(3))}%`,
+      height: `${Number(height.toFixed(3))}%`,
     }
   }
   return {
@@ -172,6 +171,24 @@ export function getBoardSpaceBounds(board, space) {
     y: quietMansionPercent(yBounds[0]),
     width: quietMansionPercent(xBounds[column + 1] - xBounds[column]),
     height: quietMansionPercent(yBounds[1] - yBounds[0]),
+  }
+}
+
+export function getBoardSpaceBounds(board, space) {
+  const bounds = getBoardCellBounds(board, space)
+  if (!bounds) return null
+  if (!['Dead Forest', "No Man's Land", 'Land of the Dead'].includes(board.name)) return bounds
+
+  const x = Number.parseFloat(bounds.x)
+  const y = Number.parseFloat(bounds.y)
+  const width = Number.parseFloat(bounds.width)
+  const height = Number.parseFloat(bounds.height)
+  const size = Math.min(width, height)
+  return {
+    x: `${Number((x + (width - size) / 2).toFixed(3))}%`,
+    y: `${Number((y + (height - size) / 2).toFixed(3))}%`,
+    width: `${Number(size.toFixed(3))}%`,
+    height: `${Number(size.toFixed(3))}%`,
   }
 }
 
