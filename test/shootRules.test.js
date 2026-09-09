@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { advanceShootEscaperTurn, createGameState, resolveShootBombs, selectShootTarget, shootEscaperWinTarget, shootRoundResult, shootRoundWinner, shootTargetOptions, startShootRound, takeShootTurn } from '../src/gameRules.js'
+import { activateShootFlak, advanceShootEscaperTurn, completeShootBombing, consumeShootScan, createGameState, endShootEscaperSkillTurn, resolveShootBombs, selectShootTarget, shootBomberTargetLimit, shootEscaperWinTarget, shootRoundResult, shootRoundWinner, shootScanArea, shootSelectedTargets, shootSkillUses, shootTargetOptions, startShootRound, takeShootTurn } from '../src/gameRules.js'
 import { getBoardCellBounds, getBoardGuideCellBounds, getBoardSpaceBounds, getBoardSpacePosition } from '../src/boardLayout.js'
 
 const board = { type: 'shoot_the_what', name: 'Land of the Dead', ladders: [{ from: 4, to: 18 }], boosts: [{ square: 7, direction: 'right', boost: 2 }], question_marks: [], whats: [] }
@@ -70,6 +70,70 @@ test('bomb targets exclude boosts, toggle off, and retain their selection order'
   assert.deepEqual(state.shoot.targetOrder, ['a2', 'a'])
   assert.equal(selectShootTarget(state, 'a2', 20).deselected, true)
   assert.deepEqual(state.shoot.targetOrder, ['a'])
+})
+
+test('a lone Bomber selects three separated targets and hides further options at the limit', () => {
+  const state = createGameState(board, [...players, { id: 'b2', name: 'B2', team: 'B' }])
+  startShootRound(state, 'A'); state.shoot.bombingDue = true
+  assert.equal(shootBomberTargetLimit(state), 3)
+  for (const target of [20, 24, 28]) assert.equal(selectShootTarget(state, 'a', target).ok, true)
+  assert.deepEqual(state.shoot.targets.a, [20, 24, 28])
+  assert.deepEqual(shootTargetOptions(state, 'a'), [20, 24, 28])
+  assert.equal(selectShootTarget(state, 'a', 32).ok, false)
+  assert.deepEqual(shootSelectedTargets(state), [20, 24, 28])
+})
+
+test('two Bombers select two separated targets each, including against their own picks', () => {
+  const state = createGameState(board, [...players, { id: 'a2', name: 'A2', team: 'A' }, { id: 'b2', name: 'B2', team: 'B' }])
+  startShootRound(state, 'A'); state.shoot.bombingDue = true
+  assert.equal(shootBomberTargetLimit(state), 2)
+  assert.equal(selectShootTarget(state, 'a', 20).ok, true)
+  assert.equal(selectShootTarget(state, 'a', 23).ok, false)
+  assert.equal(selectShootTarget(state, 'a', 24).ok, true)
+  assert.equal(selectShootTarget(state, 'a2', 28).ok, true)
+  assert.equal(selectShootTarget(state, 'a2', 31).ok, false)
+  assert.equal(selectShootTarget(state, 'a2', 32).ok, true)
+  assert.deepEqual(shootSelectedTargets(state), [20, 24, 28, 32])
+})
+
+test('three Bombers receive one target each', () => {
+  const state = createGameState(board, [...players, { id: 'a2', name: 'A2', team: 'A' }, { id: 'a3', name: 'A3', team: 'A' }, { id: 'b2', name: 'B2', team: 'B' }])
+  startShootRound(state, 'A'); state.shoot.bombingDue = true
+  assert.equal(shootBomberTargetLimit(state), 1)
+  assert.equal(selectShootTarget(state, 'a', 20).ok, true)
+  assert.equal(selectShootTarget(state, 'a', 24).ok, false)
+  assert.deepEqual(shootTargetOptions(state, 'a'), [20])
+})
+
+test('Shoot scans use a full visual 3 by 3 area, shifting at the top and bottom rows', () => {
+  assert.deepEqual(shootScanArea(1), [1, 2, 3, 20, 19, 18, 21, 22, 23])
+  assert.deepEqual(shootScanArea(100), [])
+  assert.deepEqual(shootScanArea(100 - 1), [80, 79, 78, 81, 82, 83, 100, 99, 98])
+})
+
+test('Shoot teams share three skill uses each round and Flak Jacket is exclusive until bombing ends', () => {
+  const state = createGameState(board, [...players, { id: 'b2', name: 'B2', team: 'B' }])
+  startShootRound(state, 'A')
+  assert.equal(shootSkillUses(state, 'A'), 3)
+  assert.equal(consumeShootScan(state, 'a').ok, true)
+  assert.equal(shootSkillUses(state, 'A'), 2)
+  assert.equal(activateShootFlak(state, 'b').ok, true)
+  assert.equal(state.shoot.flakPlayerId, 'b')
+  assert.equal(activateShootFlak(state, 'b2').ok, false)
+  const flakTurn = endShootEscaperSkillTurn(state)
+  assert.equal(flakTurn.bombingDue, false)
+  assert.equal(state.players[state.currentPlayerIndex].id, 'b2')
+  state.players.find(player => player.id === 'b').space = 20
+  state.shoot.bombingDue = true
+  assert.equal(selectShootTarget(state, 'a', 20).ok, true)
+  assert.deepEqual(resolveShootBombs(state), [])
+  assert.equal(state.players.find(player => player.id === 'b').eliminated, false)
+  assert.equal(state.shoot.flakPlayerId, null)
+  completeShootBombing(state)
+  assert.equal(state.shoot.flakPlayerId, null)
+  startShootRound(state)
+  assert.equal(shootSkillUses(state, 'A'), 3)
+  assert.equal(shootSkillUses(state, 'B'), 3)
 })
 
 test('bombing begins after three complete Escaper-team global turns', () => {
