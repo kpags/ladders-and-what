@@ -138,6 +138,8 @@ function initializeShootState(state) {
     targetOrder: [],
     bloodiedSpaces: [],
     roundWinner: null,
+    skillUses: { A: 3, B: 3 },
+    flakPlayerId: null,
   }
   for (const player of state.players) {
     player.specialSkill = null
@@ -163,6 +165,8 @@ export function startShootRound(state, tossTeam = state.shoot?.tossTeam) {
   state.shoot.targetOrder = []
   state.shoot.bloodiedSpaces = []
   state.shoot.roundWinner = null
+  state.shoot.skillUses = { A: 3, B: 3 }
+  state.shoot.flakPlayerId = null
   for (const player of state.players) {
     player.space = 1
     player.eliminated = false
@@ -241,6 +245,19 @@ function completeShootEscaperTurn(state, player) {
   return true
 }
 
+// Skills that end an Escaper turn must follow the same cycle accounting as a
+// die roll: only the final active Escaper advances the global turn counter.
+export function endShootEscaperSkillTurn(state) {
+  if (state.mode !== 'shoot_the_what' || !state.shoot || state.shoot.phase !== 'escaper') return { bombingDue: false }
+  const player = state.players[state.currentPlayerIndex]
+  if (!player || player.team !== state.shoot.escaperTeam || player.eliminated || player.finished) return { bombingDue: false }
+  const completedGlobalTurn = completeShootEscaperTurn(state, player)
+  state.shoot.bombingDue = completedGlobalTurn && state.shoot.globalTurns % 3 === 0
+  if (!state.shoot.bombingDue) advanceShootEscaperTurn(state)
+  addLog(state, `${player.name} activated Flak Jacket and ended their turn.`)
+  return { player, completedGlobalTurn, bombingDue: state.shoot.bombingDue }
+}
+
 export function takeShootTurn(state, forcedRoll) {
   if (state.mode !== 'shoot_the_what' || state.gameOver || state.shoot?.bombingDue) return null
   const player = state.players[state.currentPlayerIndex]
@@ -285,25 +302,103 @@ export function shootRoundWinner(state) {
   return escaped + stillAbleToEscape < target ? state.shoot.bomberTeam : null
 }
 
+export function shootSkillUses(state, team) {
+  return Math.max(0, Number(state.shoot?.skillUses?.[team]) || 0)
+}
+
+function consumeShootSkill(state, team) {
+  if (shootSkillUses(state, team) < 1) return false
+  state.shoot.skillUses[team]--
+  return true
+}
+
+export function shootScanOptions(state, playerId) {
+  const player = state.players.find(item => item.id === playerId)
+  if (state.mode !== 'shoot_the_what' || !player || player.team !== state.shoot?.bomberTeam) return []
+  return Array.from({ length: 99 }, (_, index) => index + 1)
+}
+
+export function shootScanArea(space) {
+  const center = Number(space)
+  if (!Number.isInteger(center) || center < 1 || center > 99) return []
+  const centerRow = Math.floor((center - 1) / 10)
+  const positionInRow = (center - 1) % 10
+  const centerColumn = centerRow % 2 === 0 ? positionInRow : 9 - positionInRow
+  const firstRow = Math.min(7, Math.max(0, centerRow - 1))
+  const firstColumn = Math.min(7, Math.max(0, centerColumn - 1))
+  const spaces = []
+  for (let row = firstRow; row < firstRow + 3; row++) {
+    for (let column = firstColumn; column < firstColumn + 3; column++) {
+      const position = row % 2 === 0 ? column : 9 - column
+      spaces.push(row * 10 + position + 1)
+    }
+  }
+  return spaces
+}
+
+export function activateShootFlak(state, playerId) {
+  const player = state.players.find(item => item.id === playerId)
+  if (state.mode !== 'shoot_the_what' || !player || player.team !== state.shoot?.escaperTeam) return { ok: false, message: 'Only an Escaper can use Flak Jacket.' }
+  if (state.shoot.flakPlayerId) return { ok: false, message: 'An Escaper already has an active Flak Jacket.' }
+  if (!consumeShootSkill(state, player.team)) return { ok: false, message: 'Your team has no skill uses left this round.' }
+  state.shoot.flakPlayerId = player.id
+  return { ok: true, player }
+}
+
+export function consumeShootScan(state, playerId) {
+  const player = state.players.find(item => item.id === playerId)
+  if (state.mode !== 'shoot_the_what' || !player || player.team !== state.shoot?.bomberTeam) return { ok: false, message: 'Only a Bomber can use Scan.' }
+  if (!consumeShootSkill(state, player.team)) return { ok: false, message: 'Your team has no skill uses left this round.' }
+  return { ok: true, player }
+}
+
+function shootTargetsForPlayer(state, playerId) {
+  const stored = state.shoot?.targets?.[playerId]
+  const targets = Array.isArray(stored) ? stored : [stored]
+  return targets.map(Number).filter(Number.isFinite)
+}
+
+export function shootBomberTargetLimit(state) {
+  const bombers = state.players.filter(player => player.team === state.shoot?.bomberTeam && !player.eliminated)
+  return bombers.length <= 1 ? 3 : bombers.length === 2 ? 2 : 1
+}
+
+export function shootSelectedTargets(state) {
+  const orderedBomberIds = state.shoot?.targetOrder?.length
+    ? state.shoot.targetOrder
+    : Object.keys(state.shoot?.targets || {})
+  return orderedBomberIds.flatMap(playerId => shootTargetsForPlayer(state, playerId))
+}
+
 export function shootTargetOptions(state, playerId) {
   if (state.mode !== 'shoot_the_what' || !state.shoot?.bombingDue) return []
   const player = state.players.find(item => item.id === playerId)
   if (!player || player.team !== state.shoot.bomberTeam || player.eliminated) return []
+  const selected = shootTargetsForPlayer(state, playerId)
+  if (selected.length >= shootBomberTargetLimit(state)) return selected
   const boostSquares = new Set((state.board.boosts || []).map(boost => Number(boost.square)))
-  return Array.from({ length: 99 }, (_, index) => index + 1).filter(space =>
+  const selectedByAllBombers = shootSelectedTargets(state)
+  const available = Array.from({ length: 99 }, (_, index) => index + 1).filter(space =>
     !boostSquares.has(space)
-    && !Object.entries(state.shoot.targets).some(([id, target]) => id !== playerId && Math.abs(target - space) <= 3))
+    && !selectedByAllBombers.some(target => target !== space && Math.abs(target - space) <= 3))
+  return [...selected, ...available.filter(space => !selected.includes(space))]
 }
 
 export function selectShootTarget(state, playerId, space) {
   const target = Number(space)
-  if (state.shoot?.targets[playerId] === target) {
-    delete state.shoot.targets[playerId]
-    state.shoot.targetOrder = (state.shoot.targetOrder || []).filter(id => id !== playerId)
+  const selected = shootTargetsForPlayer(state, playerId)
+  if (selected.includes(target)) {
+    const remaining = selected.filter(item => item !== target)
+    if (remaining.length) state.shoot.targets[playerId] = remaining
+    else {
+      delete state.shoot.targets[playerId]
+      state.shoot.targetOrder = (state.shoot.targetOrder || []).filter(id => id !== playerId)
+    }
     return { ok: true, target: null, deselected: true }
   }
+  if (selected.length >= shootBomberTargetLimit(state)) return { ok: false, message: `You can select up to ${shootBomberTargetLimit(state)} targets.` }
   if (!shootTargetOptions(state, playerId).includes(Number(space))) return { ok: false, message: 'Choose an available square from 1 to 99, at least four spaces from every other target.' }
-  state.shoot.targets[playerId] = target
+  state.shoot.targets[playerId] = [...selected, target]
   if (!(state.shoot.targetOrder || []).includes(playerId)) state.shoot.targetOrder = [...(state.shoot.targetOrder || []), playerId]
   return { ok: true, target }
 }
@@ -316,6 +411,10 @@ export function resolveShootBombTarget(state, target) {
   if (!state.shoot.bloodiedSpaces.includes(target)) state.shoot.bloodiedSpaces.push(target)
   for (const player of state.players) {
     if (player.team === state.shoot.escaperTeam && !player.eliminated && player.space === target) {
+      if (player.id === state.shoot.flakPlayerId) {
+        state.shoot.flakPlayerId = null
+        continue
+      }
       player.eliminated = true
       eliminated.push({ playerId: player.id, playerName: player.name, space: target })
     }
@@ -329,13 +428,12 @@ export function completeShootBombing(state) {
   state.shoot.targetOrder = []
   state.shoot.bombingDue = false
   state.shoot.targetingActive = false
+  state.shoot.flakPlayerId = null
 }
 
 export function resolveShootBombs(state) {
   if (state.mode !== 'shoot_the_what' || !state.shoot?.bombingDue) return []
-  const targets = (state.shoot.targetOrder || Object.keys(state.shoot.targets))
-    .map(playerId => state.shoot.targets[playerId])
-    .filter(Number.isFinite)
+  const targets = shootSelectedTargets(state)
   const eliminated = targets.flatMap(target => resolveShootBombTarget(state, target))
   completeShootBombing(state)
   return eliminated

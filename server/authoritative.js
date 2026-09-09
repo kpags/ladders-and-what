@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateClashSkill, activateSkill, advanceShootEscaperTurn, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashAttackPresentation, clashMoveOptions, clashVisibleSpaces, CLASH_MOVE_EVENT_MS, CLASH_TURN_MS, completeEscape, completeShootBombing, createGameState, describeRunAwayRoll, destroySpace, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, resolveShootBombTarget, shootRoundResult, shootRoundWinner, shootTargetOptions, startShootRound, selectShootTarget, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateClashSkill, activateShootFlak, activateSkill, advanceShootEscaperTurn, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashAttackPresentation, clashMoveOptions, clashVisibleSpaces, CLASH_MOVE_EVENT_MS, CLASH_TURN_MS, completeEscape, completeShootBombing, consumeShootScan, createGameState, describeRunAwayRoll, destroySpace, endShootEscaperSkillTurn, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, resolveShootBombTarget, shootRoundResult, shootRoundWinner, shootScanArea, shootScanOptions, shootSelectedTargets, shootTargetOptions, startShootRound, selectShootTarget, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
 import { activeGameModes, boardIndicesForMode, boardIsAvailable, characterIndicesForMode, gameModeIsActive, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { chooseGuessWhatDifficulty } from '../src/guessWhatWheel.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
@@ -335,6 +335,8 @@ function clearRoomTimers(room) {
   clearTimer(room.turnTimer)
   clearTimer(room.rollTimer)
   clearTimer(room.directionTimer)
+  clearTimer(room.shootScan?.timer)
+  room.shootScan = null
   room.directionChoice = null
   for (const timer of room.disconnectTimers.values()) clearTimer(timer)
   room.disconnectTimers.clear()
@@ -548,10 +550,88 @@ function beginShootTargeting(room) {
   emitEvent(room, 'shoot_targeting', { bomberTeam: room.game.shoot.bomberTeam, expiresAt }, targetDuration)
   room.turnTimer = setTimeout(() => deployShootBombs(room), targetDuration)
   for (const bomber of bombers.filter(player => player.isAI)) {
-    const options = shootTargetOptions(room.game, bomber.id)
-    if (options.length) selectShootTarget(room.game, bomber.id, options[Math.floor(Math.random() * options.length)])
+    while (true) {
+      const options = shootTargetOptions(room.game, bomber.id)
+      const storedTargets = room.game.shoot.targets[bomber.id]
+      const selected = Array.isArray(storedTargets) ? storedTargets : [storedTargets].filter(Number.isFinite)
+      const candidates = options.filter(space => !selected.includes(space))
+      if (!candidates.length) break
+      selectShootTarget(room.game, bomber.id, candidates[Math.floor(Math.random() * candidates.length)])
+    }
   }
   broadcastGame(room)
+}
+
+function resumeShootTargeting(room, remainingMs) {
+  if (!room.shootBombing || room.game?.shoot?.phase !== 'targeting') return
+  const duration = Math.max(0, Number(remainingMs) || 0)
+  if (!duration) return deployShootBombs(room)
+  const expiresAt = Date.now() + duration
+  room.shootBombing.expiresAt = expiresAt
+  emitEvent(room, 'shoot_targeting', { bomberTeam: room.game.shoot.bomberTeam, expiresAt }, duration)
+  room.turnTimer = setTimeout(() => deployShootBombs(room), duration)
+  broadcastGame(room)
+}
+
+function finishShootScan(room, playerId, target = null) {
+  const pending = room.shootScan
+  if (!pending || pending.playerId !== playerId) return
+  clearTimer(pending.timer)
+  pending.timer = null
+  if (target == null) {
+    room.shootScan = null
+    room.currentEvent = null
+    resumeShootTargeting(room, pending.remainingMs)
+    return
+  }
+  const area = shootScanArea(target)
+  if (!area.length) return finishShootScan(room, playerId)
+  const detected = room.game.players.some(player => player.team === room.game.shoot.escaperTeam && !player.eliminated && area.includes(player.space))
+  const token = ++room.sequenceToken
+  pending.resolving = true
+  // The short impact pause makes the scan feel deliberate before the three
+  // slow pulses reveal its result.
+  wait(room, 500, token).then(async valid => {
+    if (!valid || room.shootScan !== pending) return
+    emitEvent(room, 'shoot_scan_result', { playerId, center: Number(target), spaces: area, detected }, 1800)
+    broadcastGame(room)
+    if (!await wait(room, 1800, token) || room.shootScan !== pending) return
+    room.shootScan = null
+    room.currentEvent = null
+    resumeShootTargeting(room, pending.remainingMs)
+  })
+}
+
+function startShootScan(room, requesterId) {
+  if (!room.shootBombing || room.shootScan || room.game?.shoot?.phase !== 'targeting') return reject(sockets.get(requesterId), 'Scan is only available during Bomber targeting.')
+  const bomber = room.game.players.find(player => player.id === requesterId)
+  if (!bomber || bomber.team !== room.game.shoot.bomberTeam || bomber.eliminated) return reject(sockets.get(requesterId), 'Only an active Bomber can scan.')
+  const consumed = consumeShootScan(room.game, requesterId)
+  if (!consumed.ok) return reject(sockets.get(requesterId), consumed.message)
+  const remainingMs = Math.max(0, room.shootBombing.expiresAt - Date.now())
+  clearTimer(room.turnTimer)
+  room.turnTimer = null
+  const expiresAt = Date.now() + 5000
+  const pending = {
+    playerId: requesterId,
+    remainingMs,
+    timer: setTimeout(() => finishShootScan(room, requesterId), 5000),
+  }
+  room.shootScan = pending
+  emitEvent(room, 'shoot_scan_targeting', { playerId: requesterId, options: shootScanOptions(room.game, requesterId), expiresAt }, 5000)
+  broadcastGame(room)
+}
+
+function activateShootSkill(room, requesterId) {
+  if (room.phase !== 'playing' || room.game?.mode !== 'shoot_the_what' || room.game.gameOver) return reject(sockets.get(requesterId), 'Shoot skills are unavailable.')
+  const player = room.game.players.find(item => item.id === requesterId)
+  if (!player || player.eliminated || player.finished) return reject(sockets.get(requesterId), 'This player cannot use a skill.')
+  if (player.team === room.game.shoot.bomberTeam) return startShootScan(room, requesterId)
+  if (room.busy || room.game.shoot.phase !== 'escaper' || room.game.players[room.game.currentPlayerIndex]?.id !== requesterId) return reject(sockets.get(requesterId), 'Flak Jacket can only be used during your Escaper turn.')
+  const result = activateShootFlak(room.game, requesterId)
+  if (!result.ok) return reject(sockets.get(requesterId), result.message)
+  endShootEscaperSkillTurn(room.game)
+  finishSequenceAndBeginTurn(room)
 }
 
 function beginShootBombing(room) {
@@ -569,13 +649,12 @@ function beginShootBombing(room) {
 
 async function deployShootBombs(room, requesterId = null) {
   if (!room.shootBombing || room.game?.mode !== 'shoot_the_what') return
+  if (room.shootScan) return reject(sockets.get(requesterId), 'Finish the Scan first.')
   if (requesterId && !room.shootBombing.bomberIds.includes(requesterId)) return reject(sockets.get(requesterId), 'Only bombers can deploy.')
   clearTimer(room.turnTimer)
   room.turnTimer = null
   const token = ++room.sequenceToken
-  const targets = (room.game.shoot.targetOrder || Object.keys(room.game.shoot.targets))
-    .map(playerId => room.game.shoot.targets[playerId])
-    .filter(Number.isFinite)
+  const targets = shootSelectedTargets(room.game)
   room.shootBombing = null
   room.game.shoot.targetingActive = false
   room.game.shoot.phase = 'revealing'
@@ -594,7 +673,12 @@ async function deployShootBombs(room, requesterId = null) {
     // The shared explosion GIF is 20 × 80 ms frames. Keep it mounted for
     // exactly one playback so it never visibly loops at the impact square.
     emitEvent(room, 'shoot_explosion', { target }, 1600)
+    const protectedPlayerId = room.game.shoot.flakPlayerId
     const eliminated = resolveShootBombTarget(room.game, target)
+    if (protectedPlayerId && room.game.shoot.flakPlayerId !== protectedPlayerId) {
+      const protectedPlayer = room.game.players.find(player => player.id === protectedPlayerId)
+      emitEvent(room, 'shoot_flak_absorbed', { playerId: protectedPlayerId, playerName: protectedPlayer?.name, target }, 1600)
+    }
     for (const hit of eliminated) {
       // The browser receives this immediately after the explosion event, so
       // the selected death sound starts on the same impact beat.
@@ -2646,11 +2730,19 @@ wss.on('connection', socket => {
     } else if (message.type === 'start_game') startGame(room, clientId)
     else if (message.type === 'shoot_target') {
       if (!room.shootBombing || room.game?.shoot?.phase !== 'targeting') return reject(socket, 'Bomb targets can only be selected during the targeting phase.')
+      if (room.shootScan) return reject(socket, 'Targeting resumes after the Scan.')
       const result = selectShootTarget(room.game, clientId, message.space)
       if (!result.ok) reject(socket, result.message)
       else broadcastGame(room)
     }
     else if (message.type === 'shoot_deploy') deployShootBombs(room, clientId)
+    else if (message.type === 'shoot_skill') activateShootSkill(room, clientId)
+    else if (message.type === 'shoot_scan_target') {
+      const pending = room.shootScan
+      if (!pending || pending.playerId !== clientId || pending.resolving) return reject(socket, 'There is no Scan target to select.')
+      if (!shootScanOptions(room.game, clientId).includes(Number(message.space))) return reject(socket, 'Choose a scan square from 1 to 99.')
+      finishShootScan(room, clientId, Number(message.space))
+    }
     else if (message.type === 'start_roll') startRoll(room, clientId)
     else if (message.type === 'stop_roll') stopRoll(room, clientId)
     else if (message.type === 'choose_escape_move') chooseEscapeMove(room, clientId, message.roll)

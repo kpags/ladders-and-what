@@ -179,6 +179,9 @@ const shootOverlay = ref(null)
 const shootRoundCountdown = ref(0)
 const shootExplosionTarget = ref(null)
 const shootImpactTarget = ref(null)
+const shootScanOptions = ref([])
+const shootScanDeadline = ref(null)
+const shootScanEffect = ref(null)
 const shootBoostPlayerId = ref(null)
 const shootTargetDeadline = ref(null)
 const shootLobbyActivePlayerId = ref(null)
@@ -301,21 +304,41 @@ const shootTargeting = computed(() => game.value?.mode === 'shoot_the_what'
   && game.value?.shoot?.bombingDue
   && game.value?.shoot?.targetingActive
   && controlledGamePlayer.value?.team === game.value?.shoot?.bomberTeam)
-const shootOwnTarget = computed(() => {
-  const target = Number(game.value?.shoot?.targets?.[clientId])
-  return Number.isInteger(target) ? target : null
+const shootScanSeconds = computed(() => shootScanDeadline.value
+  ? Math.max(0, Math.ceil((shootScanDeadline.value - (now.value + serverClockOffset)) / 1000))
+  : 0)
+const shootSkillUsesLeft = computed(() => Number(game.value?.shoot?.skillUses?.[controlledGamePlayer.value?.team]) || 0)
+const shootFlakPlayerId = computed(() => game.value?.shoot?.flakPlayerId || null)
+const shootCanUseSkill = computed(() => {
+  const player = controlledGamePlayer.value
+  if (!player || game.value?.mode !== 'shoot_the_what' || game.value.gameOver || shootSkillUsesLeft.value < 1) return false
+  if (player.team === game.value.shoot?.bomberTeam) return shootTargeting.value && !shootScanOptions.value.length
+  return game.value.shoot?.phase === 'escaper' && isControlledTurn.value && !turnBusy.value && !shootFlakPlayerId.value
+})
+const shootOwnTargets = computed(() => {
+  const targets = game.value?.shoot?.targets?.[clientId]
+  const list = Array.isArray(targets) ? targets : [targets]
+  return list.map(Number).filter(Number.isInteger)
+})
+const shootTargetLimit = computed(() => {
+  const bombers = (game.value?.players || []).filter(player => player.team === game.value?.shoot?.bomberTeam && !player.eliminated)
+  return bombers.length <= 1 ? 3 : bombers.length === 2 ? 2 : 1
 })
 const shootTargetSpaces = computed(() => {
-  if (!shootTargeting.value) return []
+  if (!shootTargeting.value || shootScanOptions.value.length) return []
 
-  // Once this Bomber commits a target, leave only that target visible until it
-  // is toggled off. Teammates' committed targets are rendered separately.
-  if (shootOwnTarget.value != null) return [shootOwnTarget.value]
+  // Keep chosen squares visible and yellow. When the Bomber reaches their
+  // allowance, hide every unselected square while preserving deselection.
+  if (shootOwnTargets.value.length >= shootTargetLimit.value) return shootOwnTargets.value
 
-  const targets = game.value?.shoot?.targets || {}
+  const selectedTargets = Object.values(game.value?.shoot?.targets || {})
+    .flatMap(targets => (Array.isArray(targets) ? targets : [targets]))
+    .map(Number)
+    .filter(Number.isInteger)
   const boostSquares = new Set((game.value?.board?.boosts || []).map(boost => Number(boost.square)))
-  return Array.from({ length: 99 }, (_, index) => index + 1).filter(space => !boostSquares.has(space)
-    && !Object.entries(targets).some(([, target]) => Math.abs(Number(target) - space) <= 3))
+  const available = Array.from({ length: 99 }, (_, index) => index + 1).filter(space => !boostSquares.has(space)
+    && !selectedTargets.some(target => target !== space && Math.abs(target - space) <= 3))
+  return [...shootOwnTargets.value, ...available.filter(space => !shootOwnTargets.value.includes(space))]
 })
 const shootBoardObscured = computed(() => game.value?.mode === 'shoot_the_what'
   && controlledGamePlayer.value?.team === game.value?.shoot?.bomberTeam
@@ -342,7 +365,9 @@ const shootBomberSecrecy = computed(() => game.value?.mode === 'shoot_the_what'
 const shootOtherTargets = computed(() => shootTargeting.value
   ? Object.entries(game.value?.shoot?.targets || {})
     .filter(([playerId]) => playerId !== clientId)
-    .map(([, space]) => Number(space))
+    .flatMap(([, targets]) => (Array.isArray(targets) ? targets : [targets]))
+    .map(Number)
+    .filter(Number.isInteger)
   : [])
 const shootTeamPlayers = computed(() => ({
   A: (game.value?.players || []).filter(player => player.team === 'A'),
@@ -659,6 +684,9 @@ function clearGamePresentation() {
   shootOverlay.value = null
   shootRoundCountdown.value = 0
   shootImpactTarget.value = null
+  shootScanOptions.value = []
+  shootScanDeadline.value = null
+  shootScanEffect.value = null
   shootBoostPlayerId.value = null
   shootTargetDeadline.value = null
   sighOverlay.value = null
@@ -778,7 +806,30 @@ async function handleServerEvent(event) {
       : { kind: 'targeting', text: 'Bombers selecting targets' }
     shootTargetDeadline.value = event.data.expiresAt
     window.setTimeout(() => { if (shootOverlay.value?.kind === 'targeting') shootOverlay.value = null }, remaining)
-    window.setTimeout(() => { shootTargetDeadline.value = null }, remaining)
+    window.setTimeout(() => {
+      if (shootTargetDeadline.value === event.data.expiresAt) shootTargetDeadline.value = null
+    }, remaining)
+  } else if (event.type === 'shoot_scan_targeting') {
+    // Scan pauses the Bomber target window. Only its initiator receives the
+    // clickable scan grid; everyone sees the eventual public pulse.
+    shootTargetDeadline.value = null
+    if (event.data.playerId === clientId) {
+      shootScanOptions.value = event.data.options || []
+      shootScanDeadline.value = event.data.expiresAt
+      window.setTimeout(() => {
+        if (shootScanDeadline.value === event.data.expiresAt) {
+          shootScanOptions.value = []
+          shootScanDeadline.value = null
+        }
+      }, remaining)
+    }
+  } else if (event.type === 'shoot_scan_result') {
+    shootScanOptions.value = []
+    shootScanDeadline.value = null
+    shootScanEffect.value = { eventId: event.id, ...event.data }
+    window.setTimeout(() => {
+      if (shootScanEffect.value?.eventId === event.id) shootScanEffect.value = null
+    }, remaining)
   } else if (event.type === 'shoot_no_bombs') {
     shootOverlay.value = { kind: 'notice', text: 'No bombs dropped' }
     window.setTimeout(() => { shootOverlay.value = null }, remaining)
@@ -1669,6 +1720,14 @@ function selectShootTarget(space) {
   if (shootTargeting.value) sendLobby({ type: 'shoot_target', space })
 }
 
+function useShootSkill() {
+  if (shootCanUseSkill.value) sendLobby({ type: 'shoot_skill' })
+}
+
+function selectShootScanTarget(space) {
+  if (shootScanOptions.value.includes(space)) sendLobby({ type: 'shoot_scan_target', space })
+}
+
 function deployShootBombs() {
   if (shootTargeting.value) sendLobby({ type: 'shoot_deploy' })
 }
@@ -1919,6 +1978,10 @@ function playTurn() {
 function useSkill(targetId = null) {
   if (!game.value || page.value !== 'game' || turnBusy.value || game.value.gameOver) return
   if (game.value.mode === 'guess_what') return
+  if (game.value.mode === 'shoot_the_what') {
+    useShootSkill()
+    return
+  }
   if (game.value.mode === 'clash_with') {
     activateClashSkill()
     return
@@ -3147,7 +3210,7 @@ onUnmounted(() => {
             <small>{{ game.board.name }}</small>
             <h2 id="escape-briefing-title">{{ game.mode === 'shoot_the_what' ? 'Shoot the WHAT?! Instructions' : 'Escape Instructions' }}</h2>
             <ul v-if="game.mode === 'shoot_the_what'">
-              <li>First team to win 2 of 3 rounds wins.</li><li>The A/B/A/B wheel chooses the opening Bomber team.</li><li>Teams alternate Bomber and Escaper roles each round.</li><li>Escapers need one S100 finish with one or two Escapers, or two finishes with three.</li><li>Bombers win once the Escaper target is impossible.</li><li>Bombers deploy one bomb per occupied slot every third global turn.</li><li>Good luck!</li>
+              <li>There are 3 rounds; the first team to win 2 wins the game.</li><li>The A/B/A/B wheel chooses the opening Bomber team.</li><li>Teams alternate Bomber and Escaper roles each round.</li><li>Escapers need one S100 finish with one or two Escapers, or two finishes with three.</li><li>Bombers win once the Escaper target is impossible.</li><li>Every third global turn, one Bomber targets 3 squares, two Bombers target 2 each, and three Bombers target 1 each.</li><li>Good luck!</li>
             </ul>
             <ol v-else>
               <li>Work together to collect all <b>{{ game.board.keys_count }} {{ escapeKeyName.toLowerCase() }}</b> scattered on the board. Each player can collect two. If killed, all collected items will be dropped.</li>
@@ -3400,9 +3463,9 @@ onUnmounted(() => {
               {{ game.loser?.name || game.winner?.name || 'Everyone' }}
             </strong>
           </div>
-          <div v-if="!game.gameOver" class="turn-timer" :class="{ urgent: turnSeconds <= 5 }">
-            <small>{{ game.mode === 'shoot_the_what' && game.shoot?.phase === 'targeting' ? 'Target time' : 'Time left' }}</small>
-              <strong>{{ game.mode === 'shoot_the_what' && game.shoot?.phase === 'targeting' ? shootTargetSeconds : game.mode === 'escape_from' && escapeMoveChoice ? escapeMoveSeconds : game.mode === 'escape_from' && directionChoice ? directionSeconds : turnSeconds }}s</strong>
+          <div v-if="!game.gameOver" class="turn-timer" :class="{ urgent: (shootScanOptions.length ? shootScanSeconds : turnSeconds) <= 5 }">
+            <small>{{ shootScanOptions.length ? 'Scan time' : game.mode === 'shoot_the_what' && game.shoot?.phase === 'targeting' ? 'Target time' : 'Time left' }}</small>
+              <strong>{{ shootScanOptions.length ? shootScanSeconds : game.mode === 'shoot_the_what' && game.shoot?.phase === 'targeting' ? shootTargetSeconds : game.mode === 'escape_from' && escapeMoveChoice ? escapeMoveSeconds : game.mode === 'escape_from' && directionChoice ? directionSeconds : turnSeconds }}s</strong>
           </div>
           <div class="hud-dice-panel">
             <button
@@ -3413,7 +3476,7 @@ onUnmounted(() => {
             >
               {{
                 shootTargeting
-                  ? 'Deploy'
+                  ? `Deploy (${shootOwnTargets.length}/${shootTargetLimit})`
                   : isControlledTurn
                     ? (game.mode === 'clash_with' ? 'Move' : game.mode === 'escape_from' ? 'Pick Moves' : controlledGamePlayer?.specialRollPending ? 'Parkour Roll' : controlledGamePlayer?.rerollPending ? 'Reroll' : 'Roll dice')
                   : `${game.players[game.currentPlayerIndex].name}'s turn`
@@ -3651,13 +3714,36 @@ onUnmounted(() => {
                 v-for="space in shootTargetSpaces"
                 :key="`shoot-target-${space}`"
                 class="shoot-target-option"
-                :class="{ selected: game.shoot?.targets?.[clientId] === space }"
+                :class="{ selected: shootOwnTargets.includes(space) }"
                 type="button"
                 :style="shootSquareStyle(space)"
                 :aria-label="`Target square ${space}`"
                 @click="selectShootTarget(space)"
               ></button>
               <span v-for="space in shootOtherTargets" :key="`shoot-other-target-${space}`" class="shoot-target-option selected other" :style="shootSquareStyle(space)" aria-hidden="true"></span>
+              <button
+                v-for="space in shootScanOptions"
+                :key="`shoot-scan-target-${space}`"
+                class="shoot-scan-target-option"
+                type="button"
+                :style="shootSquareStyle(space)"
+                :aria-label="`Scan square ${space}`"
+                @click="selectShootScanTarget(space)"
+              ></button>
+              <span
+                v-for="space in shootScanEffect?.spaces || []"
+                :key="`shoot-scan-effect-${shootScanEffect.eventId}-${space}`"
+                class="shoot-scan-cell"
+                :class="shootScanEffect.detected ? 'detected' : 'clear'"
+                :style="shootSquareStyle(space)"
+                aria-hidden="true"
+              ></span>
+              <strong
+                v-if="shootScanEffect"
+                class="shoot-scan-result"
+                :class="shootScanEffect.detected ? 'detected' : 'clear'"
+                :style="shootSquareStyle(shootScanEffect.center)"
+              >{{ shootScanEffect.detected ? 'Detected' : 'Clear' }}</strong>
               <span v-for="space in shootBombedSpaces" :key="`shoot-bombed-${space}`" class="shoot-bombed-space" :style="shootSquareStyle(space)" aria-label="Bombed square"></span>
               <span v-if="shootImpactTarget" class="shoot-impact-warning" :style="shootSquareStyle(shootImpactTarget)" aria-label="Incoming bomb"></span>
               <span v-if="shootExplosionTarget" class="shoot-explosion-cell" :style="shootSquareStyle(shootExplosionTarget)" aria-hidden="true">
@@ -3787,7 +3873,8 @@ onUnmounted(() => {
                   'sound-picker-open': emojiPickerPlayerId === player.id && emojiPickerPlacement === 'board',
                   'social-active': game.mode === 'escape_from' && Boolean(activeReactions[player.id]),
                   'shoot-token': game.mode === 'shoot_the_what',
-                  'shoot-boost': game.mode === 'shoot_the_what' && shootBoostPlayerId === player.id
+                  'shoot-boost': game.mode === 'shoot_the_what' && shootBoostPlayerId === player.id,
+                  'shoot-flak-active': game.mode === 'shoot_the_what' && shootFlakPlayerId === player.id
                 }"
                 :style="[tokenPosition(visualSpace(player), game.players.findIndex(item => item.id === player.id)), clashTokenMotionStyle(player)]"
                 :title="`${player.name}: space ${player.space}`"
@@ -3812,7 +3899,7 @@ onUnmounted(() => {
             <div v-if="game.mode === 'shoot_the_what'" class="shoot-team-scoreboard">
               <section v-for="team in ['A', 'B']" :key="team" :class="`team-${team}`">
                 <strong>Team {{ team }}</strong>
-                <article v-for="player in shootTeamPlayers[team]" :key="player.id" :class="{ current: !shootBomberSecrecy && player.id === game.players[game.currentPlayerIndex]?.id, eliminated: player.eliminated }">
+                <article v-for="player in shootTeamPlayers[team]" :key="player.id" :class="{ current: !shootBomberSecrecy && player.id === game.players[game.currentPlayerIndex]?.id, eliminated: player.eliminated, flak: shootFlakPlayerId === player.id }">
                   <span class="console-pawn" :style="{ '--player-color': team === 'A' ? '#0879e7' : '#e9342d' }">{{ player.face }}</span>
                   <div><b>{{ player.name }}</b><small>{{ player.eliminated ? 'Eliminated' : `Space ${visualSpace(player)}` }}</small></div>
                 </article>
@@ -3853,7 +3940,7 @@ onUnmounted(() => {
               </article>
             </div>
 
-            <div v-if="!game.gameOver && controlledGamePlayer && !['guess_what', 'shoot_the_what'].includes(game.mode) && (game.mode !== 'clash_with' || controlledGamePlayer.clashPendingPickup)" class="skill-panel">
+            <div v-if="!game.gameOver && controlledGamePlayer && game.mode !== 'guess_what' && (game.mode === 'shoot_the_what' || game.mode !== 'clash_with' || controlledGamePlayer.clashPendingPickup)" class="skill-panel">
               <template v-if="game.mode === 'clash_with'">
                 <div v-if="controlledGamePlayer.clashPendingPickup" class="clash-pickup-choice">
                   <strong>Found {{ controlledGamePlayer.clashPendingPickup.weapon.name }}</strong>
@@ -3861,6 +3948,29 @@ onUnmounted(() => {
                   <button type="button" @click="resolveClashPickup(true)">Replace</button>
                   <button type="button" @click="resolveClashPickup(false)">Keep current</button>
                 </div>
+              </template>
+              <template v-else-if="game.mode === 'shoot_the_what'">
+                <div class="skill-title">
+                  <span>Team skill</span>
+                  <strong>{{ controlledGamePlayer.team === game.shoot?.bomberTeam ? 'Scan' : 'Flak Jacket' }}</strong>
+                </div>
+                <p v-if="controlledGamePlayer.team === game.shoot?.bomberTeam">Pause targeting to scan a 3 × 3 area. Green means an Escaper was detected; red means clear.</p>
+                <p v-else>Be immune to the next Bomber turn. Only one Escaper can wear the jacket at a time.</p>
+                <button
+                  type="button"
+                  class="skill-state"
+                  :class="{ ready: shootCanUseSkill }"
+                  :disabled="!shootCanUseSkill"
+                  @click="useShootSkill"
+                >
+                  <template v-if="shootSkillUsesLeft < 1">No uses left this round</template>
+                  <template v-else-if="controlledGamePlayer.team === game.shoot?.escaperTeam && shootFlakPlayerId">Flak Jacket active</template>
+                  <template v-else-if="controlledGamePlayer.team === game.shoot?.bomberTeam && shootScanOptions.length">Select a scan square</template>
+                  <template v-else-if="controlledGamePlayer.team === game.shoot?.bomberTeam && !shootTargeting">Wait for Bomber targeting</template>
+                  <template v-else-if="controlledGamePlayer.team === game.shoot?.escaperTeam && !isControlledTurn">Wait for your turn</template>
+                  <template v-else>Use {{ controlledGamePlayer.team === game.shoot?.bomberTeam ? 'Scan' : 'Flak Jacket' }}</template>
+                </button>
+                <small>{{ shootSkillUsesLeft }}/3 team uses remaining this round</small>
               </template>
               <template v-else-if="game.mode === 'escape_from'">
                 <div class="skill-title">
