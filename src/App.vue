@@ -125,6 +125,10 @@ const roomExitConfirm = ref(false)
 const roomList = ref([])
 const roomListLoading = ref(false)
 const isSpectating = ref(false)
+const adminAccess = ref(false)
+const adminDialogOpen = ref(false)
+const adminPassword = ref('')
+const adminPasswordError = ref('')
 const settingsReturnPage = ref('home')
 const settingsModalOpen = ref(false)
 let lobbySocket
@@ -258,6 +262,22 @@ const currentPlayer = computed(() => characters[playerCharacter.value])
 const turnSeconds = computed(() => turnDeadline.value ? Math.max(0, Math.ceil((turnDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
 const controlledGamePlayer = computed(() => game.value?.players.find(player => player.id === clientId))
 const isControlledTurn = computed(() => Boolean(game.value && controlledGamePlayer.value?.id === game.value.players[game.value.currentPlayerIndex]?.id))
+const adminMoveEnabled = computed(() => Boolean(adminAccess.value
+  && onlineRoom.value?.adminRoom
+  && game.value
+  && game.value.mode !== 'clash_with'
+  && isControlledTurn.value
+  && controlledGamePlayer.value?.isAdmin
+  && !turnBusy.value
+  && !game.value.gameOver))
+const adminMoveOptions = computed(() => {
+  if (!adminMoveEnabled.value) return []
+  const limit = game.value.mode === 'run_away' ? 12 : 6
+  const from = controlledGamePlayer.value.space
+  return Array.from({ length: limit * 2 + 1 }, (_, index) => index - limit)
+    .filter(steps => steps !== 0 && from + steps >= 1 && from + steps <= 100)
+})
+const adminUnlimitedSkills = computed(() => Boolean(adminAccess.value && onlineRoom.value?.adminRoom && controlledGamePlayer.value?.isAdmin))
 const isLobbyHost = computed(() => onlineRoom.value?.hostId === clientId)
 const selectedGameMode = computed(() => selectableGameModes.find(mode => mode.key === selectedMode.value) || selectableGameModes[0])
 const bloodiedSpaces = computed(() => {
@@ -311,7 +331,7 @@ const shootSkillUsesLeft = computed(() => Number(game.value?.shoot?.skillUses?.[
 const shootFlakPlayerId = computed(() => game.value?.shoot?.flakPlayerId || null)
 const shootCanUseSkill = computed(() => {
   const player = controlledGamePlayer.value
-  if (!player || game.value?.mode !== 'shoot_the_what' || game.value.gameOver || shootSkillUsesLeft.value < 1) return false
+  if (!player || game.value?.mode !== 'shoot_the_what' || game.value.gameOver || (!adminUnlimitedSkills.value && shootSkillUsesLeft.value < 1)) return false
   if (player.team === game.value.shoot?.bomberTeam) return shootTargeting.value && !shootScanOptions.value.length
   return game.value.shoot?.phase === 'escaper' && isControlledTurn.value && !turnBusy.value && !shootFlakPlayerId.value
 })
@@ -1442,6 +1462,15 @@ function handleSocketMessage(event) {
     roomListLoading.value = false
     return
   }
+  if (message.type === 'admin_status') {
+    adminAccess.value = Boolean(message.enabled)
+    adminPasswordError.value = adminAccess.value ? '' : 'Incorrect password.'
+    if (adminAccess.value) {
+      adminDialogOpen.value = false
+      adminPassword.value = ''
+    }
+    return
+  }
 
   if (message.revision && message.revision < lastRevision) return
   if (message.revision) lastRevision = message.revision
@@ -1526,6 +1555,27 @@ function sendLobby(payload) {
   if (lobbySocket?.readyState === WebSocket.OPEN) {
     lobbySocket.send(JSON.stringify({ ...payload, clientId }))
   }
+}
+
+async function toggleAdminAccess() {
+  if (adminAccess.value) {
+    sendLobby({ type: 'admin_logout' })
+    return
+  }
+  adminPassword.value = ''
+  adminPasswordError.value = ''
+  adminDialogOpen.value = true
+  try { await connectLobby() } catch {}
+}
+
+function submitAdminPassword() {
+  if (!adminPassword.value) return
+  adminPasswordError.value = ''
+  sendLobby({ type: 'admin_login', password: adminPassword.value })
+}
+
+function adminMove(steps) {
+  if (adminMoveEnabled.value) sendLobby({ type: 'admin_move', steps })
 }
 
 async function createOnlineLobby() {
@@ -2880,6 +2930,19 @@ onUnmounted(() => {
         </div>
       </section>
     </div>
+    <div v-if="adminDialogOpen" class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="admin-access-title" @click.self="adminDialogOpen = false">
+      <section class="confirm-card admin-access-card">
+        <button class="confirm-close" type="button" aria-label="Close admin access" @click="adminDialogOpen = false">×</button>
+        <h2 id="admin-access-title">Be An Admin</h2>
+        <p>Enter the admin password.</p>
+        <input v-model="adminPassword" type="password" autocomplete="current-password" @keyup.enter="submitAdminPassword">
+        <small v-if="adminPasswordError">{{ adminPasswordError }}</small>
+        <div class="confirm-actions">
+          <button class="confirm-cancel" type="button" @click="adminDialogOpen = false">Cancel</button>
+          <button class="confirm-save" type="button" :disabled="!adminPassword" @click="submitAdminPassword">Go</button>
+        </div>
+      </section>
+    </div>
 
     <template v-if="page === 'home'">
       <section class="home-screen">
@@ -2895,8 +2958,8 @@ onUnmounted(() => {
         <p class="tagline">Because life is full of surprises. <b>Duh.</b></p>
         <nav class="home-actions" aria-label="Main menu">
           <button class="game-button yellow" @click="playNowPrompt = true"><span class="icon">▶</span> Play now</button>
-          <button class="game-button green" @click="page = 'characters'"><span class="icon">♟</span> Characters</button>
           <button class="game-button blue" @click="goSettings('home')"><span class="icon">⚙</span> Settings</button>
+          <button class="game-button purple" @click="toggleAdminAccess">{{ adminAccess ? 'Exit As Admin' : 'Be An Admin' }}</button>
         </nav>
         <div v-if="playNowPrompt" class="play-now-modal" role="dialog" aria-modal="true" aria-labelledby="play-now-title">
           <section>
@@ -2907,7 +2970,7 @@ onUnmounted(() => {
             <button class="game-button blue" type="button" @click="openRoomListPage"><span class="icon">☰</span> Room List</button>
           </section>
         </div>
-        <div class="join-room">
+        <div v-if="!adminAccess" class="join-room">
           <input v-model="joinCode" maxlength="5" placeholder="ROOM CODE" @keyup.enter="joinOnlineLobby">
           <button @click="joinOnlineLobby">Join room</button>
           <small v-if="onlineError">{{ onlineError }}</small>
@@ -2937,8 +3000,11 @@ onUnmounted(() => {
         <div class="lobby-grid">
           <section class="room-panel">
             <div class="room-meta">
-              <button class="room-code" title="Share invite" @click="shareInvite"><small>Room code</small><strong>{{ roomCode || '-----' }}</strong></button>
-              <button title="Share invite" @click="shareInvite">▣</button>
+              <template v-if="!onlineRoom?.adminRoom">
+                <button class="room-code" title="Share invite" @click="shareInvite"><small>Room code</small><strong>{{ roomCode || '-----' }}</strong></button>
+                <button title="Share invite" @click="shareInvite">▣</button>
+              </template>
+              <strong v-else class="admin-room-label">Admin room · AI only</strong>
               <p>Waiting for <b>chaos</b> to begin...</p>
             </div>
 
@@ -3070,7 +3136,7 @@ onUnmounted(() => {
             </div>
 
             <div class="room-actions">
-              <button class="game-button purple" @click="shareInvite">♟ Invite</button>
+              <button v-if="!onlineRoom?.adminRoom" class="game-button purple" @click="shareInvite">♟ Invite</button>
               <button class="game-button ai-button" :disabled="!isLobbyHost || lobbyPlayerCount >= lobbyMaxPlayers || !lobbyCharacterIndices.length" @click="addAiPlayer">＋ Add AI</button>
               <button class="game-button exit" @click="leaveOnlineRoom()">↪ Exit room</button>
               <button class="game-button green" :disabled="!isLobbyHost || lobbyPlayerCount < 2 || lobbyPlayerCount > lobbyMaxPlayers || !selectedLobbyBoard || (selectedMode === 'shoot_the_what' && (!lobbyRosterPlayers.some(player => player.team === 'A') || !lobbyRosterPlayers.some(player => player.team === 'B') || lobbyRosterPlayers.filter(player => player.team === 'A').length > 3 || lobbyRosterPlayers.filter(player => player.team === 'B').length > 3))" @click="requestStartGame">▶ Start game</button>
@@ -3469,19 +3535,22 @@ onUnmounted(() => {
           </div>
           <div class="hud-dice-panel">
             <button
-              v-if="!game.gameOver"
+              v-if="!game.gameOver && !adminMoveEnabled"
               class="game-button yellow"
               :disabled="game.mode === 'shoot_the_what' ? (shootTargeting ? false : (turnBusy || !isControlledTurn)) : (turnBusy || !isControlledTurn || (game.mode === 'clash_with' && controlledClashStunned))"
               @click="game.mode === 'shoot_the_what' && shootTargeting ? deployShootBombs() : playTurn()"
             >
               {{
-                shootTargeting
+                adminMoveEnabled
+                  ? `Select 1–${game.mode === 'run_away' ? 12 : 6} spaces`
+                  : shootTargeting
                   ? `Deploy (${shootOwnTargets.length}/${shootTargetLimit})`
                   : isControlledTurn
                     ? (game.mode === 'clash_with' ? 'Move' : game.mode === 'escape_from' ? 'Pick Moves' : controlledGamePlayer?.specialRollPending ? 'Parkour Roll' : controlledGamePlayer?.rerollPending ? 'Reroll' : 'Roll dice')
                   : `${game.players[game.currentPlayerIndex].name}'s turn`
               }}
             </button>
+            <div v-else-if="adminMoveEnabled" class="admin-move-prompt">Select a highlighted square to move up to {{ game.mode === 'run_away' ? 12 : 6 }} spaces.</div>
             <button v-else class="game-button green" @click="leaveOnlineRoom()">Exit game</button>
           </div>
         </header>
@@ -3702,6 +3771,15 @@ onUnmounted(() => {
                 :style="boardSpacePosition(space)"
                 @click="sendClashMove(space)"
               ></button>
+              <button
+                v-for="steps in adminMoveOptions"
+                :key="`admin-move-${steps}`"
+                class="admin-space-option"
+                type="button"
+                :style="boardSpacePosition(controlledGamePlayer.space + steps)"
+                :aria-label="`Move ${steps > 0 ? 'forward' : 'backward'} ${Math.abs(steps)} spaces`"
+                @click="adminMove(steps)"
+              >{{ steps > 0 ? `+${steps}` : steps }}</button>
               <button
                 v-for="space in game.mode === 'clash_with' && clashItemTargeting ? clashItemTargetSpaces() : []"
                 :key="`clash-item-${space}`"
@@ -3963,7 +4041,7 @@ onUnmounted(() => {
                   :disabled="!shootCanUseSkill"
                   @click="useShootSkill"
                 >
-                  <template v-if="shootSkillUsesLeft < 1">No uses left this round</template>
+                  <template v-if="shootSkillUsesLeft < 1 && !adminUnlimitedSkills">No uses left this round</template>
                   <template v-else-if="controlledGamePlayer.team === game.shoot?.escaperTeam && shootFlakPlayerId">Flak Jacket active</template>
                   <template v-else-if="controlledGamePlayer.team === game.shoot?.bomberTeam && shootScanOptions.length">Select a scan square</template>
                   <template v-else-if="controlledGamePlayer.team === game.shoot?.bomberTeam && !shootTargeting">Wait for Bomber targeting</template>
@@ -4008,8 +4086,8 @@ onUnmounted(() => {
               <button
                 type="button"
                 class="skill-state"
-                :class="{ ready: isControlledTurn && !turnBusy && skillCooldown(controlledGamePlayer) === 0 && !controlledGamePlayer.skillBlockedTurns }"
-                :disabled="!isControlledTurn || turnBusy || game.gameOver || controlledGamePlayer.skillBlockedTurns > 0 || skillCooldown(controlledGamePlayer) > 0"
+                :class="{ ready: isControlledTurn && !turnBusy && (adminUnlimitedSkills || (skillCooldown(controlledGamePlayer) === 0 && !controlledGamePlayer.skillBlockedTurns)) }"
+                :disabled="!isControlledTurn || turnBusy || game.gameOver || (!adminUnlimitedSkills && (controlledGamePlayer.skillBlockedTurns > 0 || skillCooldown(controlledGamePlayer) > 0))"
                 @click="useSkill()"
               >
                 <template v-if="!isControlledTurn">
@@ -4018,13 +4096,13 @@ onUnmounted(() => {
                 <template v-else-if="turnBusy">
                   Please wait
                 </template>
-                <template v-else-if="controlledGamePlayer.skillBlockedTurns">
+                <template v-else-if="controlledGamePlayer.skillBlockedTurns && !adminUnlimitedSkills">
                   Blocked for {{ controlledGamePlayer.skillBlockedTurns }} turn(s)
                 </template>
-                <template v-else-if="controlledGamePlayer.delayedSkillCooldownStartTurn != null">
+                <template v-else-if="controlledGamePlayer.delayedSkillCooldownStartTurn != null && !adminUnlimitedSkills">
                   Cooldown starts turn {{ controlledGamePlayer.delayedSkillCooldownStartTurn }}
                 </template>
-                <template v-else-if="skillCooldown(controlledGamePlayer)">
+                <template v-else-if="skillCooldown(controlledGamePlayer) && !adminUnlimitedSkills">
                   Cooldown {{ skillCooldown(controlledGamePlayer) }}s
                 </template>
                 <template v-else>Use skill · Tap or press G</template>

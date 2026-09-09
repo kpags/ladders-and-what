@@ -986,7 +986,6 @@
             { "from": 59, "to": 61, "direction": "up" },
             { "from": 65, "to": 76, "direction": "up" },
             { "from": 86, "to": 94, "direction": "up" },
-            { "from": 89, "to": 69, "direction": "up" },
             { "from": 16, "to": 5, "direction": "down" },
             { "from": 36, "to": 25, "direction": "down" },
             { "from": 67, "to": 55, "direction": "down" },

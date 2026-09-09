@@ -262,9 +262,12 @@ export function takeShootTurn(state, forcedRoll) {
   if (state.mode !== 'shoot_the_what' || state.gameOver || state.shoot?.bombingDue) return null
   const player = state.players[state.currentPlayerIndex]
   if (!player || player.team !== state.shoot.escaperTeam || player.eliminated || player.finished) return null
-  const roll = Number(forcedRoll) || randomInteger(1, 6)
+  const requestedRoll = Number(forcedRoll)
+  const roll = Number.isInteger(requestedRoll) && requestedRoll !== 0 && Math.abs(requestedRoll) <= 6
+    ? requestedRoll
+    : randomInteger(1, 6)
   const from = player.space
-  player.space = Math.min(100, player.space + Math.max(1, Math.min(6, roll)))
+  player.space = Math.max(1, Math.min(100, player.space + roll))
   const landing = player.space
   state.lastRoll = roll
   const landingResolution = resolveShootLanding(state, player)
@@ -1981,7 +1984,7 @@ export function takeGuessWhatTurn(state, forcedRoll) {
   if (state.gameOver || state.mode !== 'guess_what') return null
   const player = state.players[state.currentPlayerIndex]
   const requestedRoll = Number(forcedRoll)
-  const roll = Number.isInteger(requestedRoll) && requestedRoll >= 1 && requestedRoll <= 6
+  const roll = Number.isInteger(requestedRoll) && requestedRoll !== 0 && Math.abs(requestedRoll) <= 6
     ? requestedRoll
     : randomInteger(1, 6)
   const from = player.space

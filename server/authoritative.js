@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { WebSocket, WebSocketServer } from 'ws'
-import { activateClashSkill, activateShootFlak, activateSkill, advanceShootEscaperTurn, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashAttackPresentation, clashMoveOptions, clashVisibleSpaces, CLASH_MOVE_EVENT_MS, CLASH_TURN_MS, completeEscape, completeShootBombing, consumeShootScan, createGameState, describeRunAwayRoll, destroySpace, endShootEscaperSkillTurn, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, resolveShootBombTarget, shootRoundResult, shootRoundWinner, shootScanArea, shootScanOptions, shootSelectedTargets, shootTargetOptions, startShootRound, selectShootTarget, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeTurn } from '../src/gameRules.js'
+import { activateClashSkill, activateShootFlak, activateSkill, advanceShootEscaperTurn, applyDestroyedSquareEffect, armEscapeWeapon, canSkipEscapeMove, chooseEscapeAiDirection, clashAttackPresentation, clashMoveOptions, clashVisibleSpaces, CLASH_MOVE_EVENT_MS, CLASH_TURN_MS, completeEscape, completeShootBombing, consumeShootScan, createGameState, describeRunAwayRoll, destroySpace, endShootEscaperSkillTurn, endTurnAfterSkill, forfeitPlayer, hiddenMineOptions, moveClashGhost, penalizeTurn, planRunAwayDestruction, resolveClashPickup, resolveGuessWhatAnswer, resolveShootBombTarget, shootRoundResult, shootRoundWinner, shootScanArea, shootScanOptions, shootSelectedTargets, shootTargetOptions, startShootRound, selectShootTarget, SKILL_COOLDOWN_MS, skipClashStunnedTurn, skipEscapeTurn, takeClashAttack, takeClashItem, takeClashMove, takeEscapeTurn, takeGuessWhatTurn, takeParkourWhat, takeShootTurn, takeTurn } from '../src/gameRules.js'
 import { activeGameModes, boardIndicesForMode, boardIsAvailable, characterIndicesForMode, gameModeIsActive, normalizeCharacterIndex } from '../src/lobbyCatalog.js'
 import { chooseGuessWhatDifficulty } from '../src/guessWhatWheel.js'
 import { canStartRoll, unlockRoomForNextTurn } from './turnState.js'
@@ -59,6 +59,8 @@ const GUESS_WHAT_BASE_MOVES = { easy: 3, medium: 5, hard: 7 }
 const GUESS_WHAT_WRONG_MOVES = { easy: -4, medium: -3, hard: -2 }
 const GUESS_WHAT_WHEEL_MS = 3_000
 const GUESS_WHAT_WHEEL_REVEAL_MS = 1_500
+const ADMIN_PASSWORDS = new Set(['!Qaz2wsx', 'Kurtp2000_', '!Qaz2wsxpaguio', 'kurtp2000'])
+const adminClients = new Set()
 
 function questionnaireSet(board) {
   const set = questionnaires[board?.questionnaire]
@@ -140,6 +142,7 @@ function roomView(room) {
     boardIndex: room.boardIndex,
     exactMoveFor100: Boolean(room.exactMoveFor100),
     privateRoom: Boolean(room.privateRoom),
+    adminRoom: Boolean(room.adminRoom),
     players: room.players,
     spectatorCount: room.spectators?.size || 0,
     maxSpectators: MAX_SPECTATORS,
@@ -162,6 +165,7 @@ function hasConnectedHumanPlayer(room) {
 }
 
 function isRoomListVisible(room) {
+  if (room.adminRoom) return false
   if (room.privateRoom) return false
   if (!hasConnectedHumanPlayer(room)) return false
   if (room.phase === 'lobby') return true
@@ -626,6 +630,7 @@ function activateShootSkill(room, requesterId) {
   if (room.phase !== 'playing' || room.game?.mode !== 'shoot_the_what' || room.game.gameOver) return reject(sockets.get(requesterId), 'Shoot skills are unavailable.')
   const player = room.game.players.find(item => item.id === requesterId)
   if (!player || player.eliminated || player.finished) return reject(sockets.get(requesterId), 'This player cannot use a skill.')
+  if (room.adminRoom && player.isAdmin && adminClients.has(requesterId)) room.game.shoot.skillUses[player.team] = 3
   if (player.team === room.game.shoot.bomberTeam) return startShootScan(room, requesterId)
   if (room.busy || room.game.shoot.phase !== 'escaper' || room.game.players[room.game.currentPlayerIndex]?.id !== requesterId) return reject(sockets.get(requesterId), 'Flak Jacket can only be used during your Escaper turn.')
   const result = activateShootFlak(room.game, requesterId)
@@ -993,9 +998,11 @@ async function playWhatEffects(room, player, what, effects, resolvedSpace, token
   return resolvedSpace
 }
 
-async function runShootTurnSequence(room, player, startSpace, roll, token, result) {
-  emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll, specialRoll: false }, 2000)
-  if (!await wait(room, 2000, token)) return
+async function runShootTurnSequence(room, player, startSpace, roll, token, result, showDice = true) {
+  if (showDice) {
+    emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll, specialRoll: false }, 2000)
+    if (!await wait(room, 2000, token)) return
+  }
 
   const landing = result?.landing ?? Math.max(1, Math.min(100, startSpace + roll))
   const rollDuration = Math.abs(landing - startSpace) * 540
@@ -1020,7 +1027,7 @@ async function runShootTurnSequence(room, player, startSpace, roll, token, resul
 }
 
 async function runTurnSequence(room, player, startSpace, roll, token, specialRoll = false, diceAlreadyShown = false, movementOverride = null, shootResult = null) {
-  if (room.game.mode === 'shoot_the_what') return runShootTurnSequence(room, player, startSpace, roll, token, shootResult)
+  if (room.game.mode === 'shoot_the_what') return runShootTurnSequence(room, player, startSpace, roll, token, shootResult, !diceAlreadyShown)
   if (!diceAlreadyShown) {
     emitEvent(room, 'dice_stopped', { playerId: player.id, result: roll, specialRoll }, 2000)
     if (!await wait(room, 2000, token)) return
@@ -1293,13 +1300,15 @@ async function finishGuessWhatMovement(room, result, token) {
   finishSequenceAndBeginTurn(room)
 }
 
-async function runGuessWhatRollSequence(room, result, token) {
-  emitEvent(room, 'dice_stopped', {
-    playerId: result.player.id,
-    result: result.roll,
-    resultLabel: `Rolled ${result.roll}`,
-  }, 1600)
-  if (!await wait(room, 1600, token)) return
+async function runGuessWhatRollSequence(room, result, token, showDice = true) {
+  if (showDice) {
+    emitEvent(room, 'dice_stopped', {
+      playerId: result.player.id,
+      result: result.roll,
+      resultLabel: `Rolled ${result.roll}`,
+    }, 1600)
+    if (!await wait(room, 1600, token)) return
+  }
   const firstDestination = result.exactBounce ? 100 : result.destination
   const duration = Math.abs(firstDestination - result.from) * 540
   if (duration) {
@@ -1566,6 +1575,57 @@ function expireEscapeMoveChoice(room) {
   skipEscapeTurn(room.game)
   broadcastGame(room)
   finishSequenceAndBeginTurn(room)
+}
+
+function syncRoomAdminPlayer(room, clientId, enabled = adminClients.has(clientId)) {
+  if (!room || room.hostId !== clientId) return false
+  const isAdmin = Boolean(enabled && adminClients.has(clientId))
+  const lobbyPlayer = room.players.find(player => player.id === clientId)
+  if (lobbyPlayer) lobbyPlayer.isAdmin = isAdmin
+  const gamePlayer = room.game?.players.find(player => player.id === clientId)
+  if (gamePlayer) gamePlayer.isAdmin = isAdmin
+  room.adminRoom = isAdmin
+  room.privateRoom = isAdmin
+  return true
+}
+
+function adminMove(room, requesterId, requestedSteps) {
+  const current = room.game?.players[room.game.currentPlayerIndex]
+  const steps = Number(requestedSteps)
+  const limit = room.game?.mode === 'run_away' ? 12 : 6
+  const isEligibleAdmin = Boolean(
+    room?.adminRoom
+    && adminClients.has(requesterId)
+    && room.hostId === requesterId
+    && current?.isAdmin
+    && current.id === requesterId
+  )
+  if (!isEligibleAdmin) return reject(sockets.get(requesterId), 'Admin movement is unavailable.')
+  if (room.phase !== 'playing' || room.busy || room.rolling || room.game.gameOver || room.game.mode === 'clash_with') return reject(sockets.get(requesterId), 'Admin movement is unavailable now.')
+  if (!Number.isInteger(steps) || steps === 0 || Math.abs(steps) > limit) return reject(sockets.get(requesterId), `Choose between 1 and ${limit} spaces.`)
+
+  clearTimer(room.turnTimer)
+  room.turnDeadline = null
+  room.busy = true
+  const startSpace = current.space
+  const token = ++room.sequenceToken
+  if (room.game.mode === 'guess_what') {
+    const result = takeGuessWhatTurn(room.game, steps)
+    return runGuessWhatRollSequence(room, result, token, false)
+  }
+  if (room.game.mode === 'escape_from') {
+    room.directionChoice = { playerId: current.id, roll: Math.abs(steps), startedAt: Date.now() }
+    finishEscapeDirection(room, steps < 0 ? 'backward' : 'forward')
+    return
+  }
+  if (room.game.mode === 'shoot_the_what') {
+    const result = takeShootTurn(room.game, steps)
+    if (!result) return finishSequenceAndBeginTurn(room)
+    runTurnSequence(room, current, startSpace, steps, token, false, true, { spaces: Math.abs(steps), signedSpaces: steps, direction: steps > 0 ? 'forward' : 'backward' }, result)
+    return
+  }
+  takeTurn(room.game, steps)
+  runTurnSequence(room, current, startSpace, steps, token, false, true, { spaces: Math.abs(steps), signedSpaces: steps, direction: steps > 0 ? 'forward' : 'backward' })
 }
 
 function startRoll(room, requesterId, automatic = false, continuingSequence = false) {
@@ -2200,11 +2260,16 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
   if (current.id !== requesterId) return reject(sockets.get(requesterId), 'Skill can only be used during your turn.')
   if (automatic && !current.isAI) return
   if (!automatic && current.isAI) return reject(sockets.get(requesterId), 'AI skills are controlled by the server.')
+  const adminUnlimited = room.adminRoom && current.isAdmin && adminClients.has(requesterId)
+  if (adminUnlimited) {
+    current.skillCooldownUntil = 0
+    current.delayedSkillCooldownStartTurn = null
+  }
   if (current.skillBlockedTurns > 0) return reject(sockets.get(requesterId), `Skill blocked for ${current.skillBlockedTurns} turn(s).`)
   if (current.delayedSkillCooldownStartTurn != null) return reject(sockets.get(requesterId), `Skill cooldown starts on turn ${current.delayedSkillCooldownStartTurn}.`)
   if (current.skillCooldownUntil > Date.now()) return reject(sockets.get(requesterId), 'Skill is still cooling down.')
   const turnKey = `${room.game.turn}:${room.game.currentPlayerIndex}`
-  if (room.skillUsedTurnKey === turnKey) return reject(sockets.get(requesterId), 'Skill can only be used once per turn.')
+  if (!adminUnlimited && room.skillUsedTurnKey === turnKey) return reject(sockets.get(requesterId), 'Skill can only be used once per turn.')
   if (current.specialSkill?.name === 'Hidden Mine' && targetId == null) {
     startHiddenMinePlacement(room, current)
     return
@@ -2219,7 +2284,7 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
   clearTimer(room.turnTimer)
   room.turnDeadline = null
   room.busy = true
-  room.skillUsedTurnKey = turnKey
+  if (!adminUnlimited) room.skillUsedTurnKey = turnKey
   const token = ++room.sequenceToken
   emitEvent(room, 'skill_pending', {
     playerId: current.id,
@@ -2404,6 +2469,7 @@ function startGame(room, requesterId) {
       characterId: character.id,
       name: room.modeKey === 'shoot_the_what' ? shootLobbyName(player) : player.isAI ? `${character.name} AI` : (player.customName || character.name),
       isAI: player.isAI,
+      isAdmin: Boolean(room.adminRoom && player.id === room.hostId && player.isAdmin && adminClients.has(player.id)),
       team: player.team,
       teamSlot: player.teamSlot,
     }
@@ -2478,6 +2544,7 @@ function reconnect(room, clientId, socket) {
   room.disconnectTimers.delete(clientId)
   player.connected = true
   sockets.set(clientId, socket)
+  send(socket, { type: 'admin_status', enabled: adminClients.has(clientId) })
   broadcastRoom(room)
   if (room.phase === 'playing') {
     broadcastGame(room, 'game_started')
@@ -2496,6 +2563,31 @@ wss.on('connection', socket => {
     clientId = message.clientId || clientId
     if (!clientId) return reject(socket, 'Missing client ID.')
     sockets.set(clientId, socket)
+
+    if (message.type === 'admin_login') {
+      const enabled = ADMIN_PASSWORDS.has(String(message.password || ''))
+      if (enabled) adminClients.add(clientId)
+      const currentRoom = roomForClient(clientId)
+      const currentPlayer = currentRoom?.players.find(player => player.id === clientId)
+      if (enabled && currentPlayer && currentRoom.hostId === clientId) {
+        syncRoomAdminPlayer(currentRoom, clientId, true)
+        broadcastRoom(currentRoom)
+        if (currentRoom.phase === 'playing') broadcastGame(currentRoom)
+      }
+      send(socket, { type: 'admin_status', enabled })
+      if (!enabled) reject(socket, 'Incorrect admin password.')
+      return
+    }
+    if (message.type === 'admin_logout') {
+      adminClients.delete(clientId)
+      const currentRoom = roomForClient(clientId)
+      if (syncRoomAdminPlayer(currentRoom, clientId, false)) {
+        broadcastRoom(currentRoom)
+        if (currentRoom.phase === 'playing') broadcastGame(currentRoom)
+      }
+      send(socket, { type: 'admin_status', enabled: false })
+      return
+    }
 
     if (message.type === 'create') {
       const existing = roomForClient(clientId)
@@ -2516,7 +2608,8 @@ wss.on('connection', socket => {
         modeKey: DEFAULT_MODE_KEY,
         boardIndex: firstBoardIndex(DEFAULT_MODE_KEY),
         exactMoveFor100: false,
-        privateRoom: false,
+        privateRoom: adminClients.has(clientId),
+        adminRoom: adminClients.has(clientId),
         players: [],
         revision: 0,
         eventId: 0,
@@ -2534,6 +2627,7 @@ wss.on('connection', socket => {
         characterIndex: normalizeRoomCharacter(room, message.characterIndex) ?? 0,
         isAI: false,
         connected: true,
+        isAdmin: adminClients.has(clientId),
       })
       rooms.set(room.code, room)
       broadcastRoom(room)
@@ -2543,6 +2637,7 @@ wss.on('connection', socket => {
     if (message.type === 'join') {
       const room = rooms.get(String(message.code || '').toUpperCase())
       if (!room) return reject(socket, 'Room not found.')
+      if (room.adminRoom) return reject(socket, 'Admin rooms only allow their host and AI players.')
       const spectating = spectatorRoomForClient(clientId)
       if (spectating) spectating.spectators.delete(clientId)
       const existing = room.players.find(player => player.id === clientId)
@@ -2744,6 +2839,7 @@ wss.on('connection', socket => {
       finishShootScan(room, clientId, Number(message.space))
     }
     else if (message.type === 'start_roll') startRoll(room, clientId)
+    else if (message.type === 'admin_move') adminMove(room, clientId, message.steps)
     else if (message.type === 'stop_roll') stopRoll(room, clientId)
     else if (message.type === 'choose_escape_move') chooseEscapeMove(room, clientId, message.roll)
     else if (message.type === 'skip_escape_move') skipEscapeMoveChoice(room, clientId)
