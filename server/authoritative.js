@@ -143,6 +143,7 @@ function roomView(room) {
     exactMoveFor100: Boolean(room.exactMoveFor100),
     privateRoom: Boolean(room.privateRoom),
     adminRoom: Boolean(room.adminRoom),
+    controlAi: Boolean(room.controlAi),
     players: room.players,
     spectatorCount: room.spectators?.size || 0,
     maxSpectators: MAX_SPECTATORS,
@@ -628,12 +629,15 @@ function startShootScan(room, requesterId) {
 
 function activateShootSkill(room, requesterId) {
   if (room.phase !== 'playing' || room.game?.mode !== 'shoot_the_what' || room.game.gameOver) return reject(sockets.get(requesterId), 'Shoot skills are unavailable.')
-  const player = room.game.players.find(item => item.id === requesterId)
+  const current = room.game.players[room.game.currentPlayerIndex]
+  const player = hostControlsAi(room, requesterId, current)
+    ? current
+    : room.game.players.find(item => item.id === requesterId)
   if (!player || player.eliminated || player.finished) return reject(sockets.get(requesterId), 'This player cannot use a skill.')
-  if (room.adminRoom && player.isAdmin && adminClients.has(requesterId)) room.game.shoot.skillUses[player.team] = 3
+  if (hasAdminUnlimitedSkills(room, player, requesterId)) room.game.shoot.skillUses[player.team] = 3
   if (player.team === room.game.shoot.bomberTeam) return startShootScan(room, requesterId)
-  if (room.busy || room.game.shoot.phase !== 'escaper' || room.game.players[room.game.currentPlayerIndex]?.id !== requesterId) return reject(sockets.get(requesterId), 'Flak Jacket can only be used during your Escaper turn.')
-  const result = activateShootFlak(room.game, requesterId)
+  if (room.busy || room.game.shoot.phase !== 'escaper' || (current?.id !== requesterId && !hostControlsAi(room, requesterId, current))) return reject(sockets.get(requesterId), 'Flak Jacket can only be used during your Escaper turn.')
+  const result = activateShootFlak(room.game, player.id)
   if (!result.ok) return reject(sockets.get(requesterId), result.message)
   endShootEscaperSkillTurn(room.game)
   finishSequenceAndBeginTurn(room)
@@ -897,7 +901,8 @@ async function finishEscapeDirection(room, direction) {
 
 function chooseEscapeDirection(room, requesterId, direction) {
   const choice = room.directionChoice
-  if (!choice || choice.playerId !== requesterId) return reject(sockets.get(requesterId), 'There is no direction choice for this player.')
+  const current = room.game?.players[room.game.currentPlayerIndex]
+  if (!choice || (choice.playerId !== requesterId && !hostControlsAi(room, requesterId, current))) return reject(sockets.get(requesterId), 'There is no direction choice for this player.')
   if (!['forward', 'backward'].includes(direction)) return reject(sockets.get(requesterId), 'Choose forward or backward.')
   finishEscapeDirection(room, direction)
 }
@@ -1096,6 +1101,17 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
       emitEvent(room, 'mine_push', resolution, 900)
       if (!await wait(room, 900, token)) return
       triggerAiReactions(room, player.id, 'negative')
+      if (resolution.postPushLadder) {
+        emitEvent(room, 'ladder', {
+          playerId: player.id,
+          from: resolution.postPushLadder.from,
+          to: resolution.postPushLadder.to,
+        }, 1600)
+        if (!await wait(room, 1600, token)) return
+        triggerAiReactions(room, player.id, 'ladder')
+        resolvedSpace = resolution.postPushLadder.to
+        ladderHandledByMine = true
+      }
       const settleDelay = Math.floor(Math.random() * 501)
       if (settleDelay && !await wait(room, settleDelay, token)) return
       resolvedSpace = resolution.destination
@@ -1145,6 +1161,15 @@ async function runTurnSequence(room, player, startSpace, roll, token, specialRol
     emitEvent(room, 'mine_push', mineExplosion, 900)
     if (!await wait(room, 900, token)) return
     triggerAiReactions(room, player.id, 'negative')
+    if (mineExplosion.postPushLadder) {
+      emitEvent(room, 'ladder', {
+        playerId: player.id,
+        from: mineExplosion.postPushLadder.from,
+        to: mineExplosion.postPushLadder.to,
+      }, 1600)
+      if (!await wait(room, 1600, token)) return
+      triggerAiReactions(room, player.id, 'ladder')
+    }
     const settleDelay = Math.floor(Math.random() * 501)
     if (settleDelay && !await wait(room, settleDelay, token)) return
   }
@@ -1443,7 +1468,7 @@ function answerGuessWhatQuestion(room, requesterId, selectedAnswer, timedOut = f
 function stopRoll(room, requesterId, automatic = false) {
   if (!room.rolling || room.phase !== 'playing') return
   const current = room.game.players[room.game.currentPlayerIndex]
-  if (!automatic && current.id !== requesterId) return reject(sockets.get(requesterId), 'Only the active player can stop the dice.')
+  if (!automatic && current.id !== requesterId && !hostControlsAi(room, requesterId, current)) return reject(sockets.get(requesterId), 'Only the active player can stop the dice.')
 
   clearTimer(room.rollTimer)
   if (room.game.mode === 'escape_from') {
@@ -1530,15 +1555,15 @@ function stopRoll(room, requesterId, automatic = false) {
 
 function chooseEscapeMove(room, requesterId, roll) {
   const choice = room.escapeMoveChoice
-  if (!choice || choice.playerId !== requesterId) return reject(sockets.get(requesterId), 'There is no move choice for this player.')
+  const current = room.game?.players[room.game.currentPlayerIndex]
+  if (!choice || (choice.playerId !== requesterId && !hostControlsAi(room, requesterId, current))) return reject(sockets.get(requesterId), 'There is no move choice for this player.')
   if (!choice.options.includes(Number(roll))) return reject(sockets.get(requesterId), 'Choose one of the available moves.')
   clearTimer(room.rollTimer)
   room.rollTimer = null
   room.escapeMoveChoice = null
   room.currentEvent = null
-  const current = room.game.players[room.game.currentPlayerIndex]
   room.directionChoice = { playerId: current.id, roll: Number(roll), startedAt: Date.now() }
-  if (current.isAI) {
+  if (current.isAI && !hostControlsAi(room, requesterId, current)) {
     finishEscapeDirection(room, chooseEscapeAiDirection(room.game, current, Number(roll)))
     return
   }
@@ -1553,7 +1578,7 @@ function chooseEscapeMove(room, requesterId, roll) {
 function skipEscapeMoveChoice(room, requesterId) {
   const choice = room.escapeMoveChoice
   const current = room.game?.players[room.game.currentPlayerIndex]
-  if (!choice || choice.playerId !== requesterId || current?.id !== requesterId) {
+  if (!choice || (choice.playerId !== requesterId && !hostControlsAi(room, requesterId, current)) || (current?.id !== requesterId && !hostControlsAi(room, requesterId, current))) {
     return reject(sockets.get(requesterId), 'There is no move choice for this player.')
   }
   if (!choice.canSkip || !canSkipEscapeMove(room.game, current)) {
@@ -1586,7 +1611,29 @@ function syncRoomAdminPlayer(room, clientId, enabled = adminClients.has(clientId
   if (gamePlayer) gamePlayer.isAdmin = isAdmin
   room.adminRoom = isAdmin
   room.privateRoom = isAdmin
+  if (!isAdmin) room.controlAi = false
   return true
+}
+
+function hostControlsAi(room, clientId, player = null) {
+  const activePlayer = player || room?.game?.players?.[room?.game?.currentPlayerIndex]
+  return Boolean(
+    room?.adminRoom
+    && room.controlAi
+    && room.hostId === clientId
+    && adminClients.has(clientId)
+    && activePlayer?.isAI
+    && room.game?.mode !== 'clash_with'
+  )
+}
+
+function hasAdminUnlimitedSkills(room, player, clientId = player?.id) {
+  return Boolean(
+    room?.adminRoom
+    && room.hostId === clientId
+    && adminClients.has(clientId)
+    && (player?.isAdmin || hostControlsAi(room, clientId, player))
+  )
 }
 
 function adminMove(room, requesterId, requestedSteps) {
@@ -1597,8 +1644,7 @@ function adminMove(room, requesterId, requestedSteps) {
     room?.adminRoom
     && adminClients.has(requesterId)
     && room.hostId === requesterId
-    && current?.isAdmin
-    && current.id === requesterId
+    && (current?.isAdmin && current.id === requesterId || hostControlsAi(room, requesterId, current))
   )
   if (!isEligibleAdmin) return reject(sockets.get(requesterId), 'Admin movement is unavailable.')
   if (room.phase !== 'playing' || room.busy || room.rolling || room.game.gameOver || room.game.mode === 'clash_with') return reject(sockets.get(requesterId), 'Admin movement is unavailable now.')
@@ -1629,13 +1675,21 @@ function adminMove(room, requesterId, requestedSteps) {
 }
 
 function startRoll(room, requesterId, automatic = false, continuingSequence = false) {
-  if (!canStartRoll(room, requesterId, automatic, continuingSequence)) {
+  const current = room.game?.players[room.game.currentPlayerIndex]
+  const manuallyControlledAi = !automatic && hostControlsAi(room, requesterId, current)
+  const canStartNormally = canStartRoll(room, requesterId, automatic, continuingSequence)
+  const canStartAsControlledAi = manuallyControlledAi
+    && room.phase === 'playing'
+    && !room.game?.gameOver
+    && !room.rolling
+    && (!room.busy || continuingSequence)
+  if (!canStartNormally && !canStartAsControlledAi) {
     if (!automatic && room.phase === 'playing' && !room.busy && !room.rolling && !room.game.gameOver) {
       reject(sockets.get(requesterId), 'It is not your turn.')
     }
     return
   }
-  const current = room.game.players[room.game.currentPlayerIndex]
+  if (!current) return
 
   clearTimer(room.turnTimer)
   room.turnDeadline = null
@@ -1646,7 +1700,7 @@ function startRoll(room, requesterId, automatic = false, continuingSequence = fa
       const value = Math.floor(Math.random() * 6) + 1
       if (!options.includes(value)) options.push(value)
     }
-    const duration = current.isAI ? 900 : ESCAPE_ROLL_MS
+    const duration = current.isAI && !manuallyControlledAi ? 900 : ESCAPE_ROLL_MS
     const canSkip = canSkipEscapeMove(room.game, current)
     room.escapeMoveChoice = { playerId: current.id, options, canSkip, startedAt: Date.now() }
     emitEvent(room, 'escape_move_choice', {
@@ -1656,15 +1710,15 @@ function startRoll(room, requesterId, automatic = false, continuingSequence = fa
       expiresAt: Date.now() + duration,
     }, duration)
     room.rollTimer = setTimeout(() => {
-      if (current.isAI && canSkip) skipEscapeMoveChoice(room, current.id)
-      else if (current.isAI) chooseEscapeMove(room, current.id, options[Math.floor(Math.random() * options.length)])
+      if (current.isAI && !manuallyControlledAi && canSkip) skipEscapeMoveChoice(room, current.id)
+      else if (current.isAI && !manuallyControlledAi) chooseEscapeMove(room, current.id, options[Math.floor(Math.random() * options.length)])
       else expireEscapeMoveChoice(room)
     }, duration)
     return
   }
   const specialRoll = current.specialRollPending
   const dualRoll = room.game.mode === 'run_away' && !specialRoll
-  const rollDuration = dualRoll ? 3000 : current.isAI ? 900 : 5000
+  const rollDuration = dualRoll ? 3000 : current.isAI && !manuallyControlledAi ? 900 : 5000
   room.rolling = { playerId: current.id, startedAt: Date.now(), specialRoll, dualRoll }
   emitEvent(room, 'dice_rolling', {
     playerId: current.id,
@@ -1710,7 +1764,8 @@ function beginTurn(room) {
 
   const current = room.game.players[room.game.currentPlayerIndex]
   if (room.game.mode === 'shoot_the_what' && room.game.shoot?.bombingDue) return beginShootBombing(room)
-  if (room.game.mode === 'escape_from' && current.isAI && canSkipEscapeMove(room.game, current)) {
+  const aiIsHostControlled = hostControlsAi(room, room.hostId, current)
+  if (room.game.mode === 'escape_from' && current.isAI && !aiIsHostControlled && canSkipEscapeMove(room.game, current)) {
     triggerEscapeAiSocial(room, 'lets_go')
   }
   if (room.game.mode === 'clash_with' && current.clashStunnedThroughTurn != null && room.game.turn <= current.clashStunnedThroughTurn) {
@@ -1729,7 +1784,7 @@ function beginTurn(room) {
     })
     return
   }
-  if (room.game.mode === 'escape_from' && current.isAI) {
+  if (room.game.mode === 'escape_from' && current.isAI && !aiIsHostControlled) {
     const nearEntity = room.game.entities.some(entity => Math.abs(entity.space - current.space) <= 4)
     const weaponReady = current.weaponProtectFromTurn == null && current.weaponCooldownUntil <= Date.now()
     if (nearEntity && weaponReady && Math.random() < 0.5) {
@@ -1758,7 +1813,7 @@ function beginTurn(room) {
     return
   }
 
-  if (current.isAI) {
+  if (current.isAI && !aiIsHostControlled) {
     room.turnDeadline = null
     room.turnTimer = setTimeout(() => {
       if (room.game.mode === 'clash_with') {
@@ -1966,7 +2021,8 @@ function chooseClashAiAction(room, current) {
 
 async function finishHiddenMinePlacement(room, playerId, requestedSpace = null) {
   const pending = room.pendingMine
-  if (!pending || pending.playerId !== playerId || !pending.ready) return
+  const current = room.game?.players[room.game.currentPlayerIndex]
+  if (!pending || (pending.playerId !== playerId && !hostControlsAi(room, playerId, current)) || !pending.ready) return
   clearTimer(pending.timer)
   room.pendingMine = null
   const space = pending.options.includes(Number(requestedSpace))
@@ -2009,11 +2065,11 @@ function startHiddenMinePlacement(room, current) {
       options,
     }, 5000)
     pending.timer = setTimeout(() => finishHiddenMinePlacement(room, current.id), 5000)
-    if (current.isAI) setTimeout(() => finishHiddenMinePlacement(room, current.id), 600)
+    if (current.isAI && !hostControlsAi(room, room.hostId, current)) setTimeout(() => finishHiddenMinePlacement(room, current.id), 600)
   })
 }
 
-function finishRagebaitSelection(room, playerId, targetId = null) {
+function finishRagebaitSelection(room, playerId, targetId = null, controllerId = playerId) {
   const pending = room.pendingSkillTarget
   if (!pending || pending.playerId !== playerId) return
   clearTimer(pending.timer)
@@ -2024,7 +2080,7 @@ function finishRagebaitSelection(room, playerId, targetId = null) {
   if (targetId && pending.targetIds.includes(targetId) && activeTarget) {
     room.busy = false
     room.skillUsedTurnKey = null
-    useSkill(room, playerId, targetId)
+    useSkill(room, controllerId, targetId)
     return
   }
 
@@ -2250,24 +2306,28 @@ function triggerAiReactions(room, actorId, outcome) {
 }
 
 function useSkill(room, requesterId, targetId = null, automatic = false) {
-  if (room.pendingSkillTarget?.playerId === requesterId) {
-    finishRagebaitSelection(room, requesterId, targetId)
+  const pendingPlayer = room.pendingSkillTarget?.playerId
+  const pendingCurrent = room.game?.players[room.game.currentPlayerIndex]
+  if (pendingPlayer === requesterId || (pendingPlayer && hostControlsAi(room, requesterId, pendingCurrent))) {
+    finishRagebaitSelection(room, pendingPlayer, targetId, requesterId)
     return
   }
   if (room.phase !== 'playing' || room.busy || room.game.gameOver) return
   if (['guess_what', 'clash_with'].includes(room.game.mode)) return reject(sockets.get(requesterId), 'Character skills are disabled in this mode.')
   const current = room.game.players[room.game.currentPlayerIndex]
-  if (current.id !== requesterId) return reject(sockets.get(requesterId), 'Skill can only be used during your turn.')
+  const manuallyControlledAi = hostControlsAi(room, requesterId, current)
+  if (current.id !== requesterId && !manuallyControlledAi) return reject(sockets.get(requesterId), 'Skill can only be used during your turn.')
   if (automatic && !current.isAI) return
-  if (!automatic && current.isAI) return reject(sockets.get(requesterId), 'AI skills are controlled by the server.')
-  const adminUnlimited = room.adminRoom && current.isAdmin && adminClients.has(requesterId)
+  if (!automatic && current.isAI && !manuallyControlledAi) return reject(sockets.get(requesterId), 'AI skills are controlled by the server.')
+  const adminUnlimited = hasAdminUnlimitedSkills(room, current, requesterId)
   if (adminUnlimited) {
     current.skillCooldownUntil = 0
     current.delayedSkillCooldownStartTurn = null
+    current.skillBlockedTurns = 0
   }
-  if (current.skillBlockedTurns > 0) return reject(sockets.get(requesterId), `Skill blocked for ${current.skillBlockedTurns} turn(s).`)
-  if (current.delayedSkillCooldownStartTurn != null) return reject(sockets.get(requesterId), `Skill cooldown starts on turn ${current.delayedSkillCooldownStartTurn}.`)
-  if (current.skillCooldownUntil > Date.now()) return reject(sockets.get(requesterId), 'Skill is still cooling down.')
+  if (!adminUnlimited && current.skillBlockedTurns > 0) return reject(sockets.get(requesterId), `Skill blocked for ${current.skillBlockedTurns} turn(s).`)
+  if (!adminUnlimited && current.delayedSkillCooldownStartTurn != null) return reject(sockets.get(requesterId), `Skill cooldown starts on turn ${current.delayedSkillCooldownStartTurn}.`)
+  if (!adminUnlimited && current.skillCooldownUntil > Date.now()) return reject(sockets.get(requesterId), 'Skill is still cooling down.')
   const turnKey = `${room.game.turn}:${room.game.currentPlayerIndex}`
   if (!adminUnlimited && room.skillUsedTurnKey === turnKey) return reject(sockets.get(requesterId), 'Skill can only be used once per turn.')
   if (current.specialSkill?.name === 'Hidden Mine' && targetId == null) {
@@ -2396,7 +2456,22 @@ function useSkill(room, requesterId, targetId = null, automatic = false) {
       })
     }
 
-    if (result.movement) {
+    const playSkillMovements = async () => {
+      for (const movement of result.movements || []) {
+        if (movement.from === movement.to) continue
+        const duration = Math.abs(movement.to - movement.from) * 540
+        emitEvent(room, 'movement', { ...movement, kind: 'skill' }, duration)
+        if (!await wait(room, duration, token)) return false
+        triggerAiReactions(room, movement.playerId, movement.to < movement.from ? 'negative' : 'positive')
+      }
+      return true
+    }
+
+    if (result.movements?.length) {
+      playSkillMovements().then(async moved => {
+        if (moved && await playLandingResolutions()) showResult()
+      })
+    } else if (result.movement) {
       const duration = Math.abs(result.movement.to - result.movement.from) * 540
       emitEvent(room, 'movement', { ...result.movement, kind: 'skill' }, duration)
       wait(room, duration, token).then(async moved => {
@@ -2610,6 +2685,7 @@ wss.on('connection', socket => {
         exactMoveFor100: false,
         privateRoom: adminClients.has(clientId),
         adminRoom: adminClients.has(clientId),
+        controlAi: false,
         players: [],
         revision: 0,
         eventId: 0,
@@ -2753,6 +2829,12 @@ wss.on('connection', socket => {
         room.privateRoom = Boolean(message.privateRoom ?? message.enabled)
         broadcastRoom(room)
       } else reject(socket, 'Room privacy can only be changed in the lobby.')
+    } else if (message.type === 'control_ai') {
+      if (room.hostId !== clientId || !room.adminRoom || !adminClients.has(clientId)) reject(socket, 'Only the admin host can control AI players.')
+      else if (room.phase === 'lobby') {
+        room.controlAi = Boolean(message.enabled)
+        broadcastRoom(room)
+      } else reject(socket, 'AI control can only be changed in the lobby.')
     } else if (message.type === 'board') {
       if (room.hostId !== clientId) reject(socket, 'Only the host can select the board.')
       else if (room.phase === 'lobby') {
@@ -2858,8 +2940,10 @@ wss.on('connection', socket => {
     else if (message.type === 'choose_direction') chooseEscapeDirection(room, clientId, message.direction)
     else if (message.type === 'arm_weapon') {
       if (room.game?.mode !== 'escape_from' || room.phase !== 'playing') reject(socket, 'Weapon unavailable.')
-      else if (room.busy || room.game.players[room.game.currentPlayerIndex]?.id !== clientId) reject(socket, 'It is not your turn.')
+      else if (room.busy || (room.game.players[room.game.currentPlayerIndex]?.id !== clientId && !hostControlsAi(room, clientId))) reject(socket, 'It is not your turn.')
       else {
+        const current = room.game.players[room.game.currentPlayerIndex]
+        if (hasAdminUnlimitedSkills(room, current, clientId)) current.weaponCooldownUntil = 0
         const result = armEscapeWeapon(room.game)
         if (!result.ok) reject(socket, result.message)
         else {

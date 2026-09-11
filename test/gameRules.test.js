@@ -179,7 +179,7 @@ test('Hidden Mine applies a WHAT after blowing a player onto a question square',
 
 test('Hidden Mine applies a WHAT after blasting its owner forward', () => {
   const state = createState([10, 30])
-  state.board.question_marks = [14]
+  state.board.question_marks = [13]
   state.board.whats = [{
     name: 'Owner Surprise',
     spawn_locations: { start: 1, end: 99 },
@@ -190,7 +190,7 @@ test('Hidden Mine applies a WHAT after blasting its owner forward', () => {
 
   withMockRandom(0.99, () => takeTurn(state, 2))
 
-  assert.equal(state.players[0].space, 14)
+  assert.equal(state.players[0].space, 13)
   assert.equal(state.players[0].skipTurns, 1)
   assert.equal(state.lastQuestionChain[0].kind, 'mine')
   assert.equal(state.lastQuestionChain[1].what.name, 'Owner Surprise')
@@ -233,7 +233,7 @@ test('movement skills trigger a mine when another player lands on it', () => {
   assert.equal(targetLanding.questionChain[0].landedSpace, 12)
 })
 
-test('Hidden Mine interrupts movement and limits mid-move pushback to two spaces', () => {
+test('Hidden Mine interrupts movement and pushes back exactly one space', () => {
   const state = createState([15, 10])
   state.hiddenMines = [{ ownerId: 'player-1', space: 12 }]
   state.currentPlayerIndex = 1
@@ -243,12 +243,12 @@ test('Hidden Mine interrupts movement and limits mid-move pushback to two spaces
 
   assert.equal(state.lastMineExplosion.duringMove, true)
   assert.equal(state.lastMineExplosion.landedSpace, 12)
-  assert.equal(state.lastMineExplosion.distance, 2)
+  assert.equal(state.lastMineExplosion.distance, 1)
   assert.equal(state.players[1].space, 11)
   assert.equal(state.currentPlayerIndex, 0)
 })
 
-test('Hidden Mine pushes its owner forward and ends the turn immediately', () => {
+test('Hidden Mine pushes its owner forward exactly one space and ends the turn immediately', () => {
   const state = createState([10, 30])
   state.hiddenMines = [{ ownerId: 'player-1', space: 12 }]
   state.nextExplosionTurn = 99
@@ -258,25 +258,50 @@ test('Hidden Mine pushes its owner forward and ends the turn immediately', () =>
   assert.equal(state.lastMineExplosion.selfTriggered, true)
   assert.equal(state.lastMineExplosion.direction, 'forward')
   assert.equal(state.lastMineExplosion.landedSpace, 12)
-  assert.equal(state.players[0].space, 14)
+  assert.equal(state.players[0].space, 13)
   assert.equal(state.currentPlayerIndex, 1)
 })
 
-test('Bomber Jack mine at ladder top pushes owner forward from the ladder top', () => {
+test('Hidden Mine climbs a ladder after pushing its owner forward onto its bottom', () => {
+  const state = createState([10, 30])
+  state.board.ladders = [{ from: 13, to: 37 }]
+  state.hiddenMines = [{ ownerId: 'player-1', space: 12 }]
+  state.nextExplosionTurn = 99
+
+  takeTurn(state, 2)
+
+  assert.equal(state.lastMineExplosion.destination, 13)
+  assert.deepEqual(state.lastMineExplosion.postPushLadder, { from: 13, to: 37 })
+  assert.equal(state.players[0].space, 37)
+})
+
+test('Hidden Mine climbs a ladder after pushing another player back onto its bottom', () => {
+  const state = createState([15, 10])
+  state.board.ladders = [{ from: 11, to: 31 }]
+  state.hiddenMines = [{ ownerId: 'player-1', space: 12 }]
+  state.currentPlayerIndex = 1
+  state.nextExplosionTurn = 99
+
+  takeTurn(state, 2)
+
+  assert.equal(state.lastMineExplosion.destination, 11)
+  assert.deepEqual(state.lastMineExplosion.postPushLadder, { from: 11, to: 31 })
+  assert.equal(state.players[1].space, 31)
+})
+
+test('Bomber Jack mine at ladder top pushes owner forward one space from the ladder top', () => {
   const state = createState([10, 30])
   state.board.ladders = [{ from: 14, to: 22 }]
   state.hiddenMines = [{ ownerId: 'player-1', space: 22 }]
   state.nextExplosionTurn = 99
 
   // player-1 at 10 rolls 4 → lands on 14 → climbs to 22 → own mine explodes
-  // withMockRandom(0.99): randomInteger(1, 2) = 2
-  // mineForwardDestination(22, 2): rowEnd=30, destination=24
   withMockRandom(0.99, () => takeTurn(state, 4))
 
   assert.equal(state.lastMineExplosion.selfTriggered, true)
   assert.equal(state.lastMineExplosion.landedSpace, 22)
   assert.equal(state.lastMineExplosion.pushOrigin, 14)
-  assert.equal(state.players[0].space, 24)
+  assert.equal(state.players[0].space, 23)
   assert.equal(state.currentPlayerIndex, 1)
 })
 
@@ -294,7 +319,7 @@ test('Hidden Mine on ladder bottom prevents climbing and pushes back', () => {
   assert.equal(state.players[1].space, 21)
 })
 
-test('Hidden Mine on ladder top explodes after climbing and returns player to ladder bottom', () => {
+test('Hidden Mine on ladder top explodes after climbing and climbs again when the push lands on the ladder bottom', () => {
   const state = createState([15, 20])
   state.board.ladders = [{ from: 22, to: 40 }]
   state.hiddenMines = [{ ownerId: 'player-1', space: 40 }]
@@ -306,7 +331,8 @@ test('Hidden Mine on ladder top explodes after climbing and returns player to la
   assert.deepEqual(state.lastMineExplosion.ladder, { from: 22, to: 40 })
   assert.equal(state.lastMineExplosion.landedSpace, 40)
   assert.equal(state.lastMineExplosion.pushOrigin, 22)
-  assert.equal(state.players[1].space, 22)
+  assert.deepEqual(state.lastMineExplosion.postPushLadder, { from: 22, to: 40 })
+  assert.equal(state.players[1].space, 40)
 })
 
 test('Hidden Mine placement excludes occupied squares and keeps the newest two mines', () => {
@@ -342,6 +368,10 @@ test('movement skills resolve question squares in skill-user-first order', () =>
 
   const switchResult = activateSkill(state, 1)
   assert.deepEqual(switchResult.landingResolutions.map(item => item.playerId), ['player-1', 'player-2'])
+  assert.deepEqual(switchResult.movements, [
+    { playerId: 'player-1', from: 12, to: 18 },
+    { playerId: 'player-2', from: 18, to: 12 },
+  ])
   assert.equal(state.players[0].skipTurns, 1)
   assert.equal(state.players[1].skipTurns, 1)
 
@@ -351,6 +381,10 @@ test('movement skills resolve question squares in skill-user-first order', () =>
   state.players[1].space = 18
   const intersectResult = activateSkill(state, 2)
   assert.deepEqual(intersectResult.landingResolutions.map(item => item.playerId), ['player-1', 'player-2'])
+  assert.deepEqual(intersectResult.movements, [
+    { playerId: 'player-1', from: 12, to: 15 },
+    { playerId: 'player-2', from: 18, to: 15 },
+  ])
 
   state.players[0].skillCooldownUntil = 0
   state.players[0].specialSkill = { name: 'Magnet' }
@@ -358,6 +392,7 @@ test('movement skills resolve question squares in skill-user-first order', () =>
   state.players[1].space = 18
   const magnetResult = activateSkill(state, 3)
   assert.deepEqual(magnetResult.landingResolutions.map(item => item.playerId), ['player-2'])
+  assert.deepEqual(magnetResult.movements, [{ playerId: 'player-2', from: 18, to: 12 }])
 })
 
 test('Hidden Mine clamps to the correct visual edge on alternating rows', () => {

@@ -1297,24 +1297,31 @@ function triggerHiddenMine(state, player, {
   if (mineIndex < 0 || player.eliminated || player.finished) return null
   const mine = state.hiddenMines.splice(mineIndex, 1)[0]
   const selfTriggered = mine.ownerId === player.id
-  const distance = randomInteger(1, selfTriggered ? 2 : maxBackwardDistance)
+  const distance = 1
   const push = selfTriggered
     ? mineForwardDestination(landedSpace, distance)
     : ladder
       ? { destination: pushOrigin, edge: minePushDestination(pushOrigin, 1).edge }
       : minePushDestination(pushOrigin, distance)
   player.space = push.destination
+  const postPushLadder = state.board.ladders.find(item => item.from === player.space) || null
+  if (postPushLadder) {
+    player.space = postPushLadder.to
+    addLog(state, `${player.name} climbed a ladder from ${postPushLadder.from} to ${postPushLadder.to}!`)
+  }
   state.lastMineExplosion = {
     ownerId: mine.ownerId,
     playerId: player.id,
     landedSpace,
     pushOrigin,
-    destination: player.space,
+    destination: push.destination,
+    finalDestination: player.space,
     distance,
     direction: selfTriggered ? 'forward' : 'backward',
     selfTriggered,
     duringMove,
     ladder: ladder ? { ...ladder } : null,
+    postPushLadder: postPushLadder ? { ...postPushLadder } : null,
     edge: push.edge,
   }
   addLog(state, selfTriggered
@@ -1322,7 +1329,7 @@ function triggerHiddenMine(state, player, {
     : `${player.name} landed on a hidden mine and was blown back to space ${player.space}.`)
   if (applyQuestionAfterPush) {
     const precedingChain = [...state.lastQuestionChain]
-    const mineResolution = { kind: 'mine', ...state.lastMineExplosion, destination: player.space }
+    const mineResolution = { kind: 'mine', ...state.lastMineExplosion }
     let followingChain = []
     if (state.board.question_marks.includes(player.space)) {
       resolveLanding(state, player)
@@ -2223,6 +2230,7 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
   const target = closestOpponent(state, player)
   let message
   let movement = null
+  const movements = []
   let landingResolution = null
   const landingResolutions = []
   const resolveSkillLanding = (landingPlayer, landingSpace) => {
@@ -2249,14 +2257,21 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
 
   if (skill === 'Magnet') {
     if (!target) return { ok: false, message: 'No player is within 10 spaces.' }
+    const from = target.space
     target.space = player.space
+    movements.push({ playerId: target.id, from, to: target.space })
     resolveSkillLanding(target, target.space)
     message = `${player.name} used Magnet and pulled ${target.name} to space ${player.space}.`
   } else if (skill === 'Switcheroo') {
     if (!target) return { ok: false, message: 'No player is within 10 spaces.' }
+    const playerSpace = player.space
     const targetSpace = target.space
-    target.space = player.space
+    target.space = playerSpace
     player.space = targetSpace
+    movements.push(
+      { playerId: player.id, from: playerSpace, to: player.space },
+      { playerId: target.id, from: targetSpace, to: target.space },
+    )
     resolveSkillLanding(player, player.space)
     resolveSkillLanding(target, target.space)
     message = `${player.name} used Switcheroo and swapped spaces with ${target.name}.`
@@ -2266,8 +2281,14 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
       return { ok: false, message: 'Intersect cannot be used when the closest player is only 1 space away.' }
     }
     const middle = Math.round((player.space + target.space) / 2)
+    const playerFrom = player.space
+    const targetFrom = target.space
     player.space = middle
     target.space = middle
+    movements.push(
+      { playerId: player.id, from: playerFrom, to: middle },
+      { playerId: target.id, from: targetFrom, to: middle },
+    )
     resolveSkillLanding(player, middle)
     resolveSkillLanding(target, middle)
     message = `${player.name} used Intersect and pulled themselves and ${target.name} to space ${middle}.`
@@ -2339,6 +2360,7 @@ export function activateSkill(state, now = Date.now(), targetId = null) {
     ok: true,
     message,
     movement,
+    movements,
     landingResolution,
     landingResolutions,
     requiresRoll: skill === 'Parkour',

@@ -260,14 +260,26 @@ const lobbyCharacterIndices = computed(() => characterIndicesForMode(characters,
 const hero = computed(() => characters[selected.value] || characters[homeCharacterIndices.value[0]])
 const currentPlayer = computed(() => characters[playerCharacter.value])
 const turnSeconds = computed(() => turnDeadline.value ? Math.max(0, Math.ceil((turnDeadline.value - (now.value + serverClockOffset)) / 1000)) : 0)
-const controlledGamePlayer = computed(() => game.value?.players.find(player => player.id === clientId))
+const ownGamePlayer = computed(() => game.value?.players.find(player => player.id === clientId))
+const canControlCurrentAi = computed(() => Boolean(
+  adminAccess.value
+  && onlineRoom.value?.adminRoom
+  && onlineRoom.value?.controlAi
+  && onlineRoom.value?.hostId === clientId
+  && ownGamePlayer.value?.isAdmin
+  && game.value?.mode !== 'clash_with'
+  && game.value?.players[game.value.currentPlayerIndex]?.isAI
+))
+const controlledGamePlayer = computed(() => canControlCurrentAi.value
+  ? game.value?.players[game.value.currentPlayerIndex]
+  : ownGamePlayer.value)
 const isControlledTurn = computed(() => Boolean(game.value && controlledGamePlayer.value?.id === game.value.players[game.value.currentPlayerIndex]?.id))
 const adminMoveEnabled = computed(() => Boolean(adminAccess.value
   && onlineRoom.value?.adminRoom
   && game.value
   && game.value.mode !== 'clash_with'
   && isControlledTurn.value
-  && controlledGamePlayer.value?.isAdmin
+  && (controlledGamePlayer.value?.isAdmin || canControlCurrentAi.value)
   && !turnBusy.value
   && !game.value.gameOver))
 const adminMoveOptions = computed(() => {
@@ -277,7 +289,7 @@ const adminMoveOptions = computed(() => {
   return Array.from({ length: limit * 2 + 1 }, (_, index) => index - limit)
     .filter(steps => steps !== 0 && from + steps >= 1 && from + steps <= 100)
 })
-const adminUnlimitedSkills = computed(() => Boolean(adminAccess.value && onlineRoom.value?.adminRoom && controlledGamePlayer.value?.isAdmin))
+const adminUnlimitedSkills = computed(() => Boolean(adminAccess.value && onlineRoom.value?.adminRoom && (controlledGamePlayer.value?.isAdmin || canControlCurrentAi.value)))
 const isLobbyHost = computed(() => onlineRoom.value?.hostId === clientId)
 const selectedGameMode = computed(() => selectableGameModes.find(mode => mode.key === selectedMode.value) || selectableGameModes[0])
 const bloodiedSpaces = computed(() => {
@@ -986,7 +998,7 @@ async function handleServerEvent(event) {
   } else if (event.type === 'destroyed_square_removed') {
     audioManager.ghostTownGunshot(event.data.weapon)
   } else if (event.type === 'mine_placement') {
-    if (event.data.playerId === clientId) {
+    if (canActForPlayer(event.data.playerId)) {
       minePlacement.value = { options: event.data.options, eventId: event.id }
       window.setTimeout(() => {
         if (minePlacement.value?.eventId === event.id) minePlacement.value = null
@@ -1046,7 +1058,7 @@ async function handleServerEvent(event) {
       if (whatOverlay.value?.eventId === event.id) whatOverlay.value = null
     }, remaining)
   } else if (event.type === 'skill_target_selection') {
-    if (event.data.playerId === clientId) {
+    if (canActForPlayer(event.data.playerId)) {
       skillTargetOptions.value = event.data.targets || []
       skillTargetMode.value = event.data.skillName
       skillTargetDeadline.value = event.data.expiresAt
@@ -1703,6 +1715,15 @@ function changePrivateRoom(event) {
   sendLobby({ type: 'private_room', privateRoom: event.target.checked })
 }
 
+function changeControlAi(event) {
+  if (!isLobbyHost.value || !onlineRoom.value?.adminRoom) return
+  sendLobby({ type: 'control_ai', enabled: event.target.checked })
+}
+
+function canActForPlayer(playerId) {
+  return playerId === clientId || (canControlCurrentAi.value && playerId === controlledGamePlayer.value?.id)
+}
+
 function toggleDestructionSkip(event) {
   sendLobby({ type: 'destruction_skip', checked: event.target.checked })
 }
@@ -1993,6 +2014,7 @@ async function animateSpaceBySpace(playerId, from, to, duration = Math.abs(to - 
 }
 
 function skillCooldown(player) {
+  if (adminUnlimitedSkills.value && player?.id === controlledGamePlayer.value?.id) return 0
   if (player.delayedSkillCooldownStartTurn != null) return 1
   return Math.max(0, Math.ceil((player.skillCooldownUntil - (now.value + serverClockOffset)) / 1000))
 }
@@ -2045,11 +2067,11 @@ function useSkill(targetId = null) {
     sendLobby({ type: 'arm_weapon' })
     return
   }
-  if (player.skillBlockedTurns > 0) {
+  if (player.skillBlockedTurns > 0 && !adminUnlimitedSkills.value) {
     skillNotice.value = `Skill blocked for ${player.skillBlockedTurns} more turn(s).`
     return
   }
-  if (skillCooldown(player) > 0) {
+  if (skillCooldown(player) > 0 && !adminUnlimitedSkills.value) {
     skillNotice.value = 'Skill is still cooling down.'
     return
   }
@@ -2200,19 +2222,19 @@ function move(direction) {
 }
 
 function chooseDirection(direction) {
-  if (!directionChoice.value || directionChoice.value.playerId !== clientId) return
+  if (!directionChoice.value || !canActForPlayer(directionChoice.value.playerId)) return
   directionChoice.value = null
   sendLobby({ type: 'choose_direction', direction })
 }
 
 function chooseEscapeMove(roll) {
-  if (escapeMoveChoice.value?.playerId !== clientId) return
+  if (!canActForPlayer(escapeMoveChoice.value?.playerId)) return
   escapeMoveChoice.value = null
   sendLobby({ type: 'choose_escape_move', roll })
 }
 
 function skipEscapeMove() {
-  if (!escapeMoveChoice.value?.canSkip || escapeMoveChoice.value.playerId !== clientId) return
+  if (!escapeMoveChoice.value?.canSkip || !canActForPlayer(escapeMoveChoice.value.playerId)) return
   escapeMoveChoice.value = null
   sendLobby({ type: 'skip_escape_move' })
 }
@@ -3172,6 +3194,15 @@ onUnmounted(() => {
                 >
                 <span>Private Room</span>
               </label>
+              <label v-if="onlineRoom?.adminRoom" class="exact-move-setting">
+                <input
+                  type="checkbox"
+                  :checked="Boolean(onlineRoom?.controlAi)"
+                  :disabled="!isLobbyHost"
+                  @change="changeControlAi"
+                >
+                <span>Control AI</span>
+              </label>
             </div>
             <div v-if="selectedLobbyBoard" class="board-carousel">
               <button
@@ -3311,7 +3342,7 @@ onUnmounted(() => {
               v-for="roll in escapeMoveChoice.options"
               :key="roll"
               class="large-dice"
-              :disabled="escapeMoveChoice.playerId !== clientId"
+              :disabled="!canActForPlayer(escapeMoveChoice.playerId)"
               @click="chooseEscapeMove(roll)"
             >{{ roll }}</button>
           </div>
@@ -3319,20 +3350,20 @@ onUnmounted(() => {
             v-if="escapeMoveChoice.canSkip"
             type="button"
             class="escape-skip-move"
-            :disabled="escapeMoveChoice.playerId !== clientId"
+            :disabled="!canActForPlayer(escapeMoveChoice.playerId)"
             @click="skipEscapeMove"
           >Skip turn · Stay on Square 100</button>
-          <small v-if="escapeMoveChoice.playerId !== clientId">Waiting for the current player</small>
+          <small v-if="!canActForPlayer(escapeMoveChoice.playerId)">Waiting for the current player</small>
         </div>
         <div v-if="directionChoice" class="escape-direction-overlay" role="dialog" aria-modal="true">
           <div class="escape-roll-result">Picked <b>{{ directionChoice.roll }}</b></div>
           <small>{{ directionSeconds }}s remaining</small>
           <strong>Choose direction</strong>
           <div class="escape-direction-actions">
-            <button :disabled="directionChoice.playerId !== clientId" @click="chooseDirection('backward')">← Backward</button>
-            <button :disabled="directionChoice.playerId !== clientId" @click="chooseDirection('forward')">Forward →</button>
+            <button :disabled="!canActForPlayer(directionChoice.playerId)" @click="chooseDirection('backward')">← Backward</button>
+            <button :disabled="!canActForPlayer(directionChoice.playerId)" @click="chooseDirection('forward')">Forward →</button>
           </div>
-          <small v-if="directionChoice.playerId !== clientId">Waiting for the current player</small>
+          <small v-if="!canActForPlayer(directionChoice.playerId)">Waiting for the current player</small>
         </div>
         <div v-if="penaltyOverlay" class="penalty-overlay" role="status">
           <strong>Penalty</strong>
@@ -4059,8 +4090,8 @@ onUnmounted(() => {
                 <button
                   type="button"
                   class="skill-state"
-                  :class="{ ready: isControlledTurn && !turnBusy && controlledGamePlayer.weaponProtectFromTurn == null && controlledGamePlayer.weaponCooldownUntil <= now + serverClockOffset }"
-                  :disabled="!isControlledTurn || turnBusy || controlledGamePlayer.weaponProtectFromTurn != null || controlledGamePlayer.weaponCooldownUntil > now + serverClockOffset"
+                  :class="{ ready: isControlledTurn && !turnBusy && controlledGamePlayer.weaponProtectFromTurn == null && (adminUnlimitedSkills || controlledGamePlayer.weaponCooldownUntil <= now + serverClockOffset) }"
+                  :disabled="!isControlledTurn || turnBusy || controlledGamePlayer.weaponProtectFromTurn != null || (!adminUnlimitedSkills && controlledGamePlayer.weaponCooldownUntil > now + serverClockOffset)"
                   @click="useSkill()"
                 >
                   <template v-if="controlledGamePlayer.weaponProtectFromTurn != null && game.turn < controlledGamePlayer.weaponProtectFromTurn">
@@ -4069,7 +4100,7 @@ onUnmounted(() => {
                   <template v-else-if="controlledGamePlayer.weaponProtectFromTurn != null">
                     Active through turn {{ controlledGamePlayer.weaponProtectThroughTurn }}
                   </template>
-                  <template v-else-if="controlledGamePlayer.weaponCooldownUntil > now + serverClockOffset">
+                  <template v-else-if="controlledGamePlayer.weaponCooldownUntil > now + serverClockOffset && !adminUnlimitedSkills">
                     Cooldown {{ Math.ceil((controlledGamePlayer.weaponCooldownUntil - (now + serverClockOffset)) / 1000) }}s
                   </template>
                   <template v-else-if="!isControlledTurn">Wait for your turn</template>
